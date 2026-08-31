@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Moon, RefreshCw, Search, ShieldCheck, Star, Sun, TrendingUp, WalletCards } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,7 @@ import { Input } from '@/components/ui/input';
 type Market = 'kr' | 'us';
 type Stock = { market: Market; name: string; symbol: string; fallbackPrice: string; change: number; volume: string; accent: string };
 type LivePrice = { symbol: string; timestamp: string; lastPrice: string; currency: string };
-type Money = { krw: string; usd: string };
-type Holding = { symbol: string; name: string; marketCountry: string; currency: string; quantity: string; lastPrice: string; averagePurchasePrice: string; marketValue: string; profitLoss: string; profitRate: string };
-type Portfolio = { totalPurchaseAmount: Money; marketValue: Money; profitLoss: Money; profitRate: string; items: Holding[] };
+type Holding = { symbol: string; name: string; marketCountry: string; currency: string; quantity: string; lastPrice: string; profitLoss: string; profitRate: string };
 type LoadState = 'loading' | 'ready' | 'error';
 
 const stocks: Stock[] = [
@@ -45,48 +43,72 @@ export default function Home() {
   const [dark, setDark] = useState(false);
   const [prices, setPrices] = useState<Record<string, LivePrice>>({});
   const [marketState, setMarketState] = useState<LoadState>('loading');
-  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [portfolioState, setPortfolioState] = useState<LoadState>('loading');
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [holdingsState, setHoldingsState] = useState<LoadState>('loading');
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const favoritesLoaded = useRef(false);
 
   const loadData = async () => {
-    const [marketResult, portfolioResult] = await Promise.allSettled([
-      fetch('/api/market', { cache: 'no-store' }).then(async (response) => {
-        if (!response.ok) throw new Error('market');
-        return response.json() as Promise<{ prices: LivePrice[]; fetchedAt: string }>;
-      }),
-      fetch('/api/portfolio', { cache: 'no-store' }).then(async (response) => {
-        if (!response.ok) throw new Error('portfolio');
-        return response.json() as Promise<{ portfolio: Portfolio | null }>;
-      }),
-    ]);
-
-    if (marketResult.status === 'fulfilled') {
-      setPrices(Object.fromEntries(marketResult.value.prices.map((item) => [item.symbol, item])));
-      setFetchedAt(marketResult.value.fetchedAt);
+    try {
+      const response = await fetch('/api/dashboard', { cache: 'no-store' });
+      if (!response.ok) throw new Error('dashboard');
+      const data = await response.json() as { prices: LivePrice[]; holdings: Holding[]; holdingsAvailable: boolean; fetchedAt: string };
+      setPrices(Object.fromEntries(data.prices.map((item) => [item.symbol, item])));
+      setHoldings(data.holdings);
+      if (!favoritesLoaded.current && data.holdings.length) {
+        const saved = window.localStorage.getItem('oo-live-watchlist');
+        try {
+          setFavorites(saved ? JSON.parse(saved) as string[] : data.holdings.map((item) => item.symbol));
+        } catch {
+          setFavorites(data.holdings.map((item) => item.symbol));
+        }
+        favoritesLoaded.current = true;
+      }
+      setFetchedAt(data.fetchedAt);
       setMarketState('ready');
-    } else setMarketState('error');
-
-    if (portfolioResult.status === 'fulfilled') {
-      setPortfolio(portfolioResult.value.portfolio);
-      setPortfolioState('ready');
-    } else setPortfolioState('error');
+      setHoldingsState(data.holdingsAvailable ? 'ready' : 'error');
+    } catch {
+      setMarketState('error');
+      setHoldingsState('error');
+    }
   };
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => void loadData(), 0);
-    const interval = window.setInterval(() => void loadData(), 30_000);
+    let stopped = false;
+    let nextRefresh = 0;
+    const refresh = async () => {
+      await loadData();
+      if (!stopped) nextRefresh = window.setTimeout(() => void refresh(), 5_000);
+    };
+    const initialLoad = window.setTimeout(() => void refresh(), 0);
     return () => {
+      stopped = true;
       window.clearTimeout(initialLoad);
-      window.clearInterval(interval);
+      window.clearTimeout(nextRefresh);
     };
   }, []);
 
+  const availableStocks = useMemo(() => {
+    const holdingStocks: Stock[] = holdings.filter((item) => !stocks.some((stock) => stock.symbol === item.symbol)).map((item) => ({
+      market: item.marketCountry === 'KR' ? 'kr' : 'us',
+      name: item.name,
+      symbol: item.symbol,
+      fallbackPrice: formatPrice(item.lastPrice, item.currency),
+      change: Number(item.profitRate),
+      volume: '보유종목',
+      accent: item.name.slice(0, 2).toUpperCase(),
+    }));
+    return [...stocks, ...holdingStocks];
+  }, [holdings]);
   const visibleStocks = useMemo(() => {
     const value = query.trim().toLowerCase();
-    return stocks.filter((stock) => stock.market === market && (!value || stock.name.toLowerCase().includes(value) || stock.symbol.toLowerCase().includes(value)));
-  }, [market, query]);
-  const toggleFavorite = (symbol: string) => setFavorites((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol]);
+    return availableStocks.filter((stock) => favorites.includes(stock.symbol) && stock.market === market && (!value || stock.name.toLowerCase().includes(value) || stock.symbol.toLowerCase().includes(value)));
+  }, [availableStocks, favorites, market, query]);
+  const toggleFavorite = (symbol: string) => setFavorites((current) => {
+    const next = current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol];
+    window.localStorage.setItem('oo-live-watchlist', JSON.stringify(next));
+    return next;
+  });
 
   return (
     <div className={dark ? 'dark' : ''}>
@@ -100,13 +122,13 @@ export default function Home() {
           <section className="pt-6 sm:pt-9">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div><div className="mb-2 flex items-center gap-2"><span className={`size-2 rounded-full ${marketState === 'ready' ? 'bg-emerald-500' : marketState === 'error' ? 'bg-red-500' : 'bg-amber-500'}`} /><span className="text-xs font-bold text-muted-foreground">{marketState === 'ready' ? '토스증권 API 연결됨' : marketState === 'error' ? '시세 연결 확인 필요' : '시세 불러오는 중'}</span></div><h2 className="text-2xl font-black tracking-[-0.045em] sm:text-4xl">지금, 시장의 흐름</h2><p className="mt-2 text-sm text-muted-foreground sm:text-base">한국과 미국의 주요 종목을 한눈에 확인하세요.</p></div>
-              <Badge variant="outline" className="h-7 px-3">{fetchedAt ? `실제 조회 시세 · ${new Date(fetchedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '30초마다 자동 갱신'}</Badge>
+              <Badge variant="outline" className="h-7 px-3">{fetchedAt ? `5초 갱신 · ${new Date(fetchedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '5초마다 자동 갱신'}</Badge>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">{indices.map((item) => <div key={item.label} className="rounded-2xl border bg-card p-4"><p className="text-xs font-bold text-muted-foreground">{item.label}</p><div className="mt-2 flex items-end justify-between"><strong className="text-sm">{item.value}</strong><span className="text-xs font-bold text-muted-foreground">{item.note}</span></div></div>)}</div>
           </section>
 
           <section className="mt-8">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="inline-flex w-fit rounded-xl bg-muted p-1" aria-label="시장 선택"><Button className="h-9 rounded-lg px-5" variant={market === 'kr' ? 'default' : 'ghost'} onClick={() => setMarket('kr')}>한국 주식</Button><Button className="h-9 rounded-lg px-5" variant={market === 'us' ? 'default' : 'ghost'} onClick={() => setMarket('us')}>미국 주식</Button></div><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="종목명 또는 티커 검색" aria-label="종목 검색" className="h-10 rounded-xl bg-card pl-9" /></div></div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="mb-2 text-xs font-bold text-muted-foreground">내 관심종목</p><div className="inline-flex w-fit rounded-xl bg-muted p-1" aria-label="시장 선택"><Button className="h-9 rounded-lg px-5" variant={market === 'kr' ? 'default' : 'ghost'} onClick={() => setMarket('kr')}>한국 주식</Button><Button className="h-9 rounded-lg px-5" variant={market === 'us' ? 'default' : 'ghost'} onClick={() => setMarket('us')}>미국 주식</Button></div></div><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="관심종목 검색" aria-label="관심종목 검색" className="h-10 rounded-xl bg-card pl-9" /></div></div>
             <div className="mt-4 overflow-hidden rounded-2xl border bg-card shadow-sm">
               <div className="hidden grid-cols-[1.5fr_1fr_0.8fr_1fr_44px] border-b bg-muted/55 px-5 py-3 text-[11px] font-bold text-muted-foreground sm:grid"><span>종목</span><span>현재가</span><span>등락률</span><span>거래대금</span><span /></div>
               {visibleStocks.length ? visibleStocks.map((stock) => {
@@ -120,7 +142,7 @@ export default function Home() {
 
           <section className="mt-8">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><div className="flex items-center gap-2"><WalletCards className="size-5 text-primary" /><h2 className="text-xl font-black">내 토스증권 보유자산</h2></div><p className="mt-1 text-sm text-muted-foreground">계좌번호를 제외한 읽기 전용 요약입니다.</p></div><Badge variant="secondary"><ShieldCheck className="mr-1 size-3.5" /> 개인 정보</Badge></div>
-            {portfolioState === 'loading' ? <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">보유자산을 불러오는 중입니다.</div> : portfolioState === 'error' ? <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700 dark:border-red-950 dark:bg-red-950/30 dark:text-red-300">보유자산 연결을 확인해주세요. 시세 화면은 계속 사용할 수 있습니다.</div> : portfolio ? <div className="overflow-hidden rounded-2xl border bg-card"><div className="grid gap-4 border-b bg-muted/35 p-5 sm:grid-cols-3"><div><p className="text-xs font-bold text-muted-foreground">평가금액 (원화)</p><strong className="mt-1 block text-xl font-black">{formatPrice(portfolio.marketValue.krw, 'KRW')}</strong></div><div><p className="text-xs font-bold text-muted-foreground">총 손익 (원화)</p><strong className={`mt-1 block text-xl font-black ${Number(portfolio.profitLoss.krw) >= 0 ? 'text-rise' : 'text-fall'}`}>{formatPrice(portfolio.profitLoss.krw, 'KRW')}</strong></div><div><p className="text-xs font-bold text-muted-foreground">보유 종목</p><strong className="mt-1 block text-xl font-black">{portfolio.items.length}개</strong></div></div><div>{portfolio.items.map((item) => <article key={`${item.marketCountry}-${item.symbol}`} className="grid grid-cols-[1fr_auto] gap-3 border-b px-5 py-4 last:border-0 sm:grid-cols-[1.5fr_0.7fr_1fr_0.7fr]"><div><strong>{item.name}</strong><p className="text-xs text-muted-foreground">{item.symbol} · {item.marketCountry}</p></div><div className="text-right sm:text-left"><p className="text-xs text-muted-foreground">수량</p><span className="font-mono text-sm">{item.quantity}</span></div><div className="hidden sm:block"><p className="text-xs text-muted-foreground">평가금액</p><span className="font-mono text-sm">{formatPrice(item.marketValue, item.currency)}</span></div><div className={`text-right text-sm font-bold ${Number(item.profitLoss) >= 0 ? 'text-rise' : 'text-fall'}`}>{Number(item.profitRate) >= 0 ? '+' : ''}{Number(item.profitRate).toFixed(2)}%</div></article>)}</div></div> : <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">조회 가능한 보유 종목이 없습니다.</div>}
+            {holdingsState === 'loading' ? <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">보유종목을 불러오는 중입니다.</div> : holdingsState === 'error' ? <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700 dark:border-red-950 dark:bg-red-950/30 dark:text-red-300">보유종목 연결을 잠시 확인 중입니다. 시세 화면은 계속 사용할 수 있습니다.</div> : holdings.length ? <div className="overflow-hidden rounded-2xl border bg-card"><div className="grid grid-cols-[1fr_auto] border-b bg-muted/55 px-5 py-3 text-[11px] font-bold text-muted-foreground"><span>보유종목</span><span>수익률</span></div>{holdings.map((item) => <article key={`${item.marketCountry}-${item.symbol}`} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b px-5 py-4 last:border-0"><div><strong>{item.name}</strong><p className="text-xs text-muted-foreground">{item.symbol} · 현재가 {formatPrice(item.lastPrice, item.currency)}</p></div><div className={`text-right font-mono text-base font-black ${Number(item.profitLoss) >= 0 ? 'text-rise' : 'text-fall'}`}>{Number(item.profitRate) >= 0 ? '+' : ''}{Number(item.profitRate).toFixed(2)}%</div></article>)}</div> : <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">조회 가능한 보유종목이 없습니다.</div>}
           </section>
 
           <section className="mt-6 grid gap-4 lg:grid-cols-2"><article className="rounded-2xl border bg-card p-5"><h2 className="font-black">다음 데이터 연결</h2><p className="mt-3 text-lg font-bold">환율·금·비트코인과 시장 지표를 추가합니다.</p><p className="mt-2 text-sm text-muted-foreground">주말 데이터는 실제 시세와 구분해 참고 추정가로 표시할 예정입니다.</p></article><article className="rounded-2xl bg-primary p-5 text-primary-foreground"><p className="text-xs font-bold tracking-wide opacity-65">MY WATCHLIST</p><p className="mt-3 text-2xl font-black">관심종목 {favorites.length}개</p><p className="mt-1 text-sm opacity-70">별표를 눌러 나만의 시장을 구성하세요.</p></article></section>
