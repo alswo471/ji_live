@@ -8,6 +8,16 @@ type PriceResponse = {
   result: Array<{ symbol: string; timestamp: string; lastPrice: string; currency: string }>;
 };
 
+type RankingResponse = {
+  result: {
+    rankings: Array<{
+      symbol: string;
+      price: { changeRate: string | null };
+      tradingAmount: string;
+    }>;
+  };
+};
+
 type AccountsResponse = {
   result: Array<{ accountSeq: string; accountType: string }>;
 };
@@ -21,6 +31,7 @@ type HoldingsResponse = {
       currency: string;
       quantity: string;
       lastPrice: string;
+      averagePurchasePrice: string;
       profitLoss: { amount: string; rate: string };
     }>;
   };
@@ -48,9 +59,21 @@ export async function GET() {
     const requestedSymbols = [...new Set([...SYMBOLS, ...holdings.map((item) => item.symbol)])];
     const symbols = encodeURIComponent(requestedSymbols.join(','));
     const prices = await fetchToss<PriceResponse>(`/api/v1/prices?symbols=${symbols}`);
+    const metrics = new Map<string, { changeRate: string | null; tradingAmount: string }>();
+
+    try {
+      for (const marketCountry of ['KR', 'US']) {
+        const ranking = await fetchToss<RankingResponse>(`/api/v1/rankings?type=MARKET_TRADING_AMOUNT&marketCountry=${marketCountry}&duration=realtime&count=100`);
+        for (const item of ranking.result.rankings) {
+          metrics.set(item.symbol, { changeRate: item.price.changeRate, tradingAmount: item.tradingAmount });
+        }
+      }
+    } catch (error) {
+      console.error('Market metrics request failed:', error instanceof Error ? error.message : String(error));
+    }
 
     return Response.json({
-      prices: prices.result,
+      prices: prices.result.map((item) => ({ ...item, ...metrics.get(item.symbol) })),
       holdings: holdings.map((item) => ({
         symbol: item.symbol,
         name: item.name,
@@ -58,6 +81,7 @@ export async function GET() {
         currency: item.currency,
         quantity: item.quantity,
         lastPrice: item.lastPrice,
+        averagePurchasePrice: item.averagePurchasePrice,
         profitLoss: item.profitLoss.amount,
         profitRate: item.profitLoss.rate,
       })),
