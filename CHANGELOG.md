@@ -6,16 +6,18 @@ OO라이브의 사용자에게 영향을 주는 주요 변경 사항과 장애 �
 
 ## [Unreleased]
 
-### 추가
-
-- 기존 구조 분석, 최소 변경과 변경 후 검증 등 Codex 작업 원칙 8개를 루트 `AGENTS.md`에 정의
-
 ### 예정
 
 - KOSPI, NASDAQ와 USD/KRW 시장 지표 연동
 - 비트코인, 금, 달러와 엔화 데이터 추가
 - 실제 시세와 구분된 주말 참고 추정가 제공
 - 토스 API를 위한 고정 출구 IP 중계 서버 검토
+
+## [0.3.3] - 2026-08-31
+
+### 추가
+
+- 기존 구조 분석, 최소 변경과 변경 후 검증 등 Codex 작업 원칙 8개를 루트 `AGENTS.md`에 정의
 
 ## [0.3.2] - 2026-08-31
 
@@ -86,7 +88,8 @@ OO라이브의 사용자에게 영향을 주는 주요 변경 사항과 장애 �
 - GitHub Actions 기반 lint 및 production build 검사
 
 [Unreleased]: https://github.com/alswo471/ji_live/compare/main...develop
-[0.3.2]: https://github.com/alswo471/ji_live/compare/113cc05...main
+[0.3.3]: https://github.com/alswo471/ji_live/compare/b10bcb8...main
+[0.3.2]: https://github.com/alswo471/ji_live/compare/113cc05...b10bcb8
 [0.3.1]: https://github.com/alswo471/ji_live/compare/a65203d...113cc05
 [0.3.0]: https://github.com/alswo471/ji_live/compare/e7de41a...a65203d
 [0.2.0]: https://github.com/alswo471/ji_live/compare/45a6333...e7de41a
