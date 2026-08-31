@@ -75,8 +75,16 @@ export async function fetchToss<T>(path: string, headers?: HeadersInit, canRetry
     return fetchToss<T>(path, headers, false);
   }
 
+  if (response.status === 429 && canRetry) {
+    const retryAfter = Number(response.headers.get('Retry-After'));
+    const waitMs = Number.isFinite(retryAfter) ? Math.min(Math.max(retryAfter * 1000, 250), 3_000) : 1_000;
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    return fetchToss<T>(path, headers, false);
+  }
+
   if (!response.ok) {
-    throw new Error(`토스증권 API 요청에 실패했습니다. (${response.status})`);
+    const retryAfter = response.headers.get('Retry-After');
+    throw new Error(`토스증권 API 요청에 실패했습니다. (${response.status})${retryAfter ? ` Retry-After: ${retryAfter}` : ''}`);
   }
 
   return response.json() as Promise<T>;

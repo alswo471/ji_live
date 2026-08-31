@@ -71,8 +71,11 @@ export default function Home() {
   const [holdingsState, setHoldingsState] = useState<LoadState>('loading');
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const favoritesLoaded = useRef(false);
+  const requestInFlight = useRef(false);
 
   const loadData = async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
     try {
       const response = await fetch('/api/dashboard', { cache: 'no-store' });
       if (!response.ok) throw new Error('dashboard');
@@ -94,6 +97,8 @@ export default function Home() {
     } catch {
       setMarketState('error');
       setHoldingsState('error');
+    } finally {
+      requestInFlight.current = false;
     }
   };
 
@@ -101,12 +106,18 @@ export default function Home() {
     let stopped = false;
     let nextRefresh = 0;
     const refresh = async () => {
-      await loadData();
+      window.clearTimeout(nextRefresh);
+      if (document.visibilityState === 'visible') await loadData();
       if (!stopped) nextRefresh = window.setTimeout(() => void refresh(), 5_000);
     };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     const initialLoad = window.setTimeout(() => void refresh(), 0);
     return () => {
       stopped = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.clearTimeout(initialLoad);
       window.clearTimeout(nextRefresh);
     };
