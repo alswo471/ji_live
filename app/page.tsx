@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input';
 type Market = 'kr' | 'us';
 type StockView = 'top' | 'favorites';
 type Stock = { market: Market; name: string; symbol: string; fallbackPrice: string; change: number; volume: string; accent: string };
-type LivePrice = { symbol: string; timestamp: string; lastPrice: string; currency: string };
-type Holding = { symbol: string; name: string; marketCountry: string; currency: string; quantity: string; lastPrice: string; profitLoss: string; profitRate: string };
+type LivePrice = { symbol: string; timestamp: string; lastPrice: string; currency: string; changeRate?: string | null; tradingAmount?: string };
+type Holding = { symbol: string; name: string; marketCountry: string; currency: string; quantity: string; lastPrice: string; averagePurchasePrice: string; profitLoss: string; profitRate: string };
 type LoadState = 'loading' | 'ready' | 'error';
 
 const stocks: Stock[] = [
@@ -41,6 +41,22 @@ function formatPrice(value: string, currency: string) {
   if (!Number.isFinite(amount)) return value;
   if (currency === 'KRW') return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 }).format(amount)}원`;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 2 }).format(amount);
+}
+
+function formatRate(value?: string | null) {
+  if (value === undefined || value === null || !Number.isFinite(Number(value))) return '집계 중…';
+  const percent = Number(value) * 100;
+  return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`;
+}
+
+function formatTradingAmount(value?: string, currency = 'KRW') {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '집계 중…';
+  if (currency === 'KRW') {
+    if (amount >= 1_000_000_000_000) return `${(amount / 1_000_000_000_000).toFixed(1)}조원`;
+    return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 }).format(amount / 100_000_000)}억원`;
+  }
+  return new Intl.NumberFormat('en-US', { notation: 'compact', style: 'currency', currency: 'USD', maximumFractionDigits: 1 }).format(amount);
 }
 
 export default function Home() {
@@ -143,18 +159,19 @@ export default function Home() {
                 const live = prices[stock.symbol];
                 const favorite = favorites.includes(stock.symbol);
                 const waiting = marketState === 'error' ? '연결 재시도 중…' : '연동 중…';
-                return <article key={stock.symbol} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b px-4 py-4 last:border-0 hover:bg-muted/35 sm:grid-cols-[1.5fr_1fr_0.8fr_1fr_44px] sm:px-5"><div className="flex min-w-0 items-center gap-3"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-xs font-black text-primary">{stock.accent}</div><div className="min-w-0"><h3 className="truncate font-bold">{stock.name}</h3><p className="text-xs text-muted-foreground">{stock.symbol}</p></div></div><div className="text-right sm:text-left"><strong className="font-mono text-sm sm:text-base">{live ? formatPrice(live.lastPrice, live.currency) : waiting}</strong><p className="mt-1 text-xs text-muted-foreground sm:hidden">{live ? '조회 시세' : '실제 시세 확인 중'}</p></div><span className="hidden text-sm font-bold text-muted-foreground sm:block">{live ? '—' : waiting}</span><span className="hidden text-sm text-muted-foreground sm:block">{live ? '연동 예정' : waiting}</span><Button variant="ghost" size="icon" aria-label={`${stock.name} ${favorite ? '관심종목 해제' : '관심종목 추가'}`} onClick={() => toggleFavorite(stock.symbol)}><Star className={favorite ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'} /></Button></article>;
+                const rate = live?.changeRate === undefined || live.changeRate === null ? null : Number(live.changeRate);
+                return <article key={stock.symbol} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b px-4 py-4 last:border-0 hover:bg-muted/35 sm:grid-cols-[1.5fr_1fr_0.8fr_1fr_44px] sm:px-5"><div className="flex min-w-0 items-center gap-3"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-xs font-black text-primary">{stock.accent}</div><div className="min-w-0"><h3 className="truncate font-bold">{stock.name}</h3><p className="text-xs text-muted-foreground">{stock.symbol}</p></div></div><div className="text-right sm:text-left"><strong className="font-mono text-sm sm:text-base">{live ? formatPrice(live.lastPrice, live.currency) : waiting}</strong><p className={`mt-1 text-xs font-bold sm:hidden ${rate !== null && rate >= 0 ? 'text-rise' : 'text-fall'}`}>{live ? formatRate(live.changeRate) : '실제 시세 확인 중'}</p></div><span className={`hidden text-sm font-bold sm:block ${rate !== null && rate >= 0 ? 'text-rise' : 'text-fall'}`}>{live ? formatRate(live.changeRate) : waiting}</span><span className="hidden text-sm text-muted-foreground sm:block">{live ? formatTradingAmount(live.tradingAmount, live.currency) : waiting}</span><Button variant="ghost" size="icon" aria-label={`${stock.name} ${favorite ? '관심종목 해제' : '관심종목 추가'}`} onClick={() => toggleFavorite(stock.symbol)}><Star className={favorite ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'} /></Button></article>;
               }) : <div className="px-6 py-14 text-center"><Search className="mx-auto size-8 text-muted-foreground/50" /><p className="mt-3 font-bold">검색 결과가 없습니다</p><p className="text-sm text-muted-foreground">다른 종목명이나 티커를 입력해보세요.</p></div>}
             </div>
           </section>
 
           <section className="mt-8">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><div className="flex items-center gap-2"><WalletCards className="size-5 text-primary" /><h2 className="text-xl font-black">내 토스증권 보유자산</h2></div><p className="mt-1 text-sm text-muted-foreground">계좌번호를 제외한 읽기 전용 요약입니다.</p></div><Badge variant="secondary"><ShieldCheck className="mr-1 size-3.5" /> 개인 정보</Badge></div>
-            {holdingsState === 'loading' ? <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">보유종목을 불러오는 중입니다.</div> : holdingsState === 'error' ? <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700 dark:border-red-950 dark:bg-red-950/30 dark:text-red-300">보유종목 연결을 잠시 확인 중입니다. 시세 화면은 계속 사용할 수 있습니다.</div> : holdings.length ? <div className="overflow-hidden rounded-2xl border bg-card"><div className="grid grid-cols-[1fr_auto] border-b bg-muted/55 px-5 py-3 text-[11px] font-bold text-muted-foreground"><span>보유종목</span><span>수익률</span></div>{holdings.map((item) => <article key={`${item.marketCountry}-${item.symbol}`} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b px-5 py-4 last:border-0"><div><strong>{item.name}</strong><p className="text-xs text-muted-foreground">{item.symbol} · 현재가 {formatPrice(item.lastPrice, item.currency)}</p></div><div className={`text-right font-mono text-base font-black ${Number(item.profitLoss) >= 0 ? 'text-rise' : 'text-fall'}`}>{Number(item.profitRate) >= 0 ? '+' : ''}{Number(item.profitRate).toFixed(2)}%</div></article>)}</div> : <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">조회 가능한 보유종목이 없습니다.</div>}
+            {holdingsState === 'loading' ? <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">보유종목을 불러오는 중입니다.</div> : holdingsState === 'error' ? <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700 dark:border-red-950 dark:bg-red-950/30 dark:text-red-300">보유종목 연결을 잠시 확인 중입니다. 시세 화면은 계속 사용할 수 있습니다.</div> : holdings.length ? <div className="overflow-hidden rounded-2xl border bg-card"><div className="grid grid-cols-[1fr_auto] border-b bg-muted/55 px-5 py-3 text-[11px] font-bold text-muted-foreground"><span>보유종목</span><span>수익률</span></div>{holdings.map((item) => <article key={`${item.marketCountry}-${item.symbol}`} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b px-5 py-4 last:border-0"><div><strong>{item.name}</strong><p className="text-xs text-muted-foreground">{item.symbol} · 평단 {formatPrice(item.averagePurchasePrice, item.currency)} · 현재가 {formatPrice(item.lastPrice, item.currency)}</p></div><div className={`text-right font-mono text-base font-black ${Number(item.profitLoss) >= 0 ? 'text-rise' : 'text-fall'}`}>{formatRate(item.profitRate)}</div></article>)}</div> : <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">조회 가능한 보유종목이 없습니다.</div>}
           </section>
 
           <section className="mt-6 grid gap-4 lg:grid-cols-2"><article className="rounded-2xl border bg-card p-5"><h2 className="font-black">다음 데이터 연결</h2><p className="mt-3 text-lg font-bold">환율·금·비트코인과 시장 지표를 추가합니다.</p><p className="mt-2 text-sm text-muted-foreground">주말 데이터는 실제 시세와 구분해 참고 추정가로 표시할 예정입니다.</p></article><article className="rounded-2xl bg-primary p-5 text-primary-foreground"><p className="text-xs font-bold tracking-wide opacity-65">MY WATCHLIST</p><p className="mt-3 text-2xl font-black">관심종목 {favorites.length}개</p><p className="mt-1 text-sm opacity-70">별표를 눌러 나만의 시장을 구성하세요.</p></article></section>
-          <footer className="mt-10 border-t py-7 text-xs text-muted-foreground">조회 시세는 지연될 수 있으며 투자 판단의 근거로 사용할 수 없습니다. 등락률·거래대금·시장 지표는 다음 데이터 연동 단계에서 추가됩니다.</footer>
+          <footer className="mt-10 border-t py-7 text-xs text-muted-foreground">조회 시세는 지연될 수 있으며 투자 판단의 근거로 사용할 수 없습니다. 등락률과 거래대금은 토스증권 시장 집계 기준입니다.</footer>
         </div>
       </main>
     </div>

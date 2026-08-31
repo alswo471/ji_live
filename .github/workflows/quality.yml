@@ -41,3 +41,34 @@ jobs:
 
       - name: Build production site
         run: pnpm build
+
+  notify:
+    needs: verify
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      CHECK_RESULT: ${{ needs.verify.result }}
+      REPOSITORY: ${{ github.repository }}
+      BRANCH: ${{ github.ref_name }}
+      COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+
+    steps:
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        run: |
+          if [ "$CHECK_RESULT" = "success" ]; then
+            STATUS="✅ 검사 성공"
+          else
+            STATUS="❌ 검사 실패"
+          fi
+          PAYLOAD=$(jq -n \
+            --arg status "$STATUS" \
+            --arg repository "$REPOSITORY" \
+            --arg branch "$BRANCH" \
+            --arg url "$COMMIT_URL" \
+            '{text: ("*OO라이브 GitHub 알림*\n" + $status + "\n• 저장소: " + $repository + "\n• 브랜치: " + $branch + "\n• 커밋: " + $url)}')
+          curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            --data "$PAYLOAD" \
+            "$SLACK_WEBHOOK_URL"
