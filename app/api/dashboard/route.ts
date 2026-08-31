@@ -42,7 +42,7 @@ export async function GET() {
       }
     } catch (error) {
       holdingsAvailable = false;
-      console.error('Holdings request failed', error);
+      console.error('Holdings request failed:', error instanceof Error ? error.message : String(error));
     }
 
     const requestedSymbols = [...new Set([...SYMBOLS, ...holdings.map((item) => item.symbol)])];
@@ -65,7 +65,7 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Dashboard request failed', error);
+    console.error('Dashboard request failed:', error instanceof Error ? error.message : String(error));
     return Response.json({ error: '시세를 불러오지 못했습니다.' }, { status: 502 });
   }
 }
