@@ -36,7 +36,6 @@ async function getAccessToken() {
 }
 
 async function requestAccessToken() {
-
   const { clientId, clientSecret } = credentials();
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
@@ -62,7 +61,7 @@ async function requestAccessToken() {
   return tokenCache.accessToken;
 }
 
-export async function fetchToss<T>(path: string, headers?: HeadersInit) {
+export async function fetchToss<T>(path: string, headers?: HeadersInit, canRetry = true): Promise<T> {
   const accessToken = await getAccessToken();
   const requestHeaders = new Headers(headers);
   requestHeaders.set('Authorization', `Bearer ${accessToken}`);
@@ -70,6 +69,11 @@ export async function fetchToss<T>(path: string, headers?: HeadersInit) {
     headers: requestHeaders,
     cache: 'no-store',
   });
+
+  if (response.status === 401 && canRetry) {
+    tokenCache = null;
+    return fetchToss<T>(path, headers, false);
+  }
 
   if (!response.ok) {
     throw new Error(`토스증권 API 요청에 실패했습니다. (${response.status})`);
