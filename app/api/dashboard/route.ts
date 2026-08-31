@@ -2,7 +2,7 @@ import { fetchToss } from '@/lib/toss-invest';
 
 export const dynamic = 'force-dynamic';
 
-const SYMBOLS = ['005930', '000660', '005380', '035420', 'NVDA', 'AAPL', 'TSLA', 'MSFT'];
+const SYMBOLS = ['005930', '000660', '207940', '373220', '005380', '000270', '105560', '068270', '012450', '034020', 'NVDA', 'AAPL', 'TSLA', 'MSFT'];
 
 type PriceResponse = {
   result: Array<{ symbol: string; timestamp: string; lastPrice: string; currency: string }>;
