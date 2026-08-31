@@ -50,6 +50,11 @@ async function requestAccessToken() {
   });
 
   if (!response.ok) {
+    const digest = async (value: string) => {
+      const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+      return Array.from(new Uint8Array(bytes)).slice(0, 4).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    };
+    console.error(`Toss credential check: idLength=${clientId.length}, secretLength=${clientSecret.length}, idHash=${await digest(clientId)}, secretHash=${await digest(clientSecret)}`);
     throw new Error(`토스증권 인증에 실패했습니다. (${response.status})`);
   }
 
