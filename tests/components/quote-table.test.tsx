@@ -1,14 +1,17 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import { QuoteTable } from '@/components/market/quote-table';
 import type { MarketQuote } from '@/lib/market/types';
 
 const quote: MarketQuote = {
   symbol: '005930', name: '삼성전자', nameKo: '삼성전자', nameEn: 'Samsung Electronics', assetClass: 'kr-stock', price: 84000,
   currency: 'KRW', changeRate: 0.0124, previousClose: 82970, changeRateSource: 'provider', tradingAmount: 184_200_000_000,
-  asOf: '2026-09-01T10:00:00+09:00', session: 'regular', quality: 'realtime',
-  provider: 'toss', confidence: null, estimateInputs: [],
+  asOf: '2026-09-01T10:00:00+09:00', session: 'always-open', quality: 'estimated',
+  provider: 'hyperliquid', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
+  priceKind: 'derived-estimate', comparisonBasis: 'provider-24h', sourceLabel: 'Hyperliquid 파생상품',
 };
+
+afterEach(cleanup);
 
 describe('QuoteTable', () => {
   it('현재가와 등락률, 시세 상태를 함께 표시한다', () => {
@@ -18,7 +21,8 @@ describe('QuoteTable', () => {
     expect(screen.getByText('삼성전자')).toBeInTheDocument();
     expect(screen.getByText('84,000원')).toBeInTheDocument();
     expect(screen.getAllByText('+1.24%')).toHaveLength(2);
-    expect(screen.getByText(/정규장/)).toBeInTheDocument();
+    expect(screen.getByText('24시간 추정가')).toBeInTheDocument();
+    expect(screen.getByText('24시간 전 대비')).toBeInTheDocument();
   });
 
   it('영문명 표기에서도 종목 코드를 유지한다', () => {

@@ -29,7 +29,7 @@ export function QuoteTable({ quotes, nameLocale = 'ko' }: { quotes: MarketQuote[
       <div className="text-right md:text-left"><strong className="font-mono text-base tabular-nums">{formatPrice(quote)}</strong><PriceChange value={quote.changeRate} className="mt-1 flex justify-end text-xs md:hidden" /></div>
       <PriceChange value={quote.changeRate} className="hidden text-sm md:inline-flex" />
       <span className="hidden font-mono text-sm text-muted-foreground md:block">{formatTradingAmount(quote.tradingAmount, quote.currency)}</span>
-      <div className="col-span-2 md:col-span-1"><QuoteBadge quote={quote} /></div>
+      <div className="col-span-2 min-w-0 md:col-span-1"><QuoteBadge quote={quote} /></div>
     </Link>;})}
   </div>;
 }

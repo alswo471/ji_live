@@ -33,6 +33,17 @@ function formatVolume(value: number | null) {
   return new Intl.NumberFormat('ko-KR', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
+function formatAsOf(value: string | null) {
+  if (!value) return '수신 대기 중';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '시각 확인 중';
+  return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
+function formatEstimateInput(value: string) {
+  return value === 'KRW-USDT' ? 'USDT/KRW 환산' : value;
+}
+
 function DataPoint({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl border bg-muted/25 p-4"><dt className="text-xs font-semibold text-muted-foreground">{label}</dt><dd className="mt-2 font-mono text-sm font-bold tabular-nums sm:text-base">{value}</dd></div>;
 }
@@ -45,11 +56,13 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
   const { candles, state, message } = useMarketCandles(quote.symbol, range);
   const latest: CandlePoint | undefined = candles.at(-1);
   const displayName = preferences.nameLocale === 'en' ? quote.nameEn ?? quote.name : quote.nameKo ?? quote.name;
-  const previousClose = quote.previousClose ?? (
-    quote.price !== null && quote.changeRate !== null && 1 + quote.changeRate > 0
-      ? quote.price / (1 + quote.changeRate)
-      : null
-  );
+  const previousClose = quote.comparisonBasis === 'previous-close'
+    ? quote.previousClose ?? (
+      quote.price !== null && quote.changeRate !== null && 1 + quote.changeRate > 0
+        ? quote.price / (1 + quote.changeRate)
+        : null
+    )
+    : null;
   const moveRangeFocus = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     const nextIndex = event.key === 'ArrowRight'
       ? (index + 1) % RANGES.length
@@ -86,9 +99,30 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
           <DataPoint label="고가" value={formatNumber(latest?.high ?? null, quote.currency)} />
           <DataPoint label="저가" value={formatNumber(latest?.low ?? null, quote.currency)} />
           <DataPoint label="종가" value={formatNumber(latest?.close ?? quote.price, quote.currency)} />
-          <DataPoint label="전일 종가" value={formatNumber(previousClose, quote.currency)} />
+          {quote.comparisonBasis === 'previous-close'
+            ? <DataPoint label="전일 종가" value={formatNumber(previousClose, quote.currency)} />
+            : <DataPoint label="비교 기준" value="24시간 전" />}
           <DataPoint label="거래량" value={formatVolume(latest?.volume ?? null)} />
         </dl>
+
+        <section className="mt-6 rounded-2xl border bg-card/60 p-4 sm:p-5" aria-labelledby="quote-evidence-heading">
+          <h2 id="quote-evidence-heading" className="text-sm font-black">데이터 근거</h2>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+            <DataPoint label="공급자" value={quote.sourceLabel ?? '출처 확인 중'} />
+            <DataPoint label="기준 시각" value={formatAsOf(quote.asOf)} />
+            <div className="rounded-xl border bg-muted/25 p-4">
+              <dt className="text-xs font-semibold text-muted-foreground">계산 근거</dt>
+              <dd className="mt-2 flex flex-wrap gap-1.5 font-mono text-sm font-bold">
+                {quote.estimateInputs.length
+                  ? quote.estimateInputs.map((input) => <span key={input} className="whitespace-nowrap">{formatEstimateInput(input)}</span>)
+                  : <span>표시 상품 자체</span>}
+              </dd>
+            </div>
+          </dl>
+          {quote.priceKind === 'derived-estimate' && <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-950 dark:text-amber-100">
+            실제 주식 가격이 아닌 해외 파생상품 기반 참고 추정가입니다. 투자 판단 전 공식 거래소·증권사 가격을 확인하세요.
+          </p>}
+        </section>
 
         <section className="mt-8" aria-labelledby="price-chart-heading">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4"><div><p className="flex items-center gap-2 text-xs font-bold text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" />PRICE &amp; VOLUME</p><h2 id="price-chart-heading" className="mt-1 text-xl font-black">가격·거래량 차트</h2></div><div className="max-w-full overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex min-w-max gap-2 rounded-xl border bg-card/60 p-1" role="tablist" aria-label="차트 봉 단위 선택">{RANGES.map((item, index) => <button key={item.value} id={`candle-tab-${item.value}`} type="button" role="tab" tabIndex={range === item.value ? 0 : -1} aria-selected={range === item.value} aria-controls="market-price-chart" onClick={() => setRange(item.value)} onKeyDown={(event) => moveRangeFocus(event, index)} className={`min-h-11 min-w-14 rounded-lg px-3 text-sm font-bold transition-colors ${range === item.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{item.label}</button>)}</div></div></div>
