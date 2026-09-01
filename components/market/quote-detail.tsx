@@ -120,8 +120,11 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
               </dd>
             </div>
           </dl>
-          {quote.priceKind === 'derived-estimate' && <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-950 dark:text-amber-100">
+          {quote.priceKind === 'derived-estimate' && (quote.assetClass === 'kr-stock' || quote.assetClass === 'us-stock') && <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-950 dark:text-amber-100">
             실제 주식 가격이 아닌 해외 파생상품 기반 참고 추정가입니다. 투자 판단 전 공식 거래소·증권사 가격을 확인하세요.
+          </p>}
+          {quote.priceKind === 'derived-estimate' && quote.assetClass === 'fx' && <p className="mt-4 rounded-xl border border-sky-500/30 bg-sky-400/10 p-3 text-xs leading-5 text-sky-950 dark:text-sky-100">
+            Bithumb KRW-USDT 거래상품을 기준으로 계산한 합성환율입니다. 은행 고시환율과 다를 수 있습니다.
           </p>}
         </section>
 

@@ -6,6 +6,8 @@ import {
 } from '@/lib/market/provider-error';
 
 describe('parseRetryAfter', () => {
+  const modernNow = Date.parse('2026-09-01T00:00:00.000Z');
+
   it('초 단위 값을 밀리초로 보존한다', () => {
     expect(parseRetryAfter('2.5', 1_000)).toBe(2_500);
   });
@@ -20,6 +22,26 @@ describe('parseRetryAfter', () => {
     expect(parseRetryAfter('later', 1_000)).toBeNull();
   });
 
+  it.each(['-1', '+3', ' -1 ', ' +3 '])(
+    '부호가 있는 숫자형 값 %s을 HTTP-date로 재해석하지 않는다',
+    (value) => {
+      expect(parseRetryAfter(value, modernNow)).toBeNull();
+    },
+  );
+
+  it('바깥 공백이 있는 unsigned decimal seconds는 허용한다', () => {
+    expect(parseRetryAfter(' 3 ', 1_000)).toBe(3_000);
+  });
+
+  it.each([
+    '2026-09-01T00:00:03Z',
+    'Tue, 1 Sep 2026 00:00:03 GMT',
+    'Mon, 01 Sep 2026 00:00:03 GMT',
+    'Tue, 31 Feb 2026 00:00:03 GMT',
+  ])('엄격한 IMF-fixdate가 아닌 날짜 %s를 거절한다', (value) => {
+    expect(parseRetryAfter(value, modernNow)).toBeNull();
+  });
+
   it('Infinity가 되는 큰 숫자와 운영 상한을 넘는 초를 거절한다', () => {
     expect(parseRetryAfter('9'.repeat(400), 1_000)).toBeNull();
     expect(
@@ -28,10 +50,9 @@ describe('parseRetryAfter', () => {
   });
 
   it('운영 상한보다 먼 HTTP-date를 거절한다', () => {
-    const now = Date.parse('2026-09-01T00:00:00.000Z');
-    const farFuture = new Date(now + MAX_RETRY_AFTER_MS + 1_000).toUTCString();
+    const farFuture = new Date(modernNow + MAX_RETRY_AFTER_MS + 1_000).toUTCString();
 
-    expect(parseRetryAfter(farFuture, now)).toBeNull();
+    expect(parseRetryAfter(farFuture, modernNow)).toBeNull();
   });
 });
 

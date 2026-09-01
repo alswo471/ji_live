@@ -149,6 +149,31 @@ describe('QuoteDetail', () => {
     expect(screen.queryByText('$3,472.18')).not.toBeInTheDocument();
   });
 
+  it('합성환율에는 주식 파생 면책 대신 FX 계산 근거를 표시한다', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+
+    render(<QuoteDetail initialQuote={{
+      ...quote,
+      symbol: 'USDTKRW',
+      name: 'USDT/KRW 합성환율',
+      assetClass: 'fx',
+      price: 1_380,
+      previousClose: 1_378.62,
+      changeRate: 0.001,
+      changeRateSource: 'previous-close',
+      provider: 'bithumb',
+      providerSymbol: 'KRW-USDT',
+      estimateInputs: ['KRW-USDT'],
+      priceKind: 'derived-estimate',
+      comparisonBasis: 'previous-close',
+      sourceLabel: 'Bithumb KRW-USDT',
+    }} />);
+
+    expect(screen.getByText(/Bithumb KRW-USDT 거래상품을 기준으로 계산한 합성환율/)).toBeVisible();
+    expect(screen.getByText(/은행 고시환율과 다를 수 있습니다/)).toBeVisible();
+    expect(screen.queryByText(/실제 주식 가격이 아닌 해외 파생상품/)).not.toBeInTheDocument();
+  });
+
   it('비교 기준이 없으면 24시간 전 비교로 오인하게 하지 않는다', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
 

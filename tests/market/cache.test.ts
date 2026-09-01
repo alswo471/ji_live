@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createCachedProvider } from '@/lib/market/cache';
 import {
   MAX_RETRY_AFTER_MS,
+  parseRetryAfter,
   ProviderRequestError,
 } from '@/lib/market/provider-error';
 
@@ -139,6 +140,36 @@ describe('createCachedProvider', () => {
       let now = 0;
       const load = vi.fn(async () => {
         throw new ProviderRequestError('rate limited', 429, retryAfterMs);
+      });
+      const cached = createCachedProvider({
+        ttlMs: 5_000,
+        failureThreshold: 3,
+        cooldownMs: 100,
+        load,
+        now: () => now,
+      });
+
+      await expect(cached.get()).rejects.toThrow('rate limited');
+      now = 99;
+      await expect(cached.get()).rejects.toThrow('rate limited');
+      expect(load).toHaveBeenCalledTimes(1);
+
+      now = 100;
+      await expect(cached.get()).rejects.toThrow('rate limited');
+      expect(load).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(['-1', '+3', ' -1 ', ' +3 '])(
+    '잘못된 Retry-After %s를 0ms 회로 차단 대신 지수 backoff로 처리한다',
+    async (header) => {
+      let now = 0;
+      const load = vi.fn(async () => {
+        throw new ProviderRequestError(
+          'rate limited',
+          429,
+          parseRetryAfter(header, Date.parse('2026-09-01T00:00:00.000Z')),
+        );
       });
       const cached = createCachedProvider({
         ttlMs: 5_000,

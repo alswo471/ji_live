@@ -21,7 +21,11 @@ describe('QuoteTable', () => {
     expect(screen.getByRole('link', { name: /삼성전자 상세 보기/ })).toHaveAttribute('href', '/market/005930');
     expect(screen.getByText('삼성전자')).toBeInTheDocument();
     expect(screen.getByText('84,000원')).toBeInTheDocument();
-    expect(screen.getAllByText('+1.24%')).toHaveLength(2);
+    const rates = screen.getAllByLabelText('상승 +1.24%');
+    expect(rates).toHaveLength(2);
+    expect(rates[0]).toHaveClass('md:hidden');
+    expect(rates[1]).not.toHaveClass('hidden', 'md:inline-flex');
+    expect(rates[1].parentElement).toHaveClass('hidden', 'md:block');
     expect(screen.getByText('24시간 추정가')).toBeInTheDocument();
     expect(screen.getByText('해외 파생상품 기준 · 24시간 전 대비')).toBeInTheDocument();
   });

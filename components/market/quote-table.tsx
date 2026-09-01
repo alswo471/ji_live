@@ -33,7 +33,7 @@ export function QuoteTable({ quotes, nameLocale = 'ko' }: { quotes: MarketQuote[
       return <Link key={`${quote.assetClass}-${quote.symbol}`} href={`/market/${quote.symbol}`} aria-label={`${displayName} 상세 보기`} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b px-4 py-4 transition-colors last:border-0 hover:bg-muted/35 focus-visible:z-10 focus-visible:bg-muted/35 md:grid-cols-[1.4fr_1fr_.8fr_1fr_1.2fr] md:px-5">
       <div className="min-w-0"><h3 className="truncate font-bold">{displayName}</h3><p className="mt-0.5 font-mono text-xs text-muted-foreground">{quote.symbol}</p></div>
       <div className="text-right md:text-left"><strong className="font-mono text-base tabular-nums">{formatPrice(quote)}</strong><PriceChange value={quote.changeRate} className="mt-1 flex justify-end text-xs md:hidden" /></div>
-      <PriceChange value={quote.changeRate} className="hidden text-sm md:inline-flex" />
+      <div className="hidden md:block"><PriceChange value={quote.changeRate} className="text-sm" /></div>
       <span className="hidden font-mono text-sm text-muted-foreground md:block">{formatTradingAmount(quote.tradingAmount, quote.tradingAmountCurrency)}</span>
       <div className="col-span-2 min-w-0 md:col-span-1"><QuoteBadge quote={quote} /></div>
     </Link>;})}
