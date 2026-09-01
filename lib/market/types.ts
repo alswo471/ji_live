@@ -2,7 +2,9 @@ export type AssetClass = 'kr-stock' | 'us-stock' | 'crypto' | 'index' | 'fx' | '
 export type MarketSession = 'day' | 'pre' | 'regular' | 'after' | 'closed' | 'always-open';
 export type QuoteQuality = 'realtime' | 'delayed' | 'estimated' | 'stale' | 'unavailable';
 export type Confidence = 'high' | 'medium' | 'low';
-export type MarketProvider = 'toss' | 'binance' | 'bithumb';
+export type MarketProvider = 'hyperliquid' | 'binance-futures' | 'binance-spot' | 'bithumb';
+export type PriceKind = 'actual-product' | 'derived-estimate' | 'unavailable';
+export type ComparisonBasis = 'provider-24h' | 'previous-close' | null;
 export type Currency = 'KRW' | 'USD';
 export type ChangeDirection = 'up' | 'down' | 'flat';
 export type ChangeRateSource = 'provider' | 'previous-close' | 'provider-direction' | null;
@@ -42,6 +44,9 @@ export type MarketQuote = {
   provider: MarketProvider | null;
   confidence: Confidence | null;
   estimateInputs: string[];
+  priceKind: PriceKind;
+  comparisonBasis: ComparisonBasis;
+  sourceLabel: string | null;
 };
 
 export type Instrument = {
@@ -53,6 +58,15 @@ export type Instrument = {
   currency: Currency;
   provider: MarketProvider;
   providerSymbol: string;
+};
+
+export type DerivativeTicker = {
+  provider: 'hyperliquid' | 'binance-futures';
+  providerSymbol: string;
+  price: number | null;
+  changeRate: number | null;
+  tradingAmount: number | null;
+  asOf: string;
 };
 
 export type DashboardResponse = {
