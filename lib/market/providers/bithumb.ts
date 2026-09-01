@@ -1,5 +1,8 @@
 import { INSTRUMENTS, KRW_USDT_SANITY_BOUNDS } from '../catalog';
-import { assessTimestampFreshness } from '../freshness';
+import {
+  assessTimestampFreshness,
+  MARKET_TICKER_FRESHNESS,
+} from '../freshness';
 import { createProviderRequestError } from '../provider-error';
 import type { FxConversionInput, MarketQuote } from '../types';
 
@@ -11,6 +14,7 @@ const DEFAULT_MARKETS = [
   'KRW-DOGE',
   'KRW-USDT',
 ];
+const BITHUMB_KST_OFFSET_MS = 9 * 60 * 60 * 1_000;
 type BithumbTicker = {
   market: string;
   trade_price: number;
@@ -43,6 +47,28 @@ function isWithinSanityBounds(
   return value !== null && value > bounds.minExclusive && value < bounds.maxExclusive;
 }
 
+/**
+ * Bithumb ticker가 UTC 거래시각을 KST wall-clock epoch로 보낼 때만 9시간을
+ * 되돌린다. 이미 유효한 epoch는 유지하고 보정 후보도 공통 freshness 정책으로
+ * 다시 검증해 임의의 미래 시각을 수신 시각으로 가장하지 않는다.
+ */
+function assessBithumbTimestampFreshness(timestamp: unknown, nowMs: number) {
+  const original = assessTimestampFreshness(timestamp, nowMs);
+  if (
+    original.freshness !== 'unavailable' ||
+    typeof timestamp !== 'number' ||
+    timestamp <= nowMs + MARKET_TICKER_FRESHNESS.futureToleranceMs
+  ) {
+    return original;
+  }
+
+  const normalized = assessTimestampFreshness(
+    timestamp - BITHUMB_KST_OFFSET_MS,
+    nowMs,
+  );
+  return normalized.freshness === 'unavailable' ? original : normalized;
+}
+
 export async function fetchBithumbSnapshot(
   fetcher: typeof fetch = fetch,
   markets = DEFAULT_MARKETS,
@@ -60,7 +86,7 @@ export async function fetchBithumbSnapshot(
   const tickers = (await response.json()) as BithumbTicker[];
 
   const usdtTicker = tickers.find((ticker) => ticker.market === 'KRW-USDT');
-  const fxFreshness = assessTimestampFreshness(
+  const fxFreshness = assessBithumbTimestampFreshness(
     usdtTicker?.timestamp,
     now().getTime(),
   );
@@ -124,7 +150,7 @@ export async function fetchBithumbSnapshot(
           item.assetClass === 'crypto',
       );
       if (!instrument) return [];
-      const freshness = assessTimestampFreshness(
+      const freshness = assessBithumbTimestampFreshness(
         ticker.timestamp,
         now().getTime(),
       );

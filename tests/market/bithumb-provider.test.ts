@@ -3,6 +3,17 @@ import { fetchBithumbSnapshot } from '@/lib/market/providers/bithumb';
 
 const atFixtureTime = () => new Date(1788226801000);
 
+function ticker(market: string, timestamp: number) {
+  return {
+    market,
+    trade_price: market === 'KRW-USDT' ? 1380 : 149850000,
+    prev_closing_price: market === 'KRW-USDT' ? 1378.62 : 145770000,
+    signed_change_rate: market === 'KRW-USDT' ? 0.001 : 0.028,
+    acc_trade_price_24h: market === 'KRW-USDT' ? 1000000 : 184200000000,
+    timestamp,
+  };
+}
+
 describe('fetchBithumbSnapshot', () => {
   it('기본 요청에 합성환율용 KRW-USDT를 포함한다', async () => {
     let requestedUrl = '';
@@ -255,6 +266,106 @@ describe('fetchBithumbSnapshot', () => {
     });
     expect(snapshot.quotes[0]).toMatchObject({
       price: 149850000,
+      asOf: '2026-09-01T09:54:59.000Z',
+      quality: 'stale',
+    });
+  });
+
+  it('정상 epoch timestamp는 KST 보정 없이 원래 시각을 유지한다', async () => {
+    const timestamp = Date.parse('2026-09-01T09:59:59.000Z');
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([ticker('KRW-BTC', timestamp)]));
+
+    const snapshot = await fetchBithumbSnapshot(
+      fetcher,
+      ['KRW-BTC'],
+      () => new Date('2026-09-01T10:00:00.000Z'),
+    );
+
+    expect(snapshot.quotes[0]).toMatchObject({
+      price: 149850000,
+      asOf: '2026-09-01T09:59:59.000Z',
+      quality: 'realtime',
+    });
+  });
+
+  it('현재보다 정확히 9시간 앞선 live-style timestamp를 UTC epoch로 정규화한다', async () => {
+    const normalizedTimestamp = Date.parse('2026-09-01T09:59:59.000Z');
+    const rawTimestamp = normalizedTimestamp + 9 * 60 * 60 * 1_000;
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([
+        ticker('KRW-BTC', rawTimestamp),
+        ticker('KRW-USDT', rawTimestamp),
+      ]));
+
+    const snapshot = await fetchBithumbSnapshot(
+      fetcher,
+      ['KRW-BTC', 'KRW-USDT'],
+      () => new Date('2026-09-01T10:00:00.000Z'),
+    );
+
+    expect(snapshot.quotes[0]).toMatchObject({
+      price: 149850000,
+      asOf: '2026-09-01T09:59:59.000Z',
+      quality: 'realtime',
+    });
+    expect(snapshot.fxRate).toMatchObject({
+      rate: 1380,
+      asOf: '2026-09-01T09:59:59.000Z',
+      freshness: 'fresh',
+    });
+    expect(snapshot.fxQuote).toMatchObject({
+      price: 1380,
+      asOf: '2026-09-01T09:59:59.000Z',
+      quality: 'estimated',
+    });
+  });
+
+  it('KST 보정 후보도 미래이면 arbitrary future timestamp를 unavailable로 유지한다', async () => {
+    const rawTimestamp = Date.parse('2026-09-01T22:00:00.000Z');
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([ticker('KRW-BTC', rawTimestamp)]));
+
+    const snapshot = await fetchBithumbSnapshot(
+      fetcher,
+      ['KRW-BTC'],
+      () => new Date('2026-09-01T10:00:00.000Z'),
+    );
+
+    expect(snapshot.quotes[0]).toMatchObject({
+      price: null,
+      asOf: null,
+      quality: 'unavailable',
+    });
+  });
+
+  it('KST 보정 후 정책보다 오래된 timestamp는 정규화 시각을 stale로 유지한다', async () => {
+    const normalizedTimestamp = Date.parse('2026-09-01T09:54:59.000Z');
+    const rawTimestamp = normalizedTimestamp + 9 * 60 * 60 * 1_000;
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([
+        ticker('KRW-BTC', rawTimestamp),
+        ticker('KRW-USDT', rawTimestamp),
+      ]));
+
+    const snapshot = await fetchBithumbSnapshot(
+      fetcher,
+      ['KRW-BTC', 'KRW-USDT'],
+      () => new Date('2026-09-01T10:00:00.000Z'),
+    );
+
+    expect(snapshot.quotes[0]).toMatchObject({
+      price: 149850000,
+      asOf: '2026-09-01T09:54:59.000Z',
+      quality: 'stale',
+    });
+    expect(snapshot.fxRate).toMatchObject({
+      rate: 1380,
+      asOf: '2026-09-01T09:54:59.000Z',
+      freshness: 'stale',
+    });
+    expect(snapshot.fxQuote).toMatchObject({
+      price: 1380,
       asOf: '2026-09-01T09:54:59.000Z',
       quality: 'stale',
     });
