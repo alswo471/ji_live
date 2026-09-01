@@ -4,6 +4,7 @@ export type QuoteQuality = 'realtime' | 'delayed' | 'estimated' | 'stale' | 'una
 export type Confidence = 'high' | 'medium' | 'low';
 export type MarketProvider = 'toss' | 'binance' | 'bithumb';
 export type Currency = 'KRW' | 'USD';
+export type ChangeRateSource = 'provider' | 'previous-close' | null;
 
 export type MarketQuote = {
   symbol: string;
@@ -12,6 +13,8 @@ export type MarketQuote = {
   price: number | null;
   currency: Currency;
   changeRate: number | null;
+  previousClose: number | null;
+  changeRateSource: ChangeRateSource;
   tradingAmount: number | null;
   asOf: string | null;
   session: MarketSession;

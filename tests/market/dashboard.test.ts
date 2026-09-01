@@ -4,7 +4,7 @@ import type { MarketQuote } from '@/lib/market/types';
 
 const quote = (overrides: Partial<MarketQuote>): MarketQuote => ({
   symbol: '005930', name: '삼성전자', assetClass: 'kr-stock', price: 84200, currency: 'KRW',
-  changeRate: 0.0145, tradingAmount: 1000, asOf: '2026-09-01T10:00:00+09:00',
+  changeRate: 0.0145, previousClose: null, changeRateSource: 'provider', tradingAmount: 1000, asOf: '2026-09-01T10:00:00+09:00',
   session: 'regular', quality: 'realtime', provider: 'toss', confidence: null, estimateInputs: [],
   ...overrides,
 });

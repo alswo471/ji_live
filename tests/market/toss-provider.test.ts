@@ -32,4 +32,32 @@ describe('fetchTossMarketSnapshot', () => {
     expect(quotes.find((quote) => quote.symbol === 'KOSPI')).toMatchObject({ price: 2714.08, session: 'regular' });
     expect(quotes.find((quote) => quote.symbol === 'USDKRW')).toMatchObject({ price: 1381.2, quality: 'realtime' });
   });
+
+  it('랭킹 밖 종목은 전일 종가로 실제 등락률을 계산한다', async () => {
+    const request: TossRequester = async (path) => {
+      if (path.startsWith('/api/v1/prices')) return { result: [
+        { symbol: '042700', timestamp: '2026-09-01T12:45:38+09:00', lastPrice: '213750', currency: 'KRW' },
+      ] };
+      if (path.includes('/api/v1/rankings')) return { result: { rankings: [] } };
+      if (path.includes('market-indicators/prices')) return { result: [] };
+      if (path.startsWith('/api/v1/exchange-rate')) return { result: { rate: '1381.2', validFrom: '2026-09-01T10:00:00+09:00' } };
+      if (path === '/api/v1/market-calendar/KR') return { result: { today: { integrated: {
+        preMarket: null,
+        regularMarket: { startTime: '2026-09-01T09:00:00+09:00', endTime: '2026-09-01T15:30:00+09:00' },
+        afterMarket: null,
+      } } } };
+      if (path === '/api/v1/market-calendar/US') return { result: { today: { dayMarket: null, preMarket: null, regularMarket: null, afterMarket: null } } };
+      throw new Error(`예상하지 않은 요청: ${path}`);
+    };
+    const loadPreviousCloses = async () => new Map([['042700', 219500]]);
+
+    const quotes = await fetchTossMarketSnapshot(new Date('2026-09-01T12:45:38+09:00'), request, loadPreviousCloses);
+
+    expect(quotes.find((quote) => quote.symbol === '042700')).toMatchObject({
+      price: 213750,
+      previousClose: 219500,
+      changeRate: expect.closeTo(-0.0262, 4),
+      changeRateSource: 'previous-close',
+    });
+  });
 });

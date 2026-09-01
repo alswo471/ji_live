@@ -36,6 +36,8 @@ export async function fetchBithumbQuotes(
       price,
       currency: 'KRW',
       changeRate: finiteNumber(ticker.signed_change_rate),
+      previousClose: null,
+      changeRateSource: finiteNumber(ticker.signed_change_rate) === null ? null : 'provider',
       tradingAmount: finiteNumber(ticker.acc_trade_price_24h),
       asOf: Number.isFinite(ticker.timestamp) ? new Date(ticker.timestamp).toISOString() : null,
       session: 'always-open',

@@ -367,7 +367,7 @@ git commit -m "feat(ui): 공개용 하이브리드 마켓 콕핏 전환"
 - Produces: `createPreviousCloseLoader(request): (symbols: string[]) => Promise<Map<string, number>>`
 - Consumes: Toss `/api/v1/candles?symbol={symbol}&interval=1d&count=2`, 5초 현재가와 랭킹 지표
 
-- [ ] **Step 1: 랭킹 밖 종목 실패 테스트를 작성한다.**
+- [x] **Step 1: 랭킹 밖 종목 실패 테스트를 작성한다.**
 
 ```ts
 expect(quotes.find((quote) => quote.symbol === '042700')).toMatchObject({
@@ -378,12 +378,12 @@ expect(quotes.find((quote) => quote.symbol === '042700')).toMatchObject({
 })
 ```
 
-- [ ] **Step 2: 실패를 확인한다.**
+- [x] **Step 2: 실패를 확인한다.**
 
 Run: `pnpm test -- tests/market/toss-provider.test.ts tests/market/dashboard.test.ts`
 Expected: FAIL because `previousClose` and `changeRateSource` do not exist
 
-- [ ] **Step 3: 전일 종가 loader와 계산을 구현한다.**
+- [x] **Step 3: 전일 종가 loader와 계산을 구현한다.**
 
 ```ts
 export type ChangeRateSource = 'provider' | 'previous-close' | null
@@ -396,7 +396,7 @@ export function calculateChangeRate(price: number | null, previousClose: number 
 
 랭킹 `changeRate`가 있으면 그대로 사용한다. 없으면 일봉 두 개 중 현재 거래일보다 앞선 최신 종가를 `previousClose`로 사용한다. 전일 종가는 날짜별 module cache와 in-flight 병합을 적용하고 실패한 종목만 `null`로 유지한다. 최대 20개 초기 요청은 5개씩 묶어 실행해 `MARKET_DATA_CHART` 한도를 넘기지 않는다.
 
-- [ ] **Step 4: 전체 검증과 문서 갱신 후 커밋한다.**
+- [x] **Step 4: 전체 검증과 문서 갱신 후 커밋한다.**
 
 Run: `pnpm test -- tests/market/toss-provider.test.ts tests/market/dashboard.test.ts && pnpm lint && pnpm build`
 Expected: PASS; 한미반도체·삼성바이오로직스·셀트리온의 등락률이 null이 아님

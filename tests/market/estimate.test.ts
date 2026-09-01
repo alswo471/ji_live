@@ -4,7 +4,7 @@ import type { MarketQuote } from '@/lib/market/types';
 
 const base: MarketQuote = {
   symbol: '005930', name: '삼성전자', assetClass: 'kr-stock', price: 84200, currency: 'KRW',
-  changeRate: 0, tradingAmount: 1000, asOf: '2026-08-31T20:00:00+09:00', session: 'closed',
+  changeRate: 0, previousClose: null, changeRateSource: null, tradingAmount: 1000, asOf: '2026-08-31T20:00:00+09:00', session: 'closed',
   quality: 'stale', provider: 'toss', confidence: null, estimateInputs: [],
 };
 

@@ -32,6 +32,8 @@ export async function fetchBinanceQuotes(
       price,
       currency: 'USD',
       changeRate: percent === null ? null : percent / 100,
+      previousClose: null,
+      changeRateSource: percent === null ? null : 'provider',
       tradingAmount: finiteNumber(ticker.quoteVolume),
       asOf: Number.isFinite(ticker.closeTime) ? new Date(ticker.closeTime).toISOString() : null,
       session: 'always-open',
