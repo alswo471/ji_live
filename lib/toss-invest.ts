@@ -9,6 +9,17 @@ type TokenResponse = {
 let tokenCache: { accessToken: string; expiresAt: number } | null = null;
 let tokenRequest: Promise<string> | null = null;
 
+export class MarketProviderError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryAfterMs: number | null = null,
+  ) {
+    super(message);
+    this.name = 'MarketProviderError';
+  }
+}
+
 function credentials() {
   const clientId = process.env.TOSS_INVEST_CLIENT_ID;
   const clientSecret = process.env.TOSS_INVEST_CLIENT_SECRET;
@@ -84,7 +95,12 @@ export async function fetchToss<T>(path: string, headers?: HeadersInit, canRetry
 
   if (!response.ok) {
     const retryAfter = response.headers.get('Retry-After');
-    throw new Error(`토스증권 API 요청에 실패했습니다. (${response.status})${retryAfter ? ` Retry-After: ${retryAfter}` : ''}`);
+    const retryAfterSeconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+    throw new MarketProviderError(
+      `토스증권 API 요청에 실패했습니다. (${response.status})`,
+      response.status,
+      Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : null,
+    );
   }
 
   return response.json() as Promise<T>;
