@@ -9,6 +9,8 @@ export type ChangeRateSource = 'provider' | 'previous-close' | null;
 export type MarketQuote = {
   symbol: string;
   name: string;
+  nameKo?: string;
+  nameEn?: string;
   assetClass: AssetClass;
   price: number | null;
   currency: Currency;
@@ -27,6 +29,8 @@ export type MarketQuote = {
 export type Instrument = {
   symbol: string;
   name: string;
+  nameKo?: string;
+  nameEn?: string;
   assetClass: AssetClass;
   currency: Currency;
   provider: MarketProvider;

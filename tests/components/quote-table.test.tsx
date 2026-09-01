@@ -4,7 +4,7 @@ import { QuoteTable } from '@/components/market/quote-table';
 import type { MarketQuote } from '@/lib/market/types';
 
 const quote: MarketQuote = {
-  symbol: '005930', name: '삼성전자', assetClass: 'kr-stock', price: 84000,
+  symbol: '005930', name: '삼성전자', nameKo: '삼성전자', nameEn: 'Samsung Electronics', assetClass: 'kr-stock', price: 84000,
   currency: 'KRW', changeRate: 0.0124, previousClose: 82970, changeRateSource: 'provider', tradingAmount: 184_200_000_000,
   asOf: '2026-09-01T10:00:00+09:00', session: 'regular', quality: 'realtime',
   provider: 'toss', confidence: null, estimateInputs: [],
@@ -18,6 +18,13 @@ describe('QuoteTable', () => {
     expect(screen.getByText('84,000원')).toBeInTheDocument();
     expect(screen.getAllByText('+1.24%')).toHaveLength(2);
     expect(screen.getByText(/정규장/)).toBeInTheDocument();
+  });
+
+  it('영문명 표기에서도 종목 코드를 유지한다', () => {
+    const view = render(<QuoteTable quotes={[quote]} nameLocale="en" />);
+
+    expect(view.container).toHaveTextContent('Samsung Electronics');
+    expect(view.container).toHaveTextContent('005930');
   });
 
   it('개인화 UI를 노출하지 않는다', () => {

@@ -28,6 +28,8 @@ export async function fetchBinanceQuotes(
     return {
       symbol: baseSymbol,
       name: instrument?.name ?? baseSymbol,
+      nameKo: instrument?.nameKo,
+      nameEn: instrument?.nameEn,
       assetClass: instrument?.assetClass ?? 'crypto',
       price,
       currency: 'USD',

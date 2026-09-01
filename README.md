@@ -1,6 +1,6 @@
-# OO라이브
+# 지투라이브
 
-한국·미국 주식의 주요 시세와 개인 보유종목을 한 화면에서 확인하기 위해 만드는 실시간 시장 대시보드입니다.
+한국·미국 주식, 암호화폐와 핵심 시장 지표를 한 화면에서 확인하기 위해 만드는 공개용 실시간 시장 대시보드입니다.
 
 > 지민재의 개인 학습 프로젝트입니다. 바이브코딩을 활용해 기획, UI/UX, 외부 API 연동, 테스트, GitFlow, CI/CD와 배포까지 제품 개발의 전체 과정을 직접 경험하고 기록합니다.
 
@@ -9,10 +9,10 @@
 ## 주요 기능
 
 - 한국 대표 종목 10개와 미국 주요 종목 시세 조회
+- 주요 암호화폐 5종목과 KOSPI·USD/KRW·QQQ·PAXG 지표 조회
 - 5초 주기의 현재가 자동 갱신
-- 종목별 등락률과 거래대금 표시
-- 토스증권 보유종목, 평단가, 현재가와 수익률 조회
-- 관심종목 저장과 한국·미국 시장별 필터링
+- 종목별 실제 등락률과 제공 가능한 거래대금 표시
+- 한글명·영문명과 라이트·다크 화면 전환
 - API 연결 전·실패 시 실제 가격처럼 보이는 임시 데이터 대신 명확한 상태 표시
 - GitHub Actions 품질 검사 결과 Slack 알림
 - 데스크톱과 모바일을 고려한 반응형 화면
@@ -24,7 +24,7 @@
 | Frontend | React 19, TypeScript, Tailwind CSS 4 |
 | Framework / Build | Vinext, Vite 8 |
 | UI | shadcn/ui, Base UI, Lucide React |
-| Data | Toss Invest Open API |
+| Data | Toss Invest Open API, Binance Public API, Bithumb Public API |
 | Hosting | OpenAI Sites, Cloudflare Workers |
 | Package manager | pnpm |
 | Code quality | Oxlint, Oxfmt |
@@ -37,9 +37,8 @@
 
 | 데이터 | 갱신/캐시 주기 |
 | --- | --- |
-| 주식 시세·시장 랭킹 | 5초 |
-| 보유종목 | 30초 |
-| 계좌 식별 정보 | 1시간 |
+| 주식·코인 시세와 시장 랭킹 | 5초 |
+| 전일 종가 | 거래일 단위 |
 
 같은 시점의 중복 요청은 하나로 합치고, 숨겨진 브라우저 탭에서는 폴링을 중단합니다. 일시적인 API 실패가 발생하면 가능한 경우 마지막 정상 데이터를 유지합니다.
 

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OO라이브 | 멀티자산 마켓 콕핏',
+  title: '지투라이브 | 멀티자산 마켓 콕핏',
   description: '한국·미국 주식과 암호화폐의 실제 시세 및 시장 세션을 확인하는 공개 대시보드',
 };
 

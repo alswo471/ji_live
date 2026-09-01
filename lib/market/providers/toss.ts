@@ -79,6 +79,8 @@ export async function fetchTossMarketSnapshot(
     return [{
       symbol: instrument.symbol,
       name: instrument.name,
+      nameKo: instrument.nameKo,
+      nameEn: instrument.nameEn,
       assetClass: instrument.assetClass,
       price: numberOrNull(price.lastPrice),
       currency: instrument.currency,
@@ -99,13 +101,13 @@ export async function fetchTossMarketSnapshot(
   const kospi = indicators.result.find((item) => item.symbol === 'KOSPI');
   const krSession = resolveSession(now, krSessions);
   if (kospi) quotes.push({
-    symbol: kospiInstrument.symbol, name: kospiInstrument.name, assetClass: kospiInstrument.assetClass,
+    symbol: kospiInstrument.symbol, name: kospiInstrument.name, nameKo: kospiInstrument.nameKo, nameEn: kospiInstrument.nameEn, assetClass: kospiInstrument.assetClass,
     price: numberOrNull(kospi.lastPrice), currency: kospiInstrument.currency, changeRate: null, previousClose: null, changeRateSource: null, tradingAmount: null,
     asOf: kospi.timestamp, session: krSession, quality: qualityFor(krSession), provider: 'toss', confidence: null, estimateInputs: [],
   });
   const fxInstrument = INSTRUMENTS.find((item) => item.symbol === 'USDKRW')!;
   quotes.push({
-    symbol: fxInstrument.symbol, name: fxInstrument.name, assetClass: fxInstrument.assetClass,
+    symbol: fxInstrument.symbol, name: fxInstrument.name, nameKo: fxInstrument.nameKo, nameEn: fxInstrument.nameEn, assetClass: fxInstrument.assetClass,
     price: numberOrNull(exchange.result.rate), currency: fxInstrument.currency, changeRate: null, previousClose: null, changeRateSource: null, tradingAmount: null,
     asOf: exchange.result.validFrom, session: 'always-open', quality: 'realtime', provider: 'toss', confidence: null, estimateInputs: [],
   });

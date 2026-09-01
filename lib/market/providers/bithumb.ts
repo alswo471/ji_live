@@ -32,6 +32,8 @@ export async function fetchBithumbQuotes(
     return {
       symbol,
       name: instrument?.name ?? symbol,
+      nameKo: instrument?.nameKo,
+      nameEn: instrument?.nameEn,
       assetClass: 'crypto',
       price,
       currency: 'KRW',

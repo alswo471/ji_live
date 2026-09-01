@@ -418,7 +418,7 @@ git commit -m "fix(market): 랭킹 밖 종목 실제 등락률 보완"
 - Produces: `NameLocale = 'ko' | 'en'`, `Theme = 'light' | 'dark'`, `useDisplayPreferences()`
 - Consumes: catalog `nameKo`, `nameEn`, `matchMedia('(prefers-color-scheme: dark)')`, localStorage
 
-- [ ] **Step 1: 선호 설정 실패 테스트를 작성한다.**
+- [x] **Step 1: 선호 설정 실패 테스트를 작성한다.**
 
 ```tsx
 expect(screen.getByRole('heading', { name: '지투라이브' })).toBeVisible()
@@ -428,12 +428,12 @@ await user.click(screen.getByRole('button', { name: '라이트 모드로 전환'
 expect(document.documentElement).not.toHaveClass('dark')
 ```
 
-- [ ] **Step 2: 실패를 확인한다.**
+- [x] **Step 2: 실패를 확인한다.**
 
 Run: `pnpm test -- tests/hooks/use-display-preferences.test.tsx tests/components/display-controls.test.tsx`
 Expected: FAIL with missing preference hook and controls
 
-- [ ] **Step 3: catalog와 preference hook을 구현한다.**
+- [x] **Step 3: catalog와 preference hook을 구현한다.**
 
 ```ts
 export type Instrument = {
@@ -446,11 +446,11 @@ export type Instrument = {
 
 첫 렌더는 저장값, 저장값이 없으면 운영체제 테마를 사용한다. `g2-live-theme`, `g2-live-name-locale` 두 key만 저장하며 계정·종목 개인화 데이터는 저장하지 않는다.
 
-- [ ] **Step 4: 44px 조작 영역과 두 테마 대비를 적용한다.**
+- [x] **Step 4: 44px 조작 영역과 두 테마 대비를 적용한다.**
 
 헤더에는 해·달 아이콘 버튼과 `한글명 | 영문명` segmented control을 둔다. 목록·지표·상세는 선택된 이름만 바꾸고 심볼은 유지한다. 브랜드와 metadata를 `지투라이브`로 바꾼다.
 
-- [ ] **Step 5: 검증하고 커밋한다.**
+- [x] **Step 5: 검증하고 커밋한다.**
 
 Run: `pnpm test -- tests/hooks/use-display-preferences.test.tsx tests/components/display-controls.test.tsx tests/components/quote-table.test.tsx && pnpm lint && pnpm build`
 Expected: PASS
