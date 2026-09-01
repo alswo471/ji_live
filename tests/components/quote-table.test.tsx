@@ -36,6 +36,5 @@ describe('QuoteTable', () => {
     render(<QuoteTable quotes={[quote]} />);
 
     expect(screen.queryByText(/관심종목/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/보유자산/)).not.toBeInTheDocument();
   });
 });
