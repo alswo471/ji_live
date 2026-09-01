@@ -1,4 +1,5 @@
 import { createCachedProvider } from './cache';
+import { applyEstimates } from './estimate';
 import { fetchBinanceQuotes } from './providers/binance';
 import { fetchBithumbQuotes } from './providers/bithumb';
 import { fetchTossMarketSnapshot } from './providers/toss';
@@ -34,7 +35,7 @@ export function createDashboardService(loaders: ProviderLoaders) {
         }
       });
 
-      return { quotes: [...quoteMap.values()], fetchedAt: now.toISOString(), notices };
+      return { quotes: applyEstimates([...quoteMap.values()]), fetchedAt: now.toISOString(), notices };
     },
   };
 }
