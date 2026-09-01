@@ -27,6 +27,11 @@ function finitePositive(value: string | number) {
   return parsed !== null && parsed > 0 ? parsed : null;
 }
 
+function isoDateOrNull(timestamp: number) {
+  const date = new Date(timestamp);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 export async function fetchBinanceSpotQuotes(
   fetcher: typeof fetch = fetch,
   symbols = DEFAULT_SYMBOLS,
@@ -60,7 +65,7 @@ export async function fetchBinanceSpotQuotes(
       changeRateSource: percent === null ? null : 'provider',
       tradingAmount: finitePositive(ticker.quoteVolume),
       asOf: Number.isFinite(ticker.closeTime)
-        ? new Date(ticker.closeTime).toISOString()
+        ? isoDateOrNull(ticker.closeTime)
         : null,
       session: 'always-open',
       quality: price === null ? 'unavailable' : 'realtime',

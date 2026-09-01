@@ -107,4 +107,24 @@ describe('fetchBinanceSpotQuotes', () => {
       quality: 'unavailable',
     });
   });
+
+  it('Date 범위를 벗어난 유한 closeTime은 현물 기준 시각을 null로 정규화한다', async () => {
+    const fetcher: typeof fetch = async () =>
+      new Response(
+        JSON.stringify([
+          {
+            symbol: 'BTCUSDT',
+            lastPrice: '100',
+            priceChangePercent: '1',
+            quoteVolume: '200',
+            closeTime: 9e15,
+          },
+        ]),
+        { status: 200 },
+      );
+
+    const [quote] = await fetchBinanceSpotQuotes(fetcher, ['BTCUSDT']);
+
+    expect(quote.asOf).toBeNull();
+  });
 });

@@ -127,4 +127,27 @@ describe('fetchBinanceFuturesTickers', () => {
       },
     ]);
   });
+
+  it('Date 범위를 벗어난 유한 closeTime은 주입된 현재 시각으로 대체한다', async () => {
+    const fetcher: typeof fetch = async () =>
+      new Response(
+        JSON.stringify([
+          {
+            symbol: 'TSLAUSDT',
+            lastPrice: '100',
+            priceChangePercent: '1',
+            quoteVolume: '200',
+            closeTime: 9e15,
+          },
+        ]),
+      );
+
+    const [ticker] = await fetchBinanceFuturesTickers(
+      fetcher,
+      () => new Date('2026-09-01T10:00:00.000Z'),
+      ['TSLAUSDT'],
+    );
+
+    expect(ticker.asOf).toBe('2026-09-01T10:00:00.000Z');
+  });
 });

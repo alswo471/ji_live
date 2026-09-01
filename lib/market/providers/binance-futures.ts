@@ -30,6 +30,11 @@ function finitePositive(value: string | number) {
   return parsed !== null && parsed > 0 ? parsed : null;
 }
 
+function isoDateOrNull(timestamp: number) {
+  const date = new Date(timestamp);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 export async function fetchBinanceFuturesTickers(
   fetcher: typeof fetch = fetch,
   now: () => Date = () => new Date(),
@@ -52,7 +57,7 @@ export async function fetchBinanceFuturesTickers(
       const price = finitePositive(ticker.lastPrice);
       const percent = finiteNumber(ticker.priceChangePercent);
       const asOf = Number.isFinite(ticker.closeTime)
-        ? new Date(ticker.closeTime).toISOString()
+        ? (isoDateOrNull(ticker.closeTime) ?? now().toISOString())
         : now().toISOString();
       return {
         provider: 'binance-futures',
