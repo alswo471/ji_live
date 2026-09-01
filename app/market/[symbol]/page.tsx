@@ -30,6 +30,9 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ s
     provider: instrument.provider,
     confidence: null,
     estimateInputs: [],
+    priceKind: 'unavailable',
+    comparisonBasis: null,
+    sourceLabel: null,
   };
   return <QuoteDetail initialQuote={initialQuote} />;
 }

@@ -98,6 +98,23 @@ describe('QuoteDetail', () => {
     expect(screen.getByText('82,970원')).toBeVisible();
     expect(screen.queryByText('비교 기준')).not.toBeInTheDocument();
   });
+
+  it('비교 기준이 없으면 24시간 전 비교로 오인하게 하지 않는다', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+
+    render(<QuoteDetail initialQuote={{
+      ...quote,
+      comparisonBasis: null,
+      priceKind: 'unavailable',
+      quality: 'unavailable',
+      sourceLabel: null,
+      estimateInputs: [],
+    }} />);
+
+    expect(screen.getByText('비교 기준')).toBeVisible();
+    expect(screen.getByText('제공되지 않음')).toBeVisible();
+    expect(screen.queryByText('24시간 전')).not.toBeInTheDocument();
+  });
 });
 
 describe('MarketChart', () => {

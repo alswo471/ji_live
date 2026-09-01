@@ -22,7 +22,7 @@ describe('QuoteTable', () => {
     expect(screen.getByText('84,000원')).toBeInTheDocument();
     expect(screen.getAllByText('+1.24%')).toHaveLength(2);
     expect(screen.getByText('24시간 추정가')).toBeInTheDocument();
-    expect(screen.getByText('24시간 전 대비')).toBeInTheDocument();
+    expect(screen.getByText('해외 파생상품 기준 · 24시간 전 대비')).toBeInTheDocument();
   });
 
   it('영문명 표기에서도 종목 코드를 유지한다', () => {

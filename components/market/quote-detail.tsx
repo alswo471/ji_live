@@ -101,7 +101,7 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
           <DataPoint label="종가" value={formatNumber(latest?.close ?? quote.price, quote.currency)} />
           {quote.comparisonBasis === 'previous-close'
             ? <DataPoint label="전일 종가" value={formatNumber(previousClose, quote.currency)} />
-            : <DataPoint label="비교 기준" value="24시간 전" />}
+            : <DataPoint label="비교 기준" value={quote.comparisonBasis === 'provider-24h' ? '24시간 전' : '제공되지 않음'} />}
           <DataPoint label="거래량" value={formatVolume(latest?.volume ?? null)} />
         </dl>
 

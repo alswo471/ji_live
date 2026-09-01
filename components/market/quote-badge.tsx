@@ -2,9 +2,17 @@ import { Badge } from '@/components/ui/badge';
 import type { MarketQuote } from '@/lib/market/types';
 
 const COMPARISON_LABEL = {
-  'provider-24h': '24시간 전 대비',
-  'previous-close': '전일 종가 대비',
+  'provider-24h': '해외 파생상품 기준 · 24시간 전 대비',
+  'previous-close': '해외 파생상품 기준 · 전일 종가 대비',
 } as const;
+
+function UnavailableBadge() {
+  return (
+    <Badge variant="outline" className="text-muted-foreground">
+      연동 준비 중
+    </Badge>
+  );
+}
 
 function DataStatus({ quote }: { quote: MarketQuote }) {
   if (quote.quality === 'stale') {
@@ -25,12 +33,8 @@ function DataStatus({ quote }: { quote: MarketQuote }) {
 }
 
 export function QuoteBadge({ quote }: { quote: MarketQuote }) {
-  if (quote.priceKind === 'unavailable') {
-    return (
-      <Badge variant="outline" className="text-muted-foreground">
-        연동 준비 중
-      </Badge>
-    );
+  if (quote.quality === 'unavailable' || quote.priceKind === 'unavailable') {
+    return <UnavailableBadge />;
   }
 
   if (quote.priceKind === 'derived-estimate') {
@@ -49,18 +53,21 @@ export function QuoteBadge({ quote }: { quote: MarketQuote }) {
     );
   }
 
-  return (
-    <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
-      <Badge
-        variant="outline"
-        className="border-emerald-500/35 text-emerald-700 dark:text-emerald-300"
-      >
-        실제 거래상품
-      </Badge>
-      <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-        {quote.sourceLabel ?? '출처 확인 중'}
+  if (quote.priceKind === 'actual-product')
+    return (
+      <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
+        <Badge
+          variant="outline"
+          className="border-emerald-500/35 text-emerald-700 dark:text-emerald-300"
+        >
+          실제 거래상품
+        </Badge>
+        <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+          {quote.sourceLabel ?? '출처 확인 중'}
+        </span>
+        <DataStatus quote={quote} />
       </span>
-      <DataStatus quote={quote} />
-    </span>
-  );
+    );
+
+  return <UnavailableBadge />;
 }
