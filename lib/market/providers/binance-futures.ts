@@ -1,5 +1,6 @@
 import type { DerivativeTicker } from '../types';
 import { assessTimestampFreshness } from '../freshness';
+import { createProviderRequestError } from '../provider-error';
 
 const DEFAULT_SYMBOLS = [
   'SAMSUNGEMUSDT',
@@ -42,9 +43,7 @@ export async function fetchBinanceFuturesTickers(
     signal: AbortSignal.timeout(3_000),
   });
   if (!response.ok)
-    throw new Error(
-      `Binance 선물 시세 요청에 실패했습니다. (${response.status})`,
-    );
+    throw createProviderRequestError('Binance 선물', response, now().getTime());
   const tickers = (await response.json()) as BinanceFuturesTicker[];
   const allowedSymbols = new Set(symbols);
 

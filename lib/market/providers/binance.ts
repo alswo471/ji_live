@@ -1,5 +1,6 @@
 import { INSTRUMENTS } from '../catalog';
 import { assessTimestampFreshness } from '../freshness';
+import { createProviderRequestError } from '../provider-error';
 import type { MarketQuote } from '../types';
 
 const DEFAULT_SYMBOLS = ['PAXGUSDT'];
@@ -35,7 +36,7 @@ export async function fetchBinanceSpotQuotes(
     },
   );
   if (!response.ok)
-    throw new Error(`Binance 시세 요청에 실패했습니다. (${response.status})`);
+    throw createProviderRequestError('Binance', response, now().getTime());
   const tickers = (await response.json()) as BinanceTicker[];
 
   return tickers.flatMap((ticker) => {

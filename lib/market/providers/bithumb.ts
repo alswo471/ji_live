@@ -1,5 +1,6 @@
 import { INSTRUMENTS, KRW_USDT_SANITY_BOUNDS } from '../catalog';
 import { assessTimestampFreshness } from '../freshness';
+import { createProviderRequestError } from '../provider-error';
 import type { FxConversionInput, MarketQuote } from '../types';
 
 const DEFAULT_MARKETS = [
@@ -55,7 +56,7 @@ export async function fetchBithumbSnapshot(
     },
   );
   if (!response.ok)
-    throw new Error(`Bithumb 시세 요청에 실패했습니다. (${response.status})`);
+    throw createProviderRequestError('Bithumb', response, now().getTime());
   const tickers = (await response.json()) as BithumbTicker[];
 
   const usdtTicker = tickers.find((ticker) => ticker.market === 'KRW-USDT');

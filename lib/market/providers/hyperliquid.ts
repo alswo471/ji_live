@@ -1,4 +1,5 @@
 import type { DerivativeTicker } from '../types';
+import { createProviderRequestError } from '../provider-error';
 
 const DEFAULT_SYMBOLS = ['xyz:SMSN', 'xyz:SKHX', 'xyz:HYUNDAI'];
 const ENDPOINT = 'https://api.hyperliquid.xyz/info';
@@ -29,9 +30,7 @@ export async function fetchHyperliquidTickers(
     signal: AbortSignal.timeout(3_000),
   });
   if (!response.ok)
-    throw new Error(
-      `Hyperliquid 시세 요청에 실패했습니다. (${response.status})`,
-    );
+    throw createProviderRequestError('Hyperliquid', response, now().getTime());
 
   const [meta, contexts] = (await response.json()) as [
     { universe?: HyperliquidAsset[] },

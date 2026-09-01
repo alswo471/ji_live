@@ -1,3 +1,5 @@
+import { ProviderRequestError } from './provider-error';
+
 export function createCachedProvider<T>(options: {
   ttlMs: number;
   failureThreshold: number;
@@ -10,6 +12,11 @@ export function createCachedProvider<T>(options: {
   let inFlight: Promise<{ value: T; stale: boolean }> | null = null;
   let consecutiveFailures = 0;
   let openUntil = 0;
+  let lastError: unknown = new Error('공급자 회로가 열려 있습니다.');
+
+  function fallbackDelay(exponent: number) {
+    return options.cooldownMs * 2 ** Math.min(exponent, 10);
+  }
 
   async function loadValue() {
     try {
@@ -20,7 +27,14 @@ export function createCachedProvider<T>(options: {
       return { value, stale: false };
     } catch (error) {
       consecutiveFailures += 1;
-      if (consecutiveFailures >= options.failureThreshold) openUntil = clock() + options.cooldownMs;
+      lastError = error;
+      if (error instanceof ProviderRequestError && error.status === 429) {
+        openUntil = clock() +
+          (error.retryAfterMs ?? fallbackDelay(consecutiveFailures - 1));
+      } else if (consecutiveFailures >= options.failureThreshold) {
+        openUntil = clock() +
+          fallbackDelay(consecutiveFailures - options.failureThreshold);
+      }
       if (cached) return { value: cached.value, stale: true };
       throw error;
     } finally {
@@ -33,6 +47,7 @@ export function createCachedProvider<T>(options: {
       const current = clock();
       if (cached && cached.expiresAt > current) return Promise.resolve({ value: cached.value, stale: false });
       if (cached && openUntil > current) return Promise.resolve({ value: cached.value, stale: true });
+      if (!cached && openUntil > current) return Promise.reject(lastError);
       if (inFlight) return inFlight;
       inFlight = loadValue();
       return inFlight;
