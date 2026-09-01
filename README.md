@@ -13,6 +13,7 @@
 - 5초 주기의 현재가 자동 갱신
 - 종목별 실제 등락률과 제공 가능한 거래대금 표시
 - 한글명·영문명과 라이트·다크 화면 전환
+- 종목 행에서 진입하는 1일·1주·1개월 OHLC·거래량 상세 차트
 - API 연결 전·실패 시 실제 가격처럼 보이는 임시 데이터 대신 명확한 상태 표시
 - GitHub Actions 품질 검사 결과 Slack 알림
 - 데스크톱과 모바일을 고려한 반응형 화면
@@ -23,7 +24,7 @@
 | --- | --- |
 | Frontend | React 19, TypeScript, Tailwind CSS 4 |
 | Framework / Build | Vinext, Vite 8 |
-| UI | shadcn/ui, Base UI, Lucide React |
+| UI / Chart | shadcn/ui, Base UI, Lucide React, TradingView Lightweight Charts |
 | Data | Toss Invest Open API, Binance Public API, Bithumb Public API |
 | Hosting | OpenAI Sites, Cloudflare Workers |
 | Package manager | pnpm |
@@ -39,8 +40,18 @@
 | --- | --- |
 | 주식·코인 시세와 시장 랭킹 | 5초 |
 | 전일 종가 | 거래일 단위 |
+| 1일 분봉 차트 | 60초 |
+| 1주·1개월 일봉 차트 | 6시간 |
 
 같은 시점의 중복 요청은 하나로 합치고, 숨겨진 브라우저 탭에서는 폴링을 중단합니다. 일시적인 API 실패가 발생하면 가능한 경우 마지막 정상 데이터를 유지합니다.
+
+### 데이터 출처와 표시 기준
+
+- **Toss Invest**: 한국·미국 주식, KOSPI, USD/KRW, QQQ의 현재가·시장 세션·캔들
+- **Bithumb**: KRW 기준 주요 암호화폐 5종목의 현재가·캔들
+- **Binance**: USD 기준 PAXG 실제 거래가를 `금 연동(PAXG)`으로 표시
+
+등락률은 공급자가 제공하면 그 값을 사용하고, 거래대금 상위 100위 밖 종목처럼 값이 없으면 `현재가 ÷ 전일 종가 - 1`로 계산합니다. 상세 화면의 전일 종가가 비어 있으면 현재가와 공급자 등락률로 역산합니다. QQQ는 NASDAQ 지수가 아닌 실제 ETF, PAXG는 금 현물가가 아닌 실제 토큰 시세입니다.
 
 ## 로컬 실행
 
@@ -93,6 +104,7 @@ pnpm exec vinext dev --hostname 0.0.0.0
 ## 품질 검사
 
 ```bash
+pnpm test
 pnpm lint
 pnpm build
 ```
@@ -141,8 +153,7 @@ chore: 배포 설정 갱신
 
 ## 로드맵
 
-- KOSPI, USD/KRW, NASDAQ 100 연동(QQQ)과 금 연동(PAXG) 지표 추가
-- 비트코인 등 주요 암호화폐 5종목과 엔화 데이터 추가
+- 엔화 환율과 추가 원자재·시장 지표 확장
 - 주말 참고 추정가를 실제 시세와 구분해 제공
 - 고정 출구 IP를 지원하는 안전한 API 중계 서버 검토
 

@@ -562,24 +562,24 @@ git commit -m "feat(chart): 종목별 가격·거래량 상세 차트 추가"
 - Consumes: completed Tasks 1–11
 - Produces: accurate usage, data-source and change documentation
 
-- [ ] **Step 1: README를 실제 구현과 동기화한다.**
+- [x] **Step 1: README를 실제 구현과 동기화한다.**
 
 지투라이브 명칭, 공개 멀티자산 기능, 등락률 계산 근거, 종목명·테마 전환, 상세 차트, Toss·Binance·Bithumb 역할, cache 주기와 배포 제약을 기록한다. 제거된 개인 보유종목·관심종목 설명은 현재 기능에서 삭제한다.
 
-- [ ] **Step 2: CHANGELOG `Unreleased`를 정리한다.**
+- [x] **Step 2: CHANGELOG `Unreleased`를 정리한다.**
 
 실제 완료된 추가·변경·수정·제거만 기록한다. 버전, tag와 release 날짜는 올리지 않는다.
 
-- [ ] **Step 3: 전체 자동 검증을 실행한다.**
+- [x] **Step 3: 전체 자동 검증을 실행한다.**
 
 Run: `pnpm test && pnpm lint && pnpm build`
 Expected: all tests pass, lint exit 0, production build exit 0
 
-- [ ] **Step 4: 실제 데이터와 반응형을 수동 검증한다.**
+- [x] **Step 4: 실제 데이터와 반응형을 수동 검증한다.**
 
 로컬 허용 IP 환경에서 세 누락 종목 등락률, 한국·미국·코인 상세 차트, 5초 현재가와 60초 candle 갱신을 확인한다. 375px, 768px, 1024px와 1440px에서 두 테마, 두 이름 표기, 키보드 탐색, 뒤로가기, 수평 overflow와 console error를 확인한다.
 
-- [ ] **Step 5: 문서를 커밋한다.**
+- [x] **Step 5: 문서를 커밋한다.**
 
 ```bash
 git add README.md CHANGELOG.md docs/product/PROJECT_BRIEF.md docs/superpowers/plans/2026-09-01-market-dashboard-v1.md
