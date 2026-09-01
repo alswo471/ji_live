@@ -14,6 +14,7 @@ describe('QuoteTable', () => {
   it('현재가와 등락률, 시세 상태를 함께 표시한다', () => {
     render(<QuoteTable quotes={[quote]} />);
 
+    expect(screen.getByRole('link', { name: /삼성전자 상세 보기/ })).toHaveAttribute('href', '/market/005930');
     expect(screen.getByText('삼성전자')).toBeInTheDocument();
     expect(screen.getByText('84,000원')).toBeInTheDocument();
     expect(screen.getAllByText('+1.24%')).toHaveLength(2);

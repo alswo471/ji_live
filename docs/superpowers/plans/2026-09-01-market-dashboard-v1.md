@@ -519,7 +519,7 @@ git commit -m "feat(api): 주식·코인 candle 정규화 API 추가"
 - Produces: `/market/[symbol]`, `QuoteDetail`, `MarketChart`, `useMarketCandles(symbol, range)`
 - Consumes: dashboard quote, candle route, display preferences and `lightweight-charts`
 
-- [ ] **Step 1: 차트 의존성과 상세 실패 테스트를 추가한다.**
+- [x] **Step 1: 차트 의존성과 상세 실패 테스트를 추가한다.**
 
 Run: `pnpm add lightweight-charts`
 
@@ -530,20 +530,20 @@ expect(screen.getByRole('tab', { name: '1일' })).toHaveAttribute('aria-selected
 expect(screen.getByLabelText('삼성전자 가격 차트')).toBeVisible()
 ```
 
-- [ ] **Step 2: 실패를 확인한다.**
+- [x] **Step 2: 실패를 확인한다.**
 
 Run: `pnpm test -- tests/components/quote-detail.test.tsx tests/hooks/use-market-candles.test.tsx`
 Expected: FAIL with missing detail and candle hook
 
-- [ ] **Step 3: 목록 link와 상세 정보 구조를 구현한다.**
+- [x] **Step 3: 목록 link와 상세 정보 구조를 구현한다.**
 
 행 전체를 semantic link로 만들고 기존 버튼 중첩을 두지 않는다. 상세 상단은 뒤로가기, 이름·심볼, 품질 badge, 현재가·등락률, OHLC·전일 종가·거래량 순서다. 이름과 테마 preference를 목록과 공유한다.
 
-- [ ] **Step 4: client-only chart lifecycle을 구현한다.**
+- [x] **Step 4: client-only chart lifecycle을 구현한다.**
 
 `createChart`와 candlestick·histogram series를 client effect 안에서 생성한다. `ResizeObserver`로 폭을 갱신하고 range나 symbol이 바뀌면 series data만 교체한다. cleanup에서 observer와 chart를 제거한다. 색상 밖에도 OHLC 텍스트 요약과 로딩·미지원 안내를 제공한다.
 
-- [ ] **Step 5: 검증하고 커밋한다.**
+- [x] **Step 5: 검증하고 커밋한다.**
 
 Run: `pnpm test -- tests/components/quote-detail.test.tsx tests/hooks/use-market-candles.test.tsx tests/components/quote-table.test.tsx && pnpm lint && pnpm build`
 Expected: PASS and detail route is included in production build
