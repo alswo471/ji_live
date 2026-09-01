@@ -1,10 +1,10 @@
-# OO라이브 멀티자산 대시보드 1차 개편 Implementation Plan
+# 지투라이브 멀티자산 대시보드 1차 개편 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 개인 계좌와 관심종목을 제거하고 한국·미국 주식, 암호화폐와 시장 지표를 실제 시세·참고 추정 상태와 함께 제공하는 공개 대시보드를 만든다.
+**Goal:** 한국·미국 주식과 암호화폐의 실제 등락률, 한글명·영문명, 라이트·다크 테마와 종목별 상세 차트를 제공하는 지투라이브 공개 대시보드를 완성한다.
 
-**Architecture:** Toss, Binance와 Bithumb 응답을 공급자 adapter에서 공통 `MarketQuote`로 변환한다. 공급자별 cache와 장애 격리를 거친 실제 시세를 우선 사용하며, 거래 세션 밖에서만 설명 가능한 프록시 가중평균으로 참고 추정가를 생성한다.
+**Architecture:** Toss, Binance와 Bithumb 응답을 공급자 adapter에서 공통 `MarketQuote`와 `CandlePoint`로 변환한다. 목록의 현재가는 5초 polling하고 전일 종가와 candle은 별도 TTL로 cache한다. 종목 행은 `/market/[symbol]` 상세 route로 연결하고 Lightweight Charts는 client-only 컴포넌트로 격리한다.
 
 **Tech Stack:** React 19, TypeScript 5.9, Vinext, Vite 8, Tailwind CSS 4, Vitest, Testing Library, TradingView Lightweight Charts, Toss Invest Open API, Binance Public REST API, Bithumb Public REST API
 
@@ -22,23 +22,29 @@
 - 금은 1차에서 Binance `PAXGUSDT`를 `금 연동(PAXG)`으로 명시한다.
 - NASDAQ 관련 지표는 Toss의 QQQ 실제 시세를 `NASDAQ 100 연동(QQQ)`으로 명시하며 NASDAQ 지수처럼 표시하지 않는다.
 - QQQ와 PAXG는 실제 상품 시세이고, 한국 주식 장 마감 후 참고 추정가를 계산할 때 실제 변동률을 입력으로 사용할 수 있다.
+- 화면 브랜드는 `지투라이브`로 통일한다.
+- 전체 UI는 한국어를 유지하고 종목명만 `한글명 | 영문명`으로 전환한다.
+- 첫 테마는 운영체제 설정을 따르고 사용자 선택은 브라우저에 저장한다.
+- 랭킹 밖 주식의 등락률은 실시간 현재가와 전일 종가로 계산하며 추정값으로 표시하지 않는다.
 
 ---
 
 ## File Map
 
 - `lib/market/types.ts`: 공통 시세와 dashboard DTO
-- `lib/market/catalog.ts`: 주식 20, 코인 5, 지표 4개 카탈로그
+- `lib/market/catalog.ts`: 주식 20, 코인 5, 지표 4개의 한글명·영문명 카탈로그
 - `lib/market/session.ts`: 시장 세션 판정
 - `lib/market/cache.ts`: TTL, in-flight 병합, circuit breaker
 - `lib/market/providers/*.ts`: Toss, Binance, Bithumb adapter
 - `lib/market/estimate.ts`: 프록시 가중평균 추정가
 - `lib/market/dashboard.ts`: 공급자 orchestration
 - `components/market/*`: 상태 바, 지표, 종목 표, 상세와 차트
+- `app/market/[symbol]/page.tsx`: 공유·뒤로가기를 지원하는 종목 상세 route
+- `app/api/market/[symbol]/candles/route.ts`: 공급자별 candle 정규화 API
 - `hooks/use-market-dashboard.ts`: polling과 요청 상태
 - `tests/market/*`, `tests/components/*`: 단위·컴포넌트 검증
 
-### Task 1: 테스트 기반과 공통 시세 계약
+### Task 1: 테스트 기반과 공통 시세 계약 — 완료
 
 **Files:**
 - Modify: `package.json`, `pnpm-lock.yaml`, `vite.config.ts`
@@ -94,7 +100,7 @@ git add package.json pnpm-lock.yaml vite.config.ts tests/setup.ts tests/market/c
 git commit -m "feat(market): 멀티자산 시세 공통 계약 추가"
 ```
 
-### Task 2: 시장 세션과 Toss 공개 시세 adapter
+### Task 2: 시장 세션과 Toss 공개 시세 adapter — 완료
 
 **Files:**
 - Create: `lib/market/session.ts`, `lib/market/providers/toss.ts`
@@ -133,7 +139,7 @@ git add lib/toss-invest.ts lib/market/session.ts lib/market/providers/toss.ts te
 git commit -m "feat(toss): 주식 세션과 공개 시세 변환 추가"
 ```
 
-### Task 3: Binance와 Bithumb adapter
+### Task 3: Binance와 Bithumb adapter — 완료
 
 **Files:**
 - Create: `lib/market/providers/binance.ts`, `lib/market/providers/bithumb.ts`
@@ -171,7 +177,7 @@ git add lib/market/providers/binance.ts lib/market/providers/bithumb.ts tests/ma
 git commit -m "feat(crypto): Binance·Bithumb 시세 adapter 추가"
 ```
 
-### Task 4: Cache, 장애 격리와 공개 dashboard API
+### Task 4: Cache, 장애 격리와 공개 dashboard API — 완료
 
 **Files:**
 - Create: `lib/market/cache.ts`, `lib/market/dashboard.ts`
@@ -219,7 +225,7 @@ git add lib/market/cache.ts lib/market/dashboard.ts tests/market/cache.test.ts t
 git commit -m "feat(api): 공개 멀티자산 dashboard API 전환"
 ```
 
-### Task 5: 참고 추정가 엔진
+### Task 5: 참고 추정가 엔진 — 완료
 
 **Files:**
 - Create: `lib/market/estimate.ts`, `lib/market/proxy-map.ts`, `tests/market/estimate.test.ts`
@@ -256,7 +262,7 @@ git add lib/market/estimate.ts lib/market/proxy-map.ts lib/market/dashboard.ts t
 git commit -m "feat(estimate): 주요 반도체 참고 추정가 추가"
 ```
 
-### Task 6: Polling hook과 시세 상태 UI
+### Task 6: Polling hook과 시세 상태 UI — 완료
 
 **Files:**
 - Create: `hooks/use-market-dashboard.ts`
@@ -307,7 +313,7 @@ git add hooks/use-market-dashboard.ts components/market/quote-badge.tsx componen
 git commit -m "feat(ui): 시세 상태와 5초 갱신 기반 추가"
 ```
 
-### Task 7: 하이브리드 마켓 콕핏과 개인 기능 제거
+### Task 7: 하이브리드 마켓 콕핏과 개인 기능 제거 — 완료
 
 **Files:**
 - Create: `components/market/market-status-bar.tsx`, `indicator-grid.tsx`, `asset-tabs.tsx`, `quote-table.tsx`
@@ -350,88 +356,240 @@ git add app/page.tsx app/layout.tsx app/globals.css components/market tests/comp
 git commit -m "feat(ui): 공개용 하이브리드 마켓 콕핏 전환"
 ```
 
-### Task 8: Lightweight Charts 종목 상세
+### Task 8: 랭킹 밖 주식의 실제 등락률 보완
 
 **Files:**
-- Modify: `package.json`, `pnpm-lock.yaml`, `app/page.tsx`
-- Create: `app/api/market/[symbol]/candles/route.ts`
-- Create: `components/market/market-chart.tsx`, `quote-detail.tsx`
-- Create: `tests/components/quote-detail.test.tsx`
+- Modify: `lib/market/types.ts`, `lib/market/providers/toss.ts`, `lib/market/dashboard.ts`
+- Create: `lib/market/previous-close.ts`
+- Modify: `tests/market/toss-provider.test.ts`, `tests/market/dashboard.test.ts`
 
 **Interfaces:**
-- Produces: normalized candle route, `MarketChart`, `QuoteDetail`
-- Consumes: selected quote, Toss candles, Binance klines, Bithumb candles
+- Produces: `createPreviousCloseLoader(request): (symbols: string[]) => Promise<Map<string, number>>`
+- Consumes: Toss `/api/v1/candles?symbol={symbol}&interval=1d&count=2`, 5초 현재가와 랭킹 지표
 
-- [ ] **Step 1: chart를 설치하고 상세 실패 테스트를 작성한다.**
+- [ ] **Step 1: 랭킹 밖 종목 실패 테스트를 작성한다.**
 
-Run: `pnpm add lightweight-charts`
-
-```tsx
-expect(screen.getByText('참고 추정')).toBeVisible()
-expect(screen.getByText('QQQ · USD/KRW')).toBeVisible()
-expect(screen.getByText('신뢰도 보통')).toBeVisible()
+```ts
+expect(quotes.find((quote) => quote.symbol === '042700')).toMatchObject({
+  price: 213750,
+  previousClose: 219500,
+  changeRate: expect.closeTo(-0.0262, 4),
+  changeRateSource: 'previous-close',
+})
 ```
 
 - [ ] **Step 2: 실패를 확인한다.**
 
-Run: `pnpm test -- tests/components/quote-detail.test.tsx`
-Expected: FAIL with missing detail module
+Run: `pnpm test -- tests/market/toss-provider.test.ts tests/market/dashboard.test.ts`
+Expected: FAIL because `previousClose` and `changeRateSource` do not exist
 
-- [ ] **Step 3: candle route를 구현한다.**
+- [ ] **Step 3: 전일 종가 loader와 계산을 구현한다.**
 
-각 공급자 OHLCV를 `{ time, open, high, low, close, volume }[]`로 변환한다. 기본은 5분봉 1일, 최대 500개다. 미지원 종목은 `{ candles: [], unavailable: true }`로 현재가 상세를 유지한다.
+```ts
+export type ChangeRateSource = 'provider' | 'previous-close' | null
 
-- [ ] **Step 4: client-only chart와 상세를 구현한다.**
+export function calculateChangeRate(price: number | null, previousClose: number | null) {
+  if (price === null || previousClose === null || previousClose <= 0) return null
+  return price / previousClose - 1
+}
+```
 
-`ResizeObserver`로 크기를 맞추고 OHLC tooltip, 거래량, 현재가·등락률의 텍스트 대체 정보를 제공한다. chart instance와 observer는 cleanup에서 해제한다.
+랭킹 `changeRate`가 있으면 그대로 사용한다. 없으면 일봉 두 개 중 현재 거래일보다 앞선 최신 종가를 `previousClose`로 사용한다. 전일 종가는 날짜별 module cache와 in-flight 병합을 적용하고 실패한 종목만 `null`로 유지한다. 최대 20개 초기 요청은 5개씩 묶어 실행해 `MARKET_DATA_CHART` 한도를 넘기지 않는다.
+
+- [ ] **Step 4: 전체 검증과 문서 갱신 후 커밋한다.**
+
+Run: `pnpm test -- tests/market/toss-provider.test.ts tests/market/dashboard.test.ts && pnpm lint && pnpm build`
+Expected: PASS; 한미반도체·삼성바이오로직스·셀트리온의 등락률이 null이 아님
+
+```bash
+git add lib/market/types.ts lib/market/providers/toss.ts lib/market/previous-close.ts lib/market/dashboard.ts tests/market/toss-provider.test.ts tests/market/dashboard.test.ts CHANGELOG.md
+git commit -m "fix(market): 랭킹 밖 종목 실제 등락률 보완"
+```
+
+### Task 9: 지투라이브 브랜드·테마·종목명 표기
+
+**Files:**
+- Modify: `lib/market/types.ts`, `lib/market/catalog.ts`, `app/layout.tsx`, `app/page.tsx`, `app/globals.css`
+- Create: `hooks/use-display-preferences.ts`, `components/market/display-controls.tsx`
+- Modify: `components/market/quote-table.tsx`, `components/market/indicator-grid.tsx`
+- Create: `tests/hooks/use-display-preferences.test.tsx`, `tests/components/display-controls.test.tsx`
+
+**Interfaces:**
+- Produces: `NameLocale = 'ko' | 'en'`, `Theme = 'light' | 'dark'`, `useDisplayPreferences()`
+- Consumes: catalog `nameKo`, `nameEn`, `matchMedia('(prefers-color-scheme: dark)')`, localStorage
+
+- [ ] **Step 1: 선호 설정 실패 테스트를 작성한다.**
+
+```tsx
+expect(screen.getByRole('heading', { name: '지투라이브' })).toBeVisible()
+await user.click(screen.getByRole('button', { name: '영문명으로 보기' }))
+expect(screen.getByText('Samsung Electronics')).toBeVisible()
+await user.click(screen.getByRole('button', { name: '라이트 모드로 전환' }))
+expect(document.documentElement).not.toHaveClass('dark')
+```
+
+- [ ] **Step 2: 실패를 확인한다.**
+
+Run: `pnpm test -- tests/hooks/use-display-preferences.test.tsx tests/components/display-controls.test.tsx`
+Expected: FAIL with missing preference hook and controls
+
+- [ ] **Step 3: catalog와 preference hook을 구현한다.**
+
+```ts
+export type Instrument = {
+  symbol: string
+  nameKo: string
+  nameEn: string
+  // existing provider fields remain unchanged
+}
+```
+
+첫 렌더는 저장값, 저장값이 없으면 운영체제 테마를 사용한다. `g2-live-theme`, `g2-live-name-locale` 두 key만 저장하며 계정·종목 개인화 데이터는 저장하지 않는다.
+
+- [ ] **Step 4: 44px 조작 영역과 두 테마 대비를 적용한다.**
+
+헤더에는 해·달 아이콘 버튼과 `한글명 | 영문명` segmented control을 둔다. 목록·지표·상세는 선택된 이름만 바꾸고 심볼은 유지한다. 브랜드와 metadata를 `지투라이브`로 바꾼다.
 
 - [ ] **Step 5: 검증하고 커밋한다.**
 
-Run: `pnpm test -- tests/components/quote-detail.test.tsx && pnpm build`
-Expected: PASS and build exit 0
+Run: `pnpm test -- tests/hooks/use-display-preferences.test.tsx tests/components/display-controls.test.tsx tests/components/quote-table.test.tsx && pnpm lint && pnpm build`
+Expected: PASS
 
 ```bash
-git add package.json pnpm-lock.yaml app/api/market components/market app/page.tsx tests/components/quote-detail.test.tsx
-git commit -m "feat(chart): 종목 가격·거래량 상세 차트 추가"
+git add lib/market/types.ts lib/market/catalog.ts app/layout.tsx app/page.tsx app/globals.css hooks/use-display-preferences.ts components/market/display-controls.tsx components/market/quote-table.tsx components/market/indicator-grid.tsx tests/hooks/use-display-preferences.test.tsx tests/components/display-controls.test.tsx tests/components/quote-table.test.tsx README.md CHANGELOG.md
+git commit -m "feat(ui): 지투라이브 테마·종목명 전환 추가"
 ```
 
-### Task 9: 문서 동기화와 최종 검증
+### Task 10: 공급자별 candle 정규화 API
 
 **Files:**
-- Modify: `README.md`, `CHANGELOG.md`
-- Modify: `.env.example` only when an actual key name is introduced
+- Modify: `lib/market/types.ts`
+- Create: `lib/market/candles.ts`, `lib/market/providers/toss-candles.ts`, `lib/market/providers/binance-candles.ts`, `lib/market/providers/bithumb-candles.ts`
+- Create: `app/api/market/[symbol]/candles/route.ts`
+- Create: `tests/market/candles.test.ts`, `tests/api/candles-route.test.ts`
 
 **Interfaces:**
-- Consumes: completed Tasks 1–8
-- Produces: accurate usage and change documentation
+- Produces: `CandlePoint`, `CandleRange`, `getCandles(symbol, range)`, `GET(request, { params })`
+- Consumes: Toss candles, Binance `/api/v3/klines`, Bithumb minute/day candles and catalog provider routing
+
+- [ ] **Step 1: 정규화와 route 실패 테스트를 작성한다.**
+
+```ts
+type CandlePoint = { time: number; open: number; high: number; low: number; close: number; volume: number }
+type CandleRange = '1d' | '1w' | '1mo'
+
+expect(await getCandles('005930', '1d')).toMatchObject({ unavailable: false })
+expect((await getCandles('005930', '1d')).candles[0]).toEqual({
+  time: expect.any(Number), open: expect.any(Number), high: expect.any(Number),
+  low: expect.any(Number), close: expect.any(Number), volume: expect.any(Number),
+})
+```
+
+- [ ] **Step 2: 실패를 확인한다.**
+
+Run: `pnpm test -- tests/market/candles.test.ts tests/api/candles-route.test.ts`
+Expected: FAIL with missing candle modules
+
+- [ ] **Step 3: 공급자 adapter와 cache를 구현한다.**
+
+`1d`는 1분봉 최대 500개, `1w`는 일봉 7개, `1mo`는 일봉 30개다. Toss는 `nextBefore`로 최대 3페이지, Binance와 Bithumb은 공급자 limit 안에서 한 번 요청한다. 숫자가 잘못된 candle만 제외하고 시간 오름차순으로 정렬한다. 1분봉 TTL은 60초, 일봉 TTL은 6시간이며 동일 요청은 병합한다.
+
+- [ ] **Step 4: route 입력과 미지원 종목을 검증한다.**
+
+`range`가 세 값 밖이면 HTTP 400, catalog에 없는 symbol은 HTTP 404, 공급자 장애는 HTTP 200과 `{ candles: [], unavailable: true, message }`로 현재가 상세를 유지한다.
+
+- [ ] **Step 5: 검증하고 커밋한다.**
+
+Run: `pnpm test -- tests/market/candles.test.ts tests/api/candles-route.test.ts && pnpm lint`
+Expected: PASS
+
+```bash
+git add lib/market/types.ts lib/market/candles.ts lib/market/providers/toss-candles.ts lib/market/providers/binance-candles.ts lib/market/providers/bithumb-candles.ts app/api/market tests/market/candles.test.ts tests/api/candles-route.test.ts CHANGELOG.md
+git commit -m "feat(api): 주식·코인 candle 정규화 API 추가"
+```
+
+### Task 11: 종목 상세 route와 Lightweight Charts
+
+**Files:**
+- Modify: `package.json`, `pnpm-lock.yaml`, `components/market/quote-table.tsx`
+- Create: `app/market/[symbol]/page.tsx`, `components/market/quote-detail.tsx`, `components/market/market-chart.tsx`, `hooks/use-market-candles.ts`
+- Create: `tests/components/quote-detail.test.tsx`, `tests/hooks/use-market-candles.test.tsx`
+
+**Interfaces:**
+- Produces: `/market/[symbol]`, `QuoteDetail`, `MarketChart`, `useMarketCandles(symbol, range)`
+- Consumes: dashboard quote, candle route, display preferences and `lightweight-charts`
+
+- [ ] **Step 1: 차트 의존성과 상세 실패 테스트를 추가한다.**
+
+Run: `pnpm add lightweight-charts`
+
+```tsx
+expect(screen.getByRole('link', { name: /삼성전자 상세 보기/ })).toHaveAttribute('href', '/market/005930')
+expect(screen.getByText('전일 종가')).toBeVisible()
+expect(screen.getByRole('tab', { name: '1일' })).toHaveAttribute('aria-selected', 'true')
+expect(screen.getByLabelText('삼성전자 가격 차트')).toBeVisible()
+```
+
+- [ ] **Step 2: 실패를 확인한다.**
+
+Run: `pnpm test -- tests/components/quote-detail.test.tsx tests/hooks/use-market-candles.test.tsx`
+Expected: FAIL with missing detail and candle hook
+
+- [ ] **Step 3: 목록 link와 상세 정보 구조를 구현한다.**
+
+행 전체를 semantic link로 만들고 기존 버튼 중첩을 두지 않는다. 상세 상단은 뒤로가기, 이름·심볼, 품질 badge, 현재가·등락률, OHLC·전일 종가·거래량 순서다. 이름과 테마 preference를 목록과 공유한다.
+
+- [ ] **Step 4: client-only chart lifecycle을 구현한다.**
+
+`createChart`와 candlestick·histogram series를 client effect 안에서 생성한다. `ResizeObserver`로 폭을 갱신하고 range나 symbol이 바뀌면 series data만 교체한다. cleanup에서 observer와 chart를 제거한다. 색상 밖에도 OHLC 텍스트 요약과 로딩·미지원 안내를 제공한다.
+
+- [ ] **Step 5: 검증하고 커밋한다.**
+
+Run: `pnpm test -- tests/components/quote-detail.test.tsx tests/hooks/use-market-candles.test.tsx tests/components/quote-table.test.tsx && pnpm lint && pnpm build`
+Expected: PASS and detail route is included in production build
+
+```bash
+git add package.json pnpm-lock.yaml app/market components/market/quote-table.tsx components/market/quote-detail.tsx components/market/market-chart.tsx hooks/use-market-candles.ts tests/components/quote-detail.test.tsx tests/hooks/use-market-candles.test.tsx CHANGELOG.md
+git commit -m "feat(chart): 종목별 가격·거래량 상세 차트 추가"
+```
+
+### Task 12: 문서 동기화와 최종 검증
+
+**Files:**
+- Modify: `README.md`, `CHANGELOG.md`, `docs/product/PROJECT_BRIEF.md`
+
+**Interfaces:**
+- Consumes: completed Tasks 1–11
+- Produces: accurate usage, data-source and change documentation
 
 - [ ] **Step 1: README를 실제 구현과 동기화한다.**
 
-개인 보유종목·관심종목을 현재 기능에서 제거하고 Toss, Binance, Bithumb, Lightweight Charts, 공급자 cache, 추정가 주의문과 PAXG 제약을 기록한다.
+지투라이브 명칭, 공개 멀티자산 기능, 등락률 계산 근거, 종목명·테마 전환, 상세 차트, Toss·Binance·Bithumb 역할, cache 주기와 배포 제약을 기록한다. 제거된 개인 보유종목·관심종목 설명은 현재 기능에서 삭제한다.
 
-- [ ] **Step 2: CHANGELOG `Unreleased`를 갱신한다.**
+- [ ] **Step 2: CHANGELOG `Unreleased`를 정리한다.**
 
-실제 완료된 추가·변경·제거·안정화만 기록하며 버전은 release 단계 전 임의로 올리지 않는다.
+실제 완료된 추가·변경·수정·제거만 기록한다. 버전, tag와 release 날짜는 올리지 않는다.
 
 - [ ] **Step 3: 전체 자동 검증을 실행한다.**
 
 Run: `pnpm test && pnpm lint && pnpm build`
 Expected: all tests pass, lint exit 0, production build exit 0
 
-- [ ] **Step 4: 375px, 768px, 1024px, 1440px에서 수동 검증한다.**
+- [ ] **Step 4: 실제 데이터와 반응형을 수동 검증한다.**
 
-수평 스크롤, 대비, 키보드 탐색, 실시간·stale·추정·미제공 배지, 5초 갱신, 가격 flash와 개인 UI 부재를 확인한다.
+로컬 허용 IP 환경에서 세 누락 종목 등락률, 한국·미국·코인 상세 차트, 5초 현재가와 60초 candle 갱신을 확인한다. 375px, 768px, 1024px와 1440px에서 두 테마, 두 이름 표기, 키보드 탐색, 뒤로가기, 수평 overflow와 console error를 확인한다.
 
 - [ ] **Step 5: 문서를 커밋한다.**
 
 ```bash
-git add README.md CHANGELOG.md .env.example
-git commit -m "docs: 멀티자산 대시보드 사용법과 제약 정리"
+git add README.md CHANGELOG.md docs/product/PROJECT_BRIEF.md docs/superpowers/plans/2026-09-01-market-dashboard-v1.md
+git commit -m "docs: 지투라이브 사용법과 데이터 기준 정리"
 ```
 
 ## Review Gates
 
-1. Tasks 1–4 후 API 응답, 개인 endpoint 부재와 공급자 호출량을 검토한다.
-2. Task 5 후 실제 시세 우선순위와 추정가 설명 가능성을 검토한다.
-3. Tasks 6–8 후 데스크톱·모바일 화면과 접근성을 검토한다.
-4. Task 9 검증 전에는 push, merge, release와 배포를 수행하지 않는다.
+1. Tasks 1–7은 `2c96336`까지 구현·검증 완료 상태다.
+2. Task 8 후 세 누락 종목과 임의 랭킹 밖 종목의 실제 등락률을 검토한다.
+3. Task 9 후 라이트·다크와 한글명·영문명 화면을 검토한다.
+4. Tasks 10–11 후 주식·코인 상세 차트, route 오류와 호출량을 검토한다.
+5. Task 12 검증 전에는 push, merge, release와 배포를 수행하지 않는다.
