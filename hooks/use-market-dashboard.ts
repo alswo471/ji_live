@@ -8,7 +8,7 @@ type DashboardState = 'loading' | 'ready' | 'stale' | 'error';
 export function useMarketDashboard(): {
   data: DashboardResponse | null;
   state: DashboardState;
-  refresh(): Promise<void>;
+  refresh: () => Promise<void>;
 } {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [state, setState] = useState<DashboardState>('loading');
