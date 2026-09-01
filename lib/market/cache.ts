@@ -1,4 +1,7 @@
-import { ProviderRequestError } from './provider-error';
+import {
+  boundedRetryAfterMs,
+  ProviderRequestError,
+} from './provider-error';
 
 export function createCachedProvider<T>(options: {
   ttlMs: number;
@@ -29,8 +32,9 @@ export function createCachedProvider<T>(options: {
       consecutiveFailures += 1;
       lastError = error;
       if (error instanceof ProviderRequestError && error.status === 429) {
+        const retryAfterMs = boundedRetryAfterMs(error.retryAfterMs);
         openUntil = clock() +
-          (error.retryAfterMs ?? fallbackDelay(consecutiveFailures - 1));
+          (retryAfterMs ?? fallbackDelay(consecutiveFailures - 1));
       } else if (consecutiveFailures >= options.failureThreshold) {
         openUntil = clock() +
           fallbackDelay(consecutiveFailures - options.failureThreshold);

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createCachedProvider } from '@/lib/market/cache';
-import { ProviderRequestError } from '@/lib/market/provider-error';
+import {
+  MAX_RETRY_AFTER_MS,
+  ProviderRequestError,
+} from '@/lib/market/provider-error';
 
 describe('createCachedProvider', () => {
   it('동시에 들어온 요청을 한 번의 공급자 호출로 합친다', async () => {
@@ -106,4 +109,53 @@ describe('createCachedProvider', () => {
     await expect(cached.get()).rejects.toThrow('rate limited');
     expect(load).toHaveBeenCalledTimes(3);
   });
+
+  it('Retry-After 운영 상한 경계까지는 공급자 대기 시간을 유지한다', async () => {
+    let now = 0;
+    const load = vi.fn(async () => {
+      throw new ProviderRequestError('rate limited', 429, MAX_RETRY_AFTER_MS);
+    });
+    const cached = createCachedProvider({
+      ttlMs: 5_000,
+      failureThreshold: 3,
+      cooldownMs: 100,
+      load,
+      now: () => now,
+    });
+
+    await expect(cached.get()).rejects.toThrow('rate limited');
+    now = MAX_RETRY_AFTER_MS - 1;
+    await expect(cached.get()).rejects.toThrow('rate limited');
+    expect(load).toHaveBeenCalledTimes(1);
+
+    now = MAX_RETRY_AFTER_MS;
+    await expect(cached.get()).rejects.toThrow('rate limited');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([Infinity, MAX_RETRY_AFTER_MS + 1])(
+    'cache 경계에서 과도한 Retry-After %s를 지수 backoff로 대체한다',
+    async (retryAfterMs) => {
+      let now = 0;
+      const load = vi.fn(async () => {
+        throw new ProviderRequestError('rate limited', 429, retryAfterMs);
+      });
+      const cached = createCachedProvider({
+        ttlMs: 5_000,
+        failureThreshold: 3,
+        cooldownMs: 100,
+        load,
+        now: () => now,
+      });
+
+      await expect(cached.get()).rejects.toThrow('rate limited');
+      now = 99;
+      await expect(cached.get()).rejects.toThrow('rate limited');
+      expect(load).toHaveBeenCalledTimes(1);
+
+      now = 100;
+      await expect(cached.get()).rejects.toThrow('rate limited');
+      expect(load).toHaveBeenCalledTimes(2);
+    },
+  );
 });

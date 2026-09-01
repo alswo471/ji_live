@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createProviderRequestError,
+  MAX_RETRY_AFTER_MS,
   parseRetryAfter,
 } from '@/lib/market/provider-error';
 
@@ -17,6 +18,20 @@ describe('parseRetryAfter', () => {
 
   it('유효하지 않은 값은 보존하지 않는다', () => {
     expect(parseRetryAfter('later', 1_000)).toBeNull();
+  });
+
+  it('Infinity가 되는 큰 숫자와 운영 상한을 넘는 초를 거절한다', () => {
+    expect(parseRetryAfter('9'.repeat(400), 1_000)).toBeNull();
+    expect(
+      parseRetryAfter(String(MAX_RETRY_AFTER_MS / 1_000 + 1), 1_000),
+    ).toBeNull();
+  });
+
+  it('운영 상한보다 먼 HTTP-date를 거절한다', () => {
+    const now = Date.parse('2026-09-01T00:00:00.000Z');
+    const farFuture = new Date(now + MAX_RETRY_AFTER_MS + 1_000).toUTCString();
+
+    expect(parseRetryAfter(farFuture, now)).toBeNull();
   });
 });
 
