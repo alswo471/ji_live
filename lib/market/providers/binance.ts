@@ -1,0 +1,44 @@
+import { INSTRUMENTS } from '../catalog';
+import type { MarketQuote } from '../types';
+
+const DEFAULT_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'PAXGUSDT'];
+type BinanceTicker = { symbol: string; lastPrice: string; priceChangePercent: string; quoteVolume: string; closeTime: number };
+
+function finiteNumber(value: string | number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export async function fetchBinanceQuotes(
+  fetcher: typeof fetch = fetch,
+  symbols = DEFAULT_SYMBOLS,
+): Promise<MarketQuote[]> {
+  const response = await fetcher(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(symbols))}`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(3_000),
+  });
+  if (!response.ok) throw new Error(`Binance 시세 요청에 실패했습니다. (${response.status})`);
+  const tickers = await response.json() as BinanceTicker[];
+
+  return tickers.map((ticker) => {
+    const baseSymbol = ticker.symbol.replace(/USDT$/, '');
+    const instrument = INSTRUMENTS.find((item) => item.symbol === baseSymbol);
+    const price = finiteNumber(ticker.lastPrice);
+    const percent = finiteNumber(ticker.priceChangePercent);
+    return {
+      symbol: baseSymbol,
+      name: instrument?.name ?? baseSymbol,
+      assetClass: instrument?.assetClass ?? 'crypto',
+      price,
+      currency: 'USD',
+      changeRate: percent === null ? null : percent / 100,
+      tradingAmount: finiteNumber(ticker.quoteVolume),
+      asOf: Number.isFinite(ticker.closeTime) ? new Date(ticker.closeTime).toISOString() : null,
+      session: 'always-open',
+      quality: price === null ? 'unavailable' : 'realtime',
+      provider: 'binance',
+      confidence: null,
+      estimateInputs: [],
+    } satisfies MarketQuote;
+  });
+}
