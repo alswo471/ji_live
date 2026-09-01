@@ -45,11 +45,52 @@ describe('QuoteBadge', () => {
     expect(screen.queryByText(/실시간|정규장 ·/)).not.toBeInTheDocument();
   });
 
-  it('실제 거래상품의 공급자와 갱신 지연을 텍스트로 표시한다', () => {
+  it('Bithumb 실제 상품은 파생 문구 없이 전일 종가 비교를 표시한다', () => {
+    render(<QuoteBadge quote={{
+      ...quote,
+      symbol: 'BTC',
+      assetClass: 'crypto',
+      quality: 'realtime',
+      priceKind: 'actual-product',
+      provider: 'bithumb',
+      sourceLabel: 'Bithumb',
+      comparisonBasis: 'previous-close',
+    }} />);
+
+    expect(screen.getByText('실제 거래상품')).toBeVisible();
+    expect(screen.getByText('전일 종가 대비')).toBeVisible();
+    expect(screen.queryByText(/해외 파생상품/)).not.toBeInTheDocument();
+  });
+
+  it('PAXG 실제 상품은 파생 문구 없이 24시간 비교를 표시한다', () => {
+    render(<QuoteBadge quote={{
+      ...quote,
+      symbol: 'PAXG',
+      assetClass: 'metal',
+      currency: 'USDT',
+      quality: 'realtime',
+      priceKind: 'actual-product',
+      provider: 'binance-spot',
+      sourceLabel: 'Binance 현물',
+      comparisonBasis: 'provider-24h',
+    }} />);
+
+    expect(screen.getByText('실제 거래상품')).toBeVisible();
+    expect(screen.getByText('24시간 전 대비')).toBeVisible();
+    expect(screen.queryByText(/해외 파생상품/)).not.toBeInTheDocument();
+  });
+
+  it('stale 실제 거래상품에 마지막 공급자 기준 시각을 표시한다', () => {
     render(<QuoteBadge quote={{ ...quote, quality: 'stale', priceKind: 'actual-product', sourceLabel: 'Binance 현물' }} />);
     expect(screen.getByText('실제 거래상품')).toBeVisible();
     expect(screen.getByText('Binance 현물')).toBeVisible();
-    expect(screen.getByText('갱신 지연')).toBeVisible();
+    expect(screen.getByText('갱신 지연 · 공급자 기준 10:00')).toBeVisible();
+  });
+
+  it('delayed 시세에도 마지막 공급자 기준 시각을 표시한다', () => {
+    render(<QuoteBadge quote={{ ...quote, quality: 'delayed' }} />);
+
+    expect(screen.getByText('갱신 지연 · 공급자 기준 10:00')).toBeVisible();
   });
 
   it('사용할 수 없는 가격은 연동 준비 중으로 표시한다', () => {

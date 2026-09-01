@@ -6,6 +6,23 @@ const COMPARISON_LABEL = {
   'previous-close': '해외 파생상품 기준 · 전일 종가 대비',
 } as const;
 
+const ACTUAL_COMPARISON_LABEL = {
+  'provider-24h': '24시간 전 대비',
+  'previous-close': '전일 종가 대비',
+} as const;
+
+function formatProviderTime(asOf: string | null) {
+  if (!asOf) return null;
+  const date = new Date(asOf);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'Asia/Seoul',
+  });
+}
+
 function UnavailableBadge() {
   return (
     <Badge variant="outline" className="text-muted-foreground">
@@ -15,17 +32,11 @@ function UnavailableBadge() {
 }
 
 function DataStatus({ quote }: { quote: MarketQuote }) {
-  if (quote.quality === 'stale') {
+  if (quote.quality === 'stale' || quote.quality === 'delayed') {
+    const providerTime = formatProviderTime(quote.asOf);
     return (
       <span className="whitespace-nowrap text-[11px] text-amber-700 dark:text-amber-300">
-        갱신 지연
-      </span>
-    );
-  }
-  if (quote.quality === 'delayed') {
-    return (
-      <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-        지연 시세
+        {providerTime ? `갱신 지연 · 공급자 기준 ${providerTime}` : '갱신 지연'}
       </span>
     );
   }
@@ -84,6 +95,11 @@ export function QuoteBadge({ quote }: { quote: MarketQuote }) {
         <span className="whitespace-nowrap text-[11px] text-muted-foreground">
           {quote.sourceLabel ?? '출처 확인 중'}
         </span>
+        {quote.comparisonBasis && (
+          <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+            {ACTUAL_COMPARISON_LABEL[quote.comparisonBasis]}
+          </span>
+        )}
         <DataStatus quote={quote} />
       </span>
     );
