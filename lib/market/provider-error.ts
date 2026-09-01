@@ -26,7 +26,8 @@ export class ProviderRequestError extends Error {
 export function parseRetryAfter(value: string | null, nowMs: number) {
   if (value === null) return null;
   const trimmed = value.trim();
-  if (/^\d+(?:\.\d+)?$/.test(trimmed))
+  // RFC 9110 delay-seconds는 부호나 소수점이 없는 1*DIGIT 형식이다.
+  if (/^\d+$/.test(trimmed))
     return boundedRetryAfterMs(Number(trimmed) * 1_000);
 
   // Date.parse의 느슨한 숫자·날짜 해석을 피하고 HTTP-date의 IMF-fixdate만 허용한다.

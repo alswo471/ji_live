@@ -8,8 +8,8 @@ import {
 describe('parseRetryAfter', () => {
   const modernNow = Date.parse('2026-09-01T00:00:00.000Z');
 
-  it('초 단위 값을 밀리초로 보존한다', () => {
-    expect(parseRetryAfter('2.5', 1_000)).toBe(2_500);
+  it('정수 초 단위 값을 밀리초로 보존한다', () => {
+    expect(parseRetryAfter('2', 1_000)).toBe(2_000);
   });
 
   it('HTTP-date를 현재 시각 기준 대기 밀리초로 변환한다', () => {
@@ -22,14 +22,14 @@ describe('parseRetryAfter', () => {
     expect(parseRetryAfter('later', 1_000)).toBeNull();
   });
 
-  it.each(['-1', '+3', ' -1 ', ' +3 '])(
-    '부호가 있는 숫자형 값 %s을 HTTP-date로 재해석하지 않는다',
+  it.each(['-1', '+3', ' -1 ', ' +3 ', '2.5', '.5', '2.', '1e3', '1E3'])(
+    '정수 delay-seconds가 아닌 숫자형 값 %s을 HTTP-date로 재해석하지 않는다',
     (value) => {
       expect(parseRetryAfter(value, modernNow)).toBeNull();
     },
   );
 
-  it('바깥 공백이 있는 unsigned decimal seconds는 허용한다', () => {
+  it('바깥 공백이 있는 unsigned integer seconds는 허용한다', () => {
     expect(parseRetryAfter(' 3 ', 1_000)).toBe(3_000);
   });
 

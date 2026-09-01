@@ -160,7 +160,7 @@ describe('createCachedProvider', () => {
     },
   );
 
-  it.each(['-1', '+3', ' -1 ', ' +3 '])(
+  it.each(['-1', '+3', ' -1 ', ' +3 ', '2.5', ' 2.5 ', '.5', '2.', '1e3', '1E3'])(
     '잘못된 Retry-After %s를 0ms 회로 차단 대신 지수 backoff로 처리한다',
     async (header) => {
       let now = 0;
