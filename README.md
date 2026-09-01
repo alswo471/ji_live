@@ -110,6 +110,8 @@ GitFlow를 기준으로 운영합니다.
 - `release/*`: 배포 준비
 - `hotfix/*`: 운영 긴급 수정
 
+규모가 있는 기능은 현재 작업 폴더를 보호하기 위해 Git worktree에서 구현합니다. 사용 방법과 병합 흐름은 [Worktree 작업 가이드](./docs/workflow/WORKTREE.md)를 따릅니다.
+
 커밋 메시지는 Conventional Commits의 prefix를 사용하고 설명은 한국어를 기본으로 합니다.
 
 ```text
