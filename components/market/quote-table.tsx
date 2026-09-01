@@ -7,6 +7,7 @@ import type { NameLocale } from '@/hooks/use-display-preferences';
 function formatPrice(quote: MarketQuote) {
   if (quote.price === null) return '시세 연결 중…';
   if (quote.currency === 'KRW') return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 }).format(quote.price)}원`;
+  if (quote.currency === 'USDT') return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(quote.price)} USDT`;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(quote.price);
 }
 

@@ -125,6 +125,30 @@ describe('QuoteDetail', () => {
     expect(screen.queryByText('24시간 전')).not.toBeInTheDocument();
   });
 
+  it('PAXG 현재가와 candle 가격을 USDT 단위로 표시한다', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+
+    render(<QuoteDetail initialQuote={{
+      ...quote,
+      symbol: 'PAXG',
+      name: '금 연동(PAXG)',
+      assetClass: 'metal',
+      price: 3_472.18,
+      currency: 'USDT',
+      tradingAmountCurrency: 'USDT',
+      comparisonBasis: 'provider-24h',
+      priceKind: 'actual-product',
+      quality: 'realtime',
+      provider: 'binance-spot',
+      providerSymbol: 'PAXGUSDT',
+      sourceLabel: 'Binance 현물',
+      estimateInputs: [],
+    }} />);
+
+    expect(screen.getAllByText('3,472.18 USDT').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$3,472.18')).not.toBeInTheDocument();
+  });
+
   it('비교 기준이 없으면 24시간 전 비교로 오인하게 하지 않는다', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
 
@@ -146,17 +170,27 @@ describe('QuoteDetail', () => {
 describe('MarketChart', () => {
   it('테마가 바뀌어도 차트를 재생성하지 않고 candle과 viewport를 유지한다', () => {
     const candles = [{ time: 1788226800, open: 100, high: 110, low: 90, close: 105, volume: 10 }];
-    const view = render(<MarketChart candles={candles} interval="1m" label="가격 차트" theme="light" state="ready" message={null} />);
+    const view = render(<MarketChart candles={candles} interval="1m" label="가격 차트" currency="KRW" theme="light" state="ready" message={null} />);
     expect(chartMocks.createChart).toHaveBeenCalledTimes(1);
     expect(chartMocks.setVisibleRange).toHaveBeenCalledWith({ from: 1788219600, to: 1788226800 });
     chartMocks.setData.mockClear();
 
-    view.rerender(<MarketChart candles={candles} interval="1m" label="가격 차트" theme="dark" state="ready" message={null} />);
+    view.rerender(<MarketChart candles={candles} interval="1m" label="가격 차트" currency="KRW" theme="dark" state="ready" message={null} />);
 
     expect(chartMocks.createChart).toHaveBeenCalledTimes(1);
     expect(chartMocks.applyOptions).toHaveBeenCalledWith(expect.objectContaining({
       layout: expect.objectContaining({ textColor: '#a1a1aa' }),
     }));
     expect(chartMocks.setData).not.toHaveBeenCalled();
+  });
+
+  it('USDT candle 가격축에 달러 기호 대신 USDT 단위를 표시한다', () => {
+    render(<MarketChart candles={[]} interval="1m" label="가격 차트" currency="USDT" theme="light" state="ready" message={null} />);
+
+    const options = chartMocks.createChart.mock.calls.at(-1)![1] as {
+      localization: { priceFormatter: (price: number) => string };
+    };
+    expect(options.localization.priceFormatter(366.48)).toBe('366.48 USDT');
+    expect(options.localization.priceFormatter(366.48)).not.toContain('$');
   });
 });

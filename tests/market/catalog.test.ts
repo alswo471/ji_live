@@ -9,6 +9,9 @@ describe('INSTRUMENTS', () => {
     expect(instrumentsByAssetClass('us-stock').map((item) => item.symbol)).toEqual([
       'TSLA', 'NVDA', 'AAPL', 'GOOGL',
     ]);
+    expect(instrumentsByAssetClass('us-stock').map((item) => item.currency)).toEqual([
+      'USDT', 'USDT', 'USDT', 'USDT',
+    ]);
     expect(INSTRUMENTS.find((item) => item.symbol === '005930')).toMatchObject({
       provider: 'hyperliquid', providerSymbol: 'xyz:SMSN',
       priceSanityBounds: { minExclusive: 0.01, maxExclusive: 100_000 },
@@ -18,7 +21,7 @@ describe('INSTRUMENTS', () => {
   it('공개 거래상품만 비주식 catalog에 남긴다', () => {
     expect(INSTRUMENTS.filter((item) => item.assetClass === 'crypto')).toHaveLength(5);
     expect(INSTRUMENTS.filter((item) => item.assetClass === 'metal')).toEqual([
-      expect.objectContaining({ symbol: 'PAXG', provider: 'binance-spot', providerSymbol: 'PAXGUSDT' }),
+      expect.objectContaining({ symbol: 'PAXG', currency: 'USDT', provider: 'binance-spot', providerSymbol: 'PAXGUSDT' }),
     ]);
     expect(INSTRUMENTS.filter((item) => item.assetClass === 'fx')).toEqual([
       expect.objectContaining({ symbol: 'USDTKRW', provider: 'bithumb', providerSymbol: 'KRW-USDT' }),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   CandlestickSeries,
   ColorType,
@@ -12,13 +12,14 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { formatCandleTime, getCandleViewport } from '@/lib/market/candle-intervals';
-import type { CandleInterval, CandlePoint } from '@/lib/market/types';
+import type { CandleInterval, CandlePoint, Currency } from '@/lib/market/types';
 import type { Theme } from '@/hooks/use-display-preferences';
 
 export function MarketChart({
   candles,
   interval,
   label,
+  currency,
   theme,
   state,
   message,
@@ -26,6 +27,7 @@ export function MarketChart({
   candles: CandlePoint[];
   interval: CandleInterval;
   label: string;
+  currency: Currency;
   theme: Theme;
   state: 'loading' | 'ready' | 'unavailable' | 'error';
   message: string | null;
@@ -35,6 +37,18 @@ export function MarketChart({
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const viewportIntervalRef = useRef<CandleInterval | null>(null);
+
+  const formatPrice = useCallback((price: number) => {
+    const formatted = new Intl.NumberFormat(
+      currency === 'KRW' ? 'ko-KR' : 'en-US',
+      { maximumFractionDigits: currency === 'KRW' ? 0 : 2 },
+    ).format(price);
+    return currency === 'KRW'
+      ? `${formatted}원`
+      : currency === 'USDT'
+        ? `${formatted} USDT`
+        : `$${formatted}`;
+  }, [currency]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -52,6 +66,7 @@ export function MarketChart({
       },
       rightPriceScale: { borderColor: '#0f172a1a' },
       timeScale: { borderColor: '#0f172a1a', timeVisible: true },
+      localization: { priceFormatter: formatPrice },
     });
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#ef4444', downColor: '#3b82f6', borderVisible: false,
@@ -78,7 +93,7 @@ export function MarketChart({
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
     };
-  }, []);
+  }, [formatPrice]);
 
   useEffect(() => {
     const dark = theme === 'dark';
@@ -107,7 +122,10 @@ export function MarketChart({
       return formatCandleTime(timestamp, interval);
     };
     chartRef.current?.applyOptions({
-      localization: { timeFormatter: (time: Time) => format(time) },
+      localization: {
+        priceFormatter: formatPrice,
+        timeFormatter: (time: Time) => format(time),
+      },
       timeScale: {
         timeVisible: intraday,
         secondsVisible: false,
@@ -115,7 +133,7 @@ export function MarketChart({
       },
     });
     viewportIntervalRef.current = null;
-  }, [interval]);
+  }, [formatPrice, interval]);
 
   useEffect(() => {
     candleSeriesRef.current?.setData(candles.map((candle) => ({

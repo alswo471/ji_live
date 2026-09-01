@@ -25,6 +25,7 @@ const RANGES: { value: CandleInterval; label: string }[] = [
 function formatNumber(value: number | null, currency: MarketQuote['currency']) {
   if (value === null || !Number.isFinite(value)) return '집계 중…';
   if (currency === 'KRW') return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 0 }).format(value)}원`;
+  if (currency === 'USDT') return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)} USDT`;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
 }
 
@@ -127,7 +128,7 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
         <section className="mt-8" aria-labelledby="price-chart-heading">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4"><div><p className="flex items-center gap-2 text-xs font-bold text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" />PRICE &amp; VOLUME</p><h2 id="price-chart-heading" className="mt-1 text-xl font-black">가격·거래량 차트</h2></div><div className="max-w-full overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex min-w-max gap-2 rounded-xl border bg-card/60 p-1" role="tablist" aria-label="차트 봉 단위 선택">{RANGES.map((item, index) => <button key={item.value} id={`candle-tab-${item.value}`} type="button" role="tab" tabIndex={range === item.value ? 0 : -1} aria-selected={range === item.value} aria-controls="market-price-chart" onClick={() => setRange(item.value)} onKeyDown={(event) => moveRangeFocus(event, index)} className={`min-h-11 min-w-14 rounded-lg px-3 text-sm font-bold transition-colors ${range === item.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{item.label}</button>)}</div></div></div>
           <div id="market-price-chart" role="tabpanel" aria-labelledby={`candle-tab-${range}`}>
-            <MarketChart candles={candles} interval={range} label={`${displayName} 가격 차트`} theme={preferences.theme} state={state} message={message} />
+            <MarketChart candles={candles} interval={range} label={`${displayName} 가격 차트`} currency={quote.currency} theme={preferences.theme} state={state} message={message} />
           </div>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">상승 캔들은 빨강, 하락 캔들은 파랑으로 표시합니다. 색상과 함께 상단 OHLC 수치를 확인하세요.</p>
         </section>

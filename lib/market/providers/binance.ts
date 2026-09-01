@@ -63,7 +63,7 @@ export async function fetchBinanceSpotQuotes(
       nameEn: instrument.nameEn,
       assetClass: instrument.assetClass,
       price,
-      currency: 'USD',
+      currency: instrument.currency,
       changeRate: price === null || percent === null ? null : percent / 100,
       previousClose: null,
       changeRateSource: price === null || percent === null ? null : 'provider',

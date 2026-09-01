@@ -83,7 +83,7 @@ const loaders = () => ({
       symbol: 'PAXG',
       name: '금 연동(PAXG)',
       assetClass: 'metal',
-      currency: 'USD',
+      currency: 'USDT',
       provider: 'binance-spot',
       providerSymbol: 'PAXGUSDT',
       sourceLabel: 'Binance 현물',
@@ -136,6 +136,7 @@ describe('createDashboardService', () => {
       dashboard.quotes.find((item) => item.symbol === 'TSLA'),
     ).toMatchObject({
       price: 366,
+      currency: 'USDT',
       provider: 'binance-futures',
       priceKind: 'derived-estimate',
     });
@@ -146,6 +147,7 @@ describe('createDashboardService', () => {
       dashboard.quotes.find((item) => item.symbol === 'PAXG'),
     ).toMatchObject({
       provider: 'binance-spot',
+      currency: 'USDT',
       priceKind: 'actual-product',
     });
     expect(
@@ -240,7 +242,7 @@ describe('createDashboardService', () => {
       quote({
         symbol: 'BTC',
         name: 'Bitcoin USDT',
-        currency: 'USD',
+        currency: 'USDT',
         provider: 'binance-spot',
         providerSymbol: 'BTCUSDT',
         sourceLabel: 'Binance 현물',
@@ -251,7 +253,7 @@ describe('createDashboardService', () => {
         symbol: 'PAXG',
         name: '금 연동(PAXG)',
         assetClass: 'metal',
-        currency: 'USD',
+        currency: 'USDT',
         provider: 'binance-spot',
         providerSymbol: 'PAXGUSDT',
         sourceLabel: 'Binance 현물',

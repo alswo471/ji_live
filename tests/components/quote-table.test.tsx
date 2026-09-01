@@ -39,13 +39,16 @@ describe('QuoteTable', () => {
       symbol: 'TSLA',
       name: 'Tesla',
       assetClass: 'us-stock',
-      currency: 'USD',
+      price: 366.48,
+      currency: 'USDT',
       tradingAmount: 1_200_000,
       tradingAmountCurrency: 'USDT',
       provider: 'binance-futures',
       providerSymbol: 'TSLAUSDT',
     }]} />);
 
+    expect(screen.getByText('366.48 USDT')).toBeInTheDocument();
+    expect(screen.queryByText('$366.48')).not.toBeInTheDocument();
     expect(screen.getByText('1.2M USDT')).toBeInTheDocument();
     expect(screen.queryByText('$1.2M')).not.toBeInTheDocument();
   });

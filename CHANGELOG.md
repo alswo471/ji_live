@@ -37,6 +37,7 @@
 
 - Bithumb 등락률을 전일 종가 기준으로 바로잡고 합성환율을 해외 파생상품과 구분해 표시
 - Bithumb ticker의 KST wall-clock epoch를 공급자 경계에서만 정규화해 정상 암호화폐·합성환율이 미래 시각으로 차단되던 문제 수정
+- Binance 미국 주식 무기한선물과 PAXG 현물의 가격·차트 단위를 USD가 아닌 USDT로 명시
 - 공급자 기준 시각의 유효성·노후도와 실제 Binance `count`를 검사하고 합성 시세에는 더 오래된 필수 입력 시각과 stale 상태를 전파
 - catalog의 provider symbol 소유권과 운영 sanity bound를 적용해 공급자 대체·누락·비정상 단위 값을 unavailable로 격리
 - 파생 거래대금의 USD·USDT 단위를 보존하고 한국 주식은 동일 합성환율로 KRW 환산

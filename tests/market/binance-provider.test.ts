@@ -33,6 +33,7 @@ describe('fetchBinanceSpotQuotes', () => {
       name: '금 연동(PAXG)',
       assetClass: 'metal',
       price: 3472.18,
+      currency: 'USDT',
       quality: 'realtime',
       provider: 'binance-spot',
       priceKind: 'actual-product',
