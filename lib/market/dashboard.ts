@@ -1,5 +1,9 @@
 import { createCachedProvider } from './cache';
-import { composeDerivedQuotes } from './derived-quotes';
+import { INSTRUMENTS } from './catalog';
+import {
+  composeDerivedQuotes,
+  createUnavailableQuote,
+} from './derived-quotes';
 import { fetchBinanceFuturesTickers } from './providers/binance-futures';
 import { fetchBinanceSpotQuotes } from './providers/binance';
 import {
@@ -100,9 +104,18 @@ export function createDashboardService(loaders: DashboardLoaders) {
         notices,
       );
       const bithumb = readProviderResult('bithumb', settled[3], notices);
+      const fxRate = bithumb.value
+        ? {
+            ...bithumb.value.fxRate,
+            freshness:
+              bithumb.stale && bithumb.value.fxRate.freshness !== 'unavailable'
+                ? 'stale' as const
+                : bithumb.value.fxRate.freshness,
+          }
+        : null;
       const derivativeQuotes = composeDerivedQuotes(
         [...(hyperliquid.value ?? []), ...(binanceFutures.value ?? [])],
-        bithumb.value?.krwPerUsdt ?? null,
+        fxRate,
       ).map((quote) =>
         markQuoteStale(
           quote,
@@ -122,13 +135,39 @@ export function createDashboardService(loaders: DashboardLoaders) {
           ? [markQuoteStale(bithumb.value.fxQuote, bithumb.stale)]
           : []),
       ];
-      const quoteMap = new Map<string, MarketQuote>();
+      const quoteMap = new Map<string, MarketQuote>(
+        derivativeQuotes.map((quote) => [quote.symbol, quote]),
+      );
+      const actualQuoteMap = new Map<string, MarketQuote>();
 
-      for (const quote of [...derivativeQuotes, ...actualQuotes])
-        quoteMap.set(quote.symbol, quote);
+      for (const quote of actualQuotes) {
+        if (quote.provider && quote.providerSymbol) {
+          actualQuoteMap.set(
+            `${quote.provider}:${quote.providerSymbol}`,
+            quote,
+          );
+        }
+      }
+
+      for (const instrument of INSTRUMENTS) {
+        if (
+          instrument.assetClass === 'kr-stock' ||
+          instrument.assetClass === 'us-stock'
+        ) continue;
+        const quote = actualQuoteMap.get(
+          `${instrument.provider}:${instrument.providerSymbol}`,
+        );
+        quoteMap.set(
+          instrument.symbol,
+          quote?.symbol === instrument.symbol
+            ? quote
+            : createUnavailableQuote(instrument),
+        );
+      }
 
       return {
-        quotes: [...quoteMap.values()],
+        quotes: INSTRUMENTS.map((instrument) =>
+          quoteMap.get(instrument.symbol) ?? createUnavailableQuote(instrument)),
         fetchedAt: now.toISOString(),
         notices,
       };

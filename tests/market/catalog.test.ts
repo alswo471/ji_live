@@ -11,6 +11,7 @@ describe('INSTRUMENTS', () => {
     ]);
     expect(INSTRUMENTS.find((item) => item.symbol === '005930')).toMatchObject({
       provider: 'hyperliquid', providerSymbol: 'xyz:SMSN',
+      priceSanityBounds: { minExclusive: 0.01, maxExclusive: 100_000 },
     });
   });
 
@@ -18,6 +19,9 @@ describe('INSTRUMENTS', () => {
     expect(INSTRUMENTS.filter((item) => item.assetClass === 'crypto')).toHaveLength(5);
     expect(INSTRUMENTS.filter((item) => item.assetClass === 'metal')).toEqual([
       expect.objectContaining({ symbol: 'PAXG', provider: 'binance-spot', providerSymbol: 'PAXGUSDT' }),
+    ]);
+    expect(INSTRUMENTS.filter((item) => item.assetClass === 'fx')).toEqual([
+      expect.objectContaining({ symbol: 'USDTKRW', provider: 'bithumb', providerSymbol: 'KRW-USDT' }),
     ]);
   });
 

@@ -26,7 +26,9 @@ describe('fetchHyperliquidTickers', () => {
       price: 60,
       changeRate: 60 / 59 - 1,
       tradingAmount: 1_200_000,
+      tradingAmountCurrency: 'USD',
       asOf: '2026-09-01T10:00:00.000Z',
+      freshness: 'fresh',
     });
     expect(tickers[1]).toEqual({
       provider: 'hyperliquid',
@@ -34,7 +36,9 @@ describe('fetchHyperliquidTickers', () => {
       price: 130,
       changeRate: 130 / 125 - 1,
       tradingAmount: 900_000,
+      tradingAmountCurrency: 'USD',
       asOf: '2026-09-01T10:00:00.000Z',
+      freshness: 'fresh',
     });
   });
 
@@ -61,7 +65,9 @@ describe('fetchHyperliquidTickers', () => {
       price: null,
       changeRate: null,
       tradingAmount: null,
+      tradingAmountCurrency: 'USD',
       asOf: '1970-01-01T00:00:00.000Z',
+      freshness: 'unavailable',
     });
     expect(
       tickers.find((item) => item.providerSymbol === 'xyz:SKHX')?.price,
@@ -87,7 +93,9 @@ describe('fetchHyperliquidTickers', () => {
       price: null,
       changeRate: null,
       tradingAmount: null,
+      tradingAmountCurrency: 'USD',
       asOf: '1970-01-01T00:00:00.000Z',
+      freshness: 'unavailable',
     });
   });
 

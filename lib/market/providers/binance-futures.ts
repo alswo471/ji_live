@@ -1,4 +1,5 @@
 import type { DerivativeTicker } from '../types';
+import { assessTimestampFreshness } from '../freshness';
 
 const DEFAULT_SYMBOLS = [
   'SAMSUNGEMUSDT',
@@ -18,6 +19,7 @@ type BinanceFuturesTicker = {
   priceChangePercent: string;
   quoteVolume: string;
   closeTime: number;
+  count?: number;
 };
 
 function finiteNumber(value: string | number) {
@@ -28,11 +30,6 @@ function finiteNumber(value: string | number) {
 function finitePositive(value: string | number) {
   const parsed = finiteNumber(value);
   return parsed !== null && parsed > 0 ? parsed : null;
-}
-
-function isoDateOrNull(timestamp: number) {
-  const date = new Date(timestamp);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
 export async function fetchBinanceFuturesTickers(
@@ -54,18 +51,25 @@ export async function fetchBinanceFuturesTickers(
   return tickers
     .filter((ticker) => allowedSymbols.has(ticker.symbol))
     .map((ticker) => {
-      const price = finitePositive(ticker.lastPrice);
+      const assessed = assessTimestampFreshness(
+        ticker.closeTime,
+        now().getTime(),
+        undefined,
+        ticker.count === 0,
+      );
+      const price = assessed.freshness === 'unavailable'
+        ? null
+        : finitePositive(ticker.lastPrice);
       const percent = finiteNumber(ticker.priceChangePercent);
-      const asOf = Number.isFinite(ticker.closeTime)
-        ? (isoDateOrNull(ticker.closeTime) ?? now().toISOString())
-        : now().toISOString();
       return {
         provider: 'binance-futures',
         providerSymbol: ticker.symbol,
         price,
         changeRate: price === null || percent === null ? null : percent / 100,
         tradingAmount: finitePositive(ticker.quoteVolume),
-        asOf,
+        tradingAmountCurrency: 'USDT',
+        asOf: assessed.asOf,
+        freshness: assessed.freshness,
       } satisfies DerivativeTicker;
     });
 }

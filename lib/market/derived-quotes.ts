@@ -1,5 +1,11 @@
-import { INSTRUMENTS } from './catalog';
-import type { DerivativeTicker, Instrument, MarketProvider, MarketQuote } from './types';
+import { INSTRUMENTS, KRW_USDT_SANITY_BOUNDS } from './catalog';
+import type {
+  DerivativeTicker,
+  FxConversionInput,
+  Instrument,
+  MarketProvider,
+  MarketQuote,
+} from './types';
 
 const sourceLabels: Record<MarketProvider, string> = {
   hyperliquid: 'Hyperliquid 파생상품',
@@ -8,11 +14,25 @@ const sourceLabels: Record<MarketProvider, string> = {
   bithumb: 'Bithumb',
 };
 
-function hasFinitePrice(ticker: DerivativeTicker | undefined): ticker is DerivativeTicker & { price: number } {
-  return ticker !== undefined && ticker.price !== null && Number.isFinite(ticker.price) && ticker.price > 0;
+function withinBounds(
+  value: number | null,
+  bounds: { minExclusive: number; maxExclusive: number } | undefined,
+) {
+  return (
+    value !== null &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    (!bounds || (value > bounds.minExclusive && value < bounds.maxExclusive))
+  );
 }
 
-function createUnavailableQuote(instrument: Instrument): MarketQuote {
+function oldestTimestamp(...values: string[]) {
+  const timestamps = values.map((value) => new Date(value).getTime());
+  if (timestamps.some((value) => !Number.isFinite(value))) return null;
+  return new Date(Math.min(...timestamps)).toISOString();
+}
+
+export function createUnavailableQuote(instrument: Instrument): MarketQuote {
   return {
     symbol: instrument.symbol,
     name: instrument.name,
@@ -25,10 +45,12 @@ function createUnavailableQuote(instrument: Instrument): MarketQuote {
     previousClose: null,
     changeRateSource: null,
     tradingAmount: null,
+    tradingAmountCurrency: null,
     asOf: null,
     session: 'always-open',
     quality: 'unavailable',
     provider: instrument.provider,
+    providerSymbol: instrument.providerSymbol,
     confidence: null,
     estimateInputs: [],
     priceKind: 'unavailable',
@@ -37,37 +59,96 @@ function createUnavailableQuote(instrument: Instrument): MarketQuote {
   };
 }
 
-export function composeDerivedQuotes(tickers: DerivativeTicker[], krwPerUsdt: number | null): MarketQuote[] {
-  return INSTRUMENTS
-    .filter((instrument) => instrument.assetClass === 'kr-stock' || instrument.assetClass === 'us-stock')
-    .map((instrument) => {
-      const ticker = tickers.find((item) => item.provider === instrument.provider && item.providerSymbol === instrument.providerSymbol);
-      const exchangeRateAvailable = instrument.assetClass === 'us-stock'
-        || (krwPerUsdt !== null && Number.isFinite(krwPerUsdt) && krwPerUsdt > 0);
-      if (!hasFinitePrice(ticker) || !exchangeRateAvailable) return createUnavailableQuote(instrument);
+function validFxInput(fx: FxConversionInput | null): fx is FxConversionInput & {
+  rate: number;
+  asOf: string;
+} {
+  return (
+    fx !== null &&
+    fx.freshness !== 'unavailable' &&
+    typeof fx.asOf === 'string' &&
+    withinBounds(fx.rate, KRW_USDT_SANITY_BOUNDS)
+  );
+}
 
-      const changeRate = ticker.changeRate !== null && Number.isFinite(ticker.changeRate) ? ticker.changeRate : null;
+function validTicker(
+  ticker: DerivativeTicker | undefined,
+  instrument: Instrument,
+): ticker is DerivativeTicker & { price: number; asOf: string } {
+  return (
+    ticker !== undefined &&
+    ticker.freshness !== 'unavailable' &&
+    typeof ticker.asOf === 'string' &&
+    withinBounds(ticker.price, instrument.priceSanityBounds)
+  );
+}
+
+export function composeDerivedQuotes(
+  tickers: DerivativeTicker[],
+  fx: FxConversionInput | null,
+): MarketQuote[] {
+  return INSTRUMENTS
+    .filter((instrument) =>
+      instrument.assetClass === 'kr-stock' || instrument.assetClass === 'us-stock')
+    .map((instrument) => {
+      const ticker = tickers.find(
+        (item) =>
+          item.provider === instrument.provider &&
+          item.providerSymbol === instrument.providerSymbol,
+      );
+      if (!validTicker(ticker, instrument))
+        return createUnavailableQuote(instrument);
+
+      let rate = 1;
+      let asOf: string | null = ticker.asOf;
+      let fxStale = false;
+      let estimateInputs = [ticker.providerSymbol];
+      if (instrument.assetClass === 'kr-stock') {
+        if (!validFxInput(fx)) return createUnavailableQuote(instrument);
+        rate = fx.rate;
+        asOf = oldestTimestamp(ticker.asOf, fx.asOf);
+        fxStale = fx.freshness === 'stale';
+        estimateInputs = [ticker.providerSymbol, fx.providerSymbol];
+      }
+      if (asOf === null) return createUnavailableQuote(instrument);
+
+      const changeRate =
+        ticker.changeRate !== null && Number.isFinite(ticker.changeRate)
+          ? ticker.changeRate
+          : null;
+      const tradingAmount =
+        ticker.tradingAmount !== null && Number.isFinite(ticker.tradingAmount)
+          ? ticker.tradingAmount * rate
+          : null;
+      const stale =
+        ticker.freshness === 'stale' || fxStale;
+
       return {
         symbol: instrument.symbol,
         name: instrument.name,
         nameKo: instrument.nameKo,
         nameEn: instrument.nameEn,
         assetClass: instrument.assetClass,
-        price: instrument.assetClass === 'kr-stock' ? ticker.price * krwPerUsdt! : ticker.price,
+        price: ticker.price * rate,
         currency: instrument.currency,
         changeRate,
         previousClose: null,
         changeRateSource: changeRate === null ? null : 'provider',
-        tradingAmount: ticker.tradingAmount,
-        asOf: ticker.asOf,
+        tradingAmount,
+        tradingAmountCurrency:
+          instrument.assetClass === 'kr-stock'
+            ? 'KRW'
+            : ticker.tradingAmountCurrency,
+        asOf,
         session: 'always-open',
-        quality: 'estimated',
+        quality: stale ? 'stale' : 'estimated',
         provider: ticker.provider,
+        providerSymbol: ticker.providerSymbol,
         confidence: null,
-        estimateInputs: instrument.assetClass === 'kr-stock' ? [ticker.providerSymbol, 'KRW-USDT'] : [ticker.providerSymbol],
+        estimateInputs,
         priceKind: 'derived-estimate',
         comparisonBasis: 'provider-24h',
         sourceLabel: sourceLabels[ticker.provider],
-      };
+      } satisfies MarketQuote;
     });
 }

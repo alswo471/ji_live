@@ -6,7 +6,7 @@ import type { MarketQuote } from '@/lib/market/types';
 const quote: MarketQuote = {
   symbol: '005930', name: '삼성전자', assetClass: 'kr-stock', price: 84200, currency: 'KRW',
   changeRate: 0.01, previousClose: null, changeRateSource: null, tradingAmount: 1000, asOf: '2026-09-01T10:00:00+09:00', session: 'closed',
-  quality: 'estimated', provider: 'hyperliquid', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
+  tradingAmountCurrency: 'KRW', quality: 'estimated', provider: 'hyperliquid', providerSymbol: 'xyz:SMSN', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
   priceKind: 'derived-estimate', comparisonBasis: 'provider-24h', sourceLabel: 'Hyperliquid 파생상품',
 };
 
@@ -17,6 +17,26 @@ describe('QuoteBadge', () => {
     render(<QuoteBadge quote={quote} />);
     expect(screen.getByText('24시간 추정가')).toBeVisible();
     expect(screen.getByText('해외 파생상품 기준 · 24시간 전 대비')).toBeVisible();
+  });
+
+  it('Bithumb 합성환율을 해외 파생상품으로 오인하지 않게 표시한다', () => {
+    render(<QuoteBadge quote={{
+      ...quote,
+      symbol: 'USDTKRW',
+      assetClass: 'fx',
+      price: 1_380,
+      previousClose: 1_378.62,
+      changeRate: 0.001,
+      changeRateSource: 'previous-close',
+      provider: 'bithumb',
+      estimateInputs: ['KRW-USDT'],
+      comparisonBasis: 'previous-close',
+      sourceLabel: 'Bithumb KRW-USDT',
+    }} />);
+
+    expect(screen.getByText('합성환율')).toBeVisible();
+    expect(screen.getByText('Bithumb KRW-USDT 기준 · 전일 대비')).toBeVisible();
+    expect(screen.queryByText(/해외 파생상품/)).not.toBeInTheDocument();
   });
 
   it('정규장 시간이어도 파생 추정가를 실제 시세로 바꾸지 않는다', () => {

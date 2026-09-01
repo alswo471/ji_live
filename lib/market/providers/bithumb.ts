@@ -1,5 +1,6 @@
-import { INSTRUMENTS } from '../catalog';
-import type { MarketQuote } from '../types';
+import { INSTRUMENTS, KRW_USDT_SANITY_BOUNDS } from '../catalog';
+import { assessTimestampFreshness } from '../freshness';
+import type { FxConversionInput, MarketQuote } from '../types';
 
 const DEFAULT_MARKETS = [
   'KRW-BTC',
@@ -12,6 +13,7 @@ const DEFAULT_MARKETS = [
 type BithumbTicker = {
   market: string;
   trade_price: number;
+  prev_closing_price: number;
   signed_change_rate: number;
   acc_trade_price_24h: number;
   timestamp: number;
@@ -19,7 +21,7 @@ type BithumbTicker = {
 
 export type BithumbSnapshot = {
   quotes: MarketQuote[];
-  krwPerUsdt: number | null;
+  fxRate: FxConversionInput;
   fxQuote: MarketQuote;
 };
 
@@ -33,15 +35,17 @@ function finitePositive(value: unknown) {
   return parsed !== null && parsed > 0 ? parsed : null;
 }
 
-function isoDateOrNull(timestamp: unknown) {
-  if (typeof timestamp !== 'number') return null;
-  const date = new Date(timestamp);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+function isWithinSanityBounds(
+  value: number | null,
+  bounds: { minExclusive: number; maxExclusive: number },
+) {
+  return value !== null && value > bounds.minExclusive && value < bounds.maxExclusive;
 }
 
 export async function fetchBithumbSnapshot(
   fetcher: typeof fetch = fetch,
   markets = DEFAULT_MARKETS,
+  now: () => Date = () => new Date(),
 ): Promise<BithumbSnapshot> {
   const response = await fetcher(
     `https://api.bithumb.com/v1/ticker?markets=${encodeURIComponent(markets.join(','))}`,
@@ -55,9 +59,25 @@ export async function fetchBithumbSnapshot(
   const tickers = (await response.json()) as BithumbTicker[];
 
   const usdtTicker = tickers.find((ticker) => ticker.market === 'KRW-USDT');
-  const krwPerUsdt = finitePositive(usdtTicker?.trade_price);
+  const fxFreshness = assessTimestampFreshness(
+    usdtTicker?.timestamp,
+    now().getTime(),
+  );
+  const parsedKrwPerUsdt = fxFreshness.freshness === 'unavailable'
+    ? null
+    : finitePositive(usdtTicker?.trade_price);
+  const krwPerUsdt = isWithinSanityBounds(
+    parsedKrwPerUsdt,
+    KRW_USDT_SANITY_BOUNDS,
+  )
+    ? parsedKrwPerUsdt
+    : null;
+  const fxPreviousClose =
+    krwPerUsdt === null ? null : finitePositive(usdtTicker?.prev_closing_price);
   const fxChangeRate =
-    krwPerUsdt === null ? null : finiteNumber(usdtTicker?.signed_change_rate);
+    krwPerUsdt === null || fxPreviousClose === null
+      ? null
+      : finiteNumber(usdtTicker?.signed_change_rate);
   const fxQuote: MarketQuote = {
     symbol: 'USDTKRW',
     name: 'USDT/KRW 합성환율',
@@ -67,54 +87,100 @@ export async function fetchBithumbSnapshot(
     price: krwPerUsdt,
     currency: 'KRW',
     changeRate: fxChangeRate,
-    previousClose: null,
-    changeRateSource: fxChangeRate === null ? null : 'provider',
+    previousClose: fxPreviousClose,
+    changeRateSource: fxChangeRate === null ? null : 'previous-close',
     tradingAmount:
       krwPerUsdt === null
         ? null
         : finitePositive(usdtTicker?.acc_trade_price_24h),
-    asOf: krwPerUsdt === null ? null : isoDateOrNull(usdtTicker?.timestamp),
+    tradingAmountCurrency: krwPerUsdt === null ? null : 'KRW',
+    asOf: krwPerUsdt === null ? null : fxFreshness.asOf,
     session: 'always-open',
-    quality: krwPerUsdt === null ? 'unavailable' : 'estimated',
+    quality: krwPerUsdt === null
+      ? 'unavailable'
+      : fxFreshness.freshness === 'stale'
+        ? 'stale'
+        : 'estimated',
     provider: 'bithumb',
+    providerSymbol: 'KRW-USDT',
     confidence: null,
     estimateInputs: ['KRW-USDT'],
     priceKind: krwPerUsdt === null ? 'unavailable' : 'derived-estimate',
-    comparisonBasis: krwPerUsdt === null ? null : 'provider-24h',
+    comparisonBasis:
+      krwPerUsdt === null || fxPreviousClose === null
+        ? null
+        : 'previous-close',
     sourceLabel: 'Bithumb KRW-USDT',
   };
 
   const quotes = tickers
-    .filter((ticker) => ticker.market !== 'KRW-USDT')
-    .map((ticker) => {
-      const symbol = ticker.market.replace(/^KRW-/, '');
-      const instrument = INSTRUMENTS.find((item) => item.symbol === symbol);
-      const price = finitePositive(ticker.trade_price);
+    .flatMap((ticker) => {
+      if (ticker.market === 'KRW-USDT') return [];
+      const instrument = INSTRUMENTS.find(
+        (item) =>
+          item.provider === 'bithumb' &&
+          item.providerSymbol === ticker.market &&
+          item.assetClass === 'crypto',
+      );
+      if (!instrument) return [];
+      const freshness = assessTimestampFreshness(
+        ticker.timestamp,
+        now().getTime(),
+      );
+      const price = freshness.freshness === 'unavailable'
+        ? null
+        : finitePositive(ticker.trade_price);
+      const previousClose =
+        price === null ? null : finitePositive(ticker.prev_closing_price);
       const changeRate =
-        price === null ? null : finiteNumber(ticker.signed_change_rate);
+        price === null || previousClose === null
+          ? null
+          : finiteNumber(ticker.signed_change_rate);
       return {
-        symbol,
-        name: instrument?.name ?? symbol,
-        nameKo: instrument?.nameKo,
-        nameEn: instrument?.nameEn,
+        symbol: instrument.symbol,
+        name: instrument.name,
+        nameKo: instrument.nameKo,
+        nameEn: instrument.nameEn,
         assetClass: 'crypto',
         price,
         currency: 'KRW',
         changeRate,
-        previousClose: null,
-        changeRateSource: changeRate === null ? null : 'provider',
+        previousClose,
+        changeRateSource: changeRate === null ? null : 'previous-close',
         tradingAmount: finitePositive(ticker.acc_trade_price_24h),
-        asOf: isoDateOrNull(ticker.timestamp),
+        tradingAmountCurrency: 'KRW',
+        asOf: price === null ? null : freshness.asOf,
         session: 'always-open',
-        quality: price === null ? 'unavailable' : 'realtime',
+        quality: price === null
+          ? 'unavailable'
+          : freshness.freshness === 'stale'
+            ? 'stale'
+            : 'realtime',
         provider: 'bithumb',
+        providerSymbol: ticker.market,
         confidence: null,
         estimateInputs: [],
         priceKind: price === null ? 'unavailable' : 'actual-product',
-        comparisonBasis: price === null ? null : 'provider-24h',
+        comparisonBasis:
+          price === null || previousClose === null ? null : 'previous-close',
         sourceLabel: 'Bithumb',
       } satisfies MarketQuote;
     });
 
-  return { quotes, krwPerUsdt, fxQuote };
+  return {
+    quotes,
+    fxRate: {
+      rate: krwPerUsdt,
+      provider: 'bithumb',
+      providerSymbol: 'KRW-USDT',
+      asOf: fxQuote.asOf,
+      freshness:
+        fxQuote.quality === 'stale'
+          ? 'stale'
+          : fxQuote.quality === 'unavailable'
+            ? 'unavailable'
+            : 'fresh',
+    },
+    fxQuote,
+  };
 }

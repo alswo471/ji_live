@@ -1,11 +1,13 @@
 export type AssetClass = 'kr-stock' | 'us-stock' | 'crypto' | 'index' | 'fx' | 'metal';
 export type MarketSession = 'day' | 'pre' | 'regular' | 'after' | 'closed' | 'always-open';
 export type QuoteQuality = 'realtime' | 'delayed' | 'estimated' | 'stale' | 'unavailable';
+export type DataFreshness = 'fresh' | 'stale' | 'unavailable';
 export type Confidence = 'high' | 'medium' | 'low';
 export type MarketProvider = 'hyperliquid' | 'binance-futures' | 'binance-spot' | 'bithumb';
 export type PriceKind = 'actual-product' | 'derived-estimate' | 'unavailable';
 export type ComparisonBasis = 'provider-24h' | 'previous-close' | null;
 export type Currency = 'KRW' | 'USD';
+export type TradingAmountCurrency = Currency | 'USDT';
 export type ChangeDirection = 'up' | 'down' | 'flat';
 export type ChangeRateSource = 'provider' | 'previous-close' | 'provider-direction' | null;
 export type CandleInterval = '1m' | '15m' | '1h' | '4h' | '1d' | '1w' | '1M';
@@ -38,10 +40,12 @@ export type MarketQuote = {
   previousClose: number | null;
   changeRateSource: ChangeRateSource;
   tradingAmount: number | null;
+  tradingAmountCurrency: TradingAmountCurrency | null;
   asOf: string | null;
   session: MarketSession;
   quality: QuoteQuality;
   provider: MarketProvider | null;
+  providerSymbol: string | null;
   confidence: Confidence | null;
   estimateInputs: string[];
   priceKind: PriceKind;
@@ -58,6 +62,10 @@ export type Instrument = {
   currency: Currency;
   provider: MarketProvider;
   providerSymbol: string;
+  priceSanityBounds?: {
+    minExclusive: number;
+    maxExclusive: number;
+  };
 };
 
 export type DerivativeTicker = {
@@ -66,7 +74,17 @@ export type DerivativeTicker = {
   price: number | null;
   changeRate: number | null;
   tradingAmount: number | null;
-  asOf: string;
+  tradingAmountCurrency: 'USD' | 'USDT';
+  asOf: string | null;
+  freshness: DataFreshness;
+};
+
+export type FxConversionInput = {
+  rate: number | null;
+  provider: 'bithumb';
+  providerSymbol: 'KRW-USDT';
+  asOf: string | null;
+  freshness: DataFreshness;
 };
 
 export type DashboardResponse = {

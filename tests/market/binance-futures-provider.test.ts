@@ -12,6 +12,7 @@ describe('fetchBinanceFuturesTickers', () => {
             priceChangePercent: '4.939',
             quoteVolume: '1000000',
             closeTime: 1788249315837,
+            count: 10,
           },
           {
             symbol: 'BTCUSDT',
@@ -19,13 +20,14 @@ describe('fetchBinanceFuturesTickers', () => {
             priceChangePercent: '1',
             quoteVolume: '999',
             closeTime: 1788249315837,
+            count: 10,
           },
         ]),
       );
 
     const result = await fetchBinanceFuturesTickers(
       fetcher,
-      () => new Date(0),
+      () => new Date(1788249316837),
       ['TSLAUSDT'],
     );
 
@@ -36,7 +38,9 @@ describe('fetchBinanceFuturesTickers', () => {
         price: 366.48,
         changeRate: 0.04939,
         tradingAmount: 1_000_000,
+        tradingAmountCurrency: 'USDT',
         asOf: new Date(1788249315837).toISOString(),
+        freshness: 'fresh',
       },
     ]);
   });
@@ -115,7 +119,9 @@ describe('fetchBinanceFuturesTickers', () => {
         price: null,
         changeRate: null,
         tradingAmount: null,
+        tradingAmountCurrency: 'USDT',
         asOf: new Date(1).toISOString(),
+        freshness: 'fresh',
       },
       {
         provider: 'binance-futures',
@@ -123,12 +129,14 @@ describe('fetchBinanceFuturesTickers', () => {
         price: 100,
         changeRate: -0.025,
         tradingAmount: 200,
+        tradingAmountCurrency: 'USDT',
         asOf: new Date(1).toISOString(),
+        freshness: 'fresh',
       },
     ]);
   });
 
-  it('Date 범위를 벗어난 유한 closeTime은 주입된 현재 시각으로 대체한다', async () => {
+  it('Date 범위를 벗어난 closeTime은 현재 시각으로 대체하지 않고 unavailable로 둔다', async () => {
     const fetcher: typeof fetch = async () =>
       new Response(
         JSON.stringify([
@@ -148,6 +156,58 @@ describe('fetchBinanceFuturesTickers', () => {
       ['TSLAUSDT'],
     );
 
-    expect(ticker.asOf).toBe('2026-09-01T10:00:00.000Z');
+    expect(ticker).toMatchObject({
+      price: null,
+      asOf: null,
+      freshness: 'unavailable',
+    });
+  });
+
+  it('정책보다 오래된 closeTime은 마지막 시각을 유지한 stale ticker로 둔다', async () => {
+    const closeTime = Date.parse('2026-09-01T09:54:59.000Z');
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([{
+        symbol: 'TSLAUSDT',
+        lastPrice: '366.48',
+        priceChangePercent: '4.939',
+        quoteVolume: '1000000',
+        closeTime,
+        count: 10,
+      }]));
+
+    const [ticker] = await fetchBinanceFuturesTickers(
+      fetcher,
+      () => new Date('2026-09-01T10:00:00.000Z'),
+      ['TSLAUSDT'],
+    );
+
+    expect(ticker).toMatchObject({
+      price: 366.48,
+      asOf: '2026-09-01T09:54:59.000Z',
+      freshness: 'stale',
+    });
+  });
+
+  it('24시간 ticker의 실제 count가 0이면 거래상태를 만들지 않고 stale로 둔다', async () => {
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([{
+        symbol: 'TSLAUSDT',
+        lastPrice: '366.48',
+        priceChangePercent: '0',
+        quoteVolume: '1',
+        closeTime: Date.parse('2026-09-01T09:59:59.000Z'),
+        count: 0,
+      }]));
+
+    const [ticker] = await fetchBinanceFuturesTickers(
+      fetcher,
+      () => new Date('2026-09-01T10:00:00.000Z'),
+      ['TSLAUSDT'],
+    );
+
+    expect(ticker).toMatchObject({
+      asOf: '2026-09-01T09:59:59.000Z',
+      freshness: 'stale',
+    });
   });
 });

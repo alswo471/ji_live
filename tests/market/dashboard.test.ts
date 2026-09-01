@@ -11,7 +11,9 @@ const derivative = (
   price: 100,
   changeRate: 0.01,
   tradingAmount: 1_000_000,
+  tradingAmountCurrency: 'USDT',
   asOf: '2026-09-01T10:00:00.000Z',
+  freshness: 'fresh',
   ...overrides,
 });
 
@@ -29,10 +31,12 @@ const quote = (overrides: Partial<MarketQuote>): MarketQuote => ({
   session: 'always-open',
   quality: 'realtime',
   provider: 'bithumb',
+  providerSymbol: 'KRW-BTC',
   confidence: null,
   estimateInputs: [],
   priceKind: 'actual-product',
-  comparisonBasis: 'provider-24h',
+  comparisonBasis: 'previous-close',
+  tradingAmountCurrency: 'KRW',
   sourceLabel: 'Bithumb',
   ...overrides,
 });
@@ -41,7 +45,13 @@ const bithumbSnapshot = (
   overrides: Partial<BithumbSnapshot> = {},
 ): BithumbSnapshot => ({
   quotes: [quote({ symbol: 'BTC' })],
-  krwPerUsdt: 1_380,
+  fxRate: {
+    rate: 1_380,
+    provider: 'bithumb',
+    providerSymbol: 'KRW-USDT',
+    asOf: '2026-09-01T09:59:00.000Z',
+    freshness: 'fresh',
+  },
   fxQuote: quote({
     symbol: 'USDTKRW',
     name: 'USDT/KRW 합성환율',
@@ -49,8 +59,10 @@ const bithumbSnapshot = (
     price: 1_380,
     priceKind: 'derived-estimate',
     quality: 'estimated',
+    providerSymbol: 'KRW-USDT',
     sourceLabel: 'Bithumb KRW-USDT',
     estimateInputs: ['KRW-USDT'],
+    comparisonBasis: 'previous-close',
   }),
   ...overrides,
 });
@@ -73,7 +85,10 @@ const loaders = () => ({
       assetClass: 'metal',
       currency: 'USD',
       provider: 'binance-spot',
+      providerSymbol: 'PAXGUSDT',
       sourceLabel: 'Binance 현물',
+      comparisonBasis: 'provider-24h',
+      tradingAmountCurrency: 'USDT',
     }),
   ]),
   bithumb: vi.fn(async () => bithumbSnapshot()),
@@ -113,6 +128,9 @@ describe('createDashboardService', () => {
       priceKind: 'derived-estimate',
       comparisonBasis: 'provider-24h',
       sourceLabel: 'Hyperliquid 파생상품',
+      asOf: '2026-09-01T09:59:00.000Z',
+      tradingAmount: 1_380_000_000,
+      tradingAmountCurrency: 'KRW',
     });
     expect(
       dashboard.quotes.find((item) => item.symbol === 'TSLA'),
@@ -166,7 +184,16 @@ describe('createDashboardService', () => {
       },
       bithumb: async () => {
         await wait('bithumb');
-        return bithumbSnapshot({ quotes: [], krwPerUsdt: null });
+        return bithumbSnapshot({
+          quotes: [],
+          fxRate: {
+            rate: null,
+            provider: 'bithumb',
+            providerSymbol: 'KRW-USDT',
+            asOf: null,
+            freshness: 'unavailable',
+          },
+        });
       },
     });
 
@@ -209,6 +236,29 @@ describe('createDashboardService', () => {
 
   it('Bithumb 장애 시 미국 추정가와 PAXG는 유지하고 한국 추정가는 unavailable로 둔다', async () => {
     const providerLoaders = loaders();
+    providerLoaders.binanceSpot.mockResolvedValue([
+      quote({
+        symbol: 'BTC',
+        name: 'Bitcoin USDT',
+        currency: 'USD',
+        provider: 'binance-spot',
+        providerSymbol: 'BTCUSDT',
+        sourceLabel: 'Binance 현물',
+        comparisonBasis: 'provider-24h',
+        tradingAmountCurrency: 'USDT',
+      }),
+      quote({
+        symbol: 'PAXG',
+        name: '금 연동(PAXG)',
+        assetClass: 'metal',
+        currency: 'USD',
+        provider: 'binance-spot',
+        providerSymbol: 'PAXGUSDT',
+        sourceLabel: 'Binance 현물',
+        comparisonBasis: 'provider-24h',
+        tradingAmountCurrency: 'USDT',
+      }),
+    ]);
     providerLoaders.bithumb.mockRejectedValue(new Error('timeout'));
     const service = createDashboardService(providerLoaders);
 
@@ -220,6 +270,12 @@ describe('createDashboardService', () => {
     expect(
       dashboard.quotes.find((item) => item.symbol === 'PAXG')?.provider,
     ).toBe('binance-spot');
+    expect(dashboard.quotes.find((item) => item.symbol === 'BTC')).toMatchObject({
+      provider: 'bithumb',
+      providerSymbol: 'KRW-BTC',
+      price: null,
+      quality: 'unavailable',
+    });
     expect(
       dashboard.quotes.find((item) => item.symbol === '005930'),
     ).toMatchObject({
@@ -227,9 +283,12 @@ describe('createDashboardService', () => {
       quality: 'unavailable',
       priceKind: 'unavailable',
     });
-    expect(dashboard.quotes.some((item) => item.symbol === 'USDTKRW')).toBe(
-      false,
-    );
+    expect(dashboard.quotes.find((item) => item.symbol === 'USDTKRW')).toMatchObject({
+      provider: 'bithumb',
+      providerSymbol: 'KRW-USDT',
+      price: null,
+      quality: 'unavailable',
+    });
     expect(dashboard.notices).toContain('Bithumb 시세를 불러오지 못했습니다.');
   });
 

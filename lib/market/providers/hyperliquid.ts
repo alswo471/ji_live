@@ -59,7 +59,9 @@ export async function fetchHyperliquidTickers(
           ? null
           : price / previousPrice - 1,
       tradingAmount: finitePositive(context?.dayNtlVlm),
+      tradingAmountCurrency: 'USD',
       asOf,
+      freshness: price === null ? 'unavailable' : 'fresh',
     } satisfies DerivativeTicker;
   });
 }

@@ -37,6 +37,25 @@ export function QuoteBadge({ quote }: { quote: MarketQuote }) {
     return <UnavailableBadge />;
   }
 
+  if (quote.priceKind === 'derived-estimate' && quote.assetClass === 'fx') {
+    const comparison = quote.comparisonBasis === 'previous-close'
+      ? ' · 전일 대비'
+      : quote.comparisonBasis === 'provider-24h'
+        ? ' · 24시간 전 대비'
+        : '';
+    return (
+      <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
+        <Badge className="border-sky-500/40 bg-sky-500/12 text-sky-800 dark:text-sky-200">
+          합성환율
+        </Badge>
+        <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+          {quote.sourceLabel ?? 'Bithumb KRW-USDT'} 기준{comparison}
+        </span>
+        <DataStatus quote={quote} />
+      </span>
+    );
+  }
+
   if (quote.priceKind === 'derived-estimate') {
     return (
       <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">

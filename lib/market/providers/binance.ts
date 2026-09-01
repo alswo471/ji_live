@@ -1,20 +1,15 @@
 import { INSTRUMENTS } from '../catalog';
+import { assessTimestampFreshness } from '../freshness';
 import type { MarketQuote } from '../types';
 
-const DEFAULT_SYMBOLS = [
-  'BTCUSDT',
-  'ETHUSDT',
-  'SOLUSDT',
-  'XRPUSDT',
-  'DOGEUSDT',
-  'PAXGUSDT',
-];
+const DEFAULT_SYMBOLS = ['PAXGUSDT'];
 type BinanceTicker = {
   symbol: string;
   lastPrice: string;
   priceChangePercent: string;
   quoteVolume: string;
   closeTime: number;
+  count?: number;
 };
 
 function finiteNumber(value: string | number) {
@@ -27,14 +22,10 @@ function finitePositive(value: string | number) {
   return parsed !== null && parsed > 0 ? parsed : null;
 }
 
-function isoDateOrNull(timestamp: number) {
-  const date = new Date(timestamp);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-}
-
 export async function fetchBinanceSpotQuotes(
   fetcher: typeof fetch = fetch,
   symbols = DEFAULT_SYMBOLS,
+  now: () => Date = () => new Date(),
 ): Promise<MarketQuote[]> {
   const response = await fetcher(
     `https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(symbols))}`,
@@ -47,33 +38,49 @@ export async function fetchBinanceSpotQuotes(
     throw new Error(`Binance 시세 요청에 실패했습니다. (${response.status})`);
   const tickers = (await response.json()) as BinanceTicker[];
 
-  return tickers.map((ticker) => {
-    const baseSymbol = ticker.symbol.replace(/USDT$/, '');
-    const instrument = INSTRUMENTS.find((item) => item.symbol === baseSymbol);
-    const price = finitePositive(ticker.lastPrice);
+  return tickers.flatMap((ticker) => {
+    const instrument = INSTRUMENTS.find(
+      (item) =>
+        item.provider === 'binance-spot' &&
+        item.providerSymbol === ticker.symbol,
+    );
+    if (!instrument) return [];
+    const assessed = assessTimestampFreshness(
+      ticker.closeTime,
+      now().getTime(),
+      undefined,
+      ticker.count === 0,
+    );
+    const price = assessed.freshness === 'unavailable'
+      ? null
+      : finitePositive(ticker.lastPrice);
     const percent = finiteNumber(ticker.priceChangePercent);
     return {
-      symbol: baseSymbol,
-      name: instrument?.name ?? baseSymbol,
-      nameKo: instrument?.nameKo,
-      nameEn: instrument?.nameEn,
-      assetClass: instrument?.assetClass ?? 'crypto',
+      symbol: instrument.symbol,
+      name: instrument.name,
+      nameKo: instrument.nameKo,
+      nameEn: instrument.nameEn,
+      assetClass: instrument.assetClass,
       price,
       currency: 'USD',
-      changeRate: percent === null ? null : percent / 100,
+      changeRate: price === null || percent === null ? null : percent / 100,
       previousClose: null,
-      changeRateSource: percent === null ? null : 'provider',
+      changeRateSource: price === null || percent === null ? null : 'provider',
       tradingAmount: finitePositive(ticker.quoteVolume),
-      asOf: Number.isFinite(ticker.closeTime)
-        ? isoDateOrNull(ticker.closeTime)
-        : null,
+      tradingAmountCurrency: 'USDT',
+      asOf: assessed.asOf,
       session: 'always-open',
-      quality: price === null ? 'unavailable' : 'realtime',
+      quality: price === null
+        ? 'unavailable'
+        : assessed.freshness === 'stale'
+          ? 'stale'
+          : 'realtime',
       provider: 'binance-spot',
+      providerSymbol: ticker.symbol,
       confidence: null,
       estimateInputs: [],
-      priceKind: 'actual-product',
-      comparisonBasis: 'provider-24h',
+      priceKind: price === null ? 'unavailable' : 'actual-product',
+      comparisonBasis: price === null ? null : 'provider-24h',
       sourceLabel: 'Binance 현물',
     } satisfies MarketQuote;
   });

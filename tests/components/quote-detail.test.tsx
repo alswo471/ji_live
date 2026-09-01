@@ -31,8 +31,9 @@ vi.mock('lightweight-charts', () => ({
 const quote: MarketQuote = {
   symbol: '005930', name: '삼성전자', nameKo: '삼성전자', nameEn: 'Samsung Electronics', assetClass: 'kr-stock', price: 84000,
   currency: 'KRW', changeRate: 0.0124, previousClose: null, changeRateSource: 'provider', tradingAmount: 184_200_000_000,
+  tradingAmountCurrency: 'KRW',
   asOf: '2026-09-01T10:00:00+09:00', session: 'always-open', quality: 'estimated',
-  provider: 'hyperliquid', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
+  provider: 'hyperliquid', providerSymbol: 'xyz:SMSN', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
   priceKind: 'derived-estimate', comparisonBasis: 'provider-24h', sourceLabel: 'Hyperliquid 파생상품',
 };
 
@@ -97,6 +98,31 @@ describe('QuoteDetail', () => {
     expect(screen.getByText('전일 종가')).toBeVisible();
     expect(screen.getByText('82,970원')).toBeVisible();
     expect(screen.queryByText('비교 기준')).not.toBeInTheDocument();
+  });
+
+  it('Bithumb 실제 상품은 제공된 전일 종가를 비교 기준으로 표시한다', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+
+    render(<QuoteDetail initialQuote={{
+      ...quote,
+      symbol: 'BTC',
+      name: '비트코인',
+      assetClass: 'crypto',
+      price: 149_850_000,
+      previousClose: 145_770_000,
+      changeRate: 0.028,
+      changeRateSource: 'previous-close',
+      comparisonBasis: 'previous-close',
+      priceKind: 'actual-product',
+      quality: 'realtime',
+      provider: 'bithumb',
+      sourceLabel: 'Bithumb',
+      estimateInputs: [],
+    }} />);
+
+    expect(screen.getByText('전일 종가')).toBeVisible();
+    expect(screen.getByText('145,770,000원')).toBeVisible();
+    expect(screen.queryByText('24시간 전')).not.toBeInTheDocument();
   });
 
   it('비교 기준이 없으면 24시간 전 비교로 오인하게 하지 않는다', () => {

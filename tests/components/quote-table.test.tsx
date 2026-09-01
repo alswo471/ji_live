@@ -6,8 +6,9 @@ import type { MarketQuote } from '@/lib/market/types';
 const quote: MarketQuote = {
   symbol: '005930', name: '삼성전자', nameKo: '삼성전자', nameEn: 'Samsung Electronics', assetClass: 'kr-stock', price: 84000,
   currency: 'KRW', changeRate: 0.0124, previousClose: 82970, changeRateSource: 'provider', tradingAmount: 184_200_000_000,
+  tradingAmountCurrency: 'KRW',
   asOf: '2026-09-01T10:00:00+09:00', session: 'always-open', quality: 'estimated',
-  provider: 'hyperliquid', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
+  provider: 'hyperliquid', providerSymbol: 'xyz:SMSN', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
   priceKind: 'derived-estimate', comparisonBasis: 'provider-24h', sourceLabel: 'Hyperliquid 파생상품',
 };
 
@@ -30,6 +31,23 @@ describe('QuoteTable', () => {
 
     expect(view.container).toHaveTextContent('Samsung Electronics');
     expect(view.container).toHaveTextContent('005930');
+  });
+
+  it('거래대금은 가격 통화가 아니라 공급자 quote-volume 단위로 표시한다', () => {
+    render(<QuoteTable quotes={[{
+      ...quote,
+      symbol: 'TSLA',
+      name: 'Tesla',
+      assetClass: 'us-stock',
+      currency: 'USD',
+      tradingAmount: 1_200_000,
+      tradingAmountCurrency: 'USDT',
+      provider: 'binance-futures',
+      providerSymbol: 'TSLAUSDT',
+    }]} />);
+
+    expect(screen.getByText('1.2M USDT')).toBeInTheDocument();
+    expect(screen.queryByText('$1.2M')).not.toBeInTheDocument();
   });
 
   it('개인화 UI를 노출하지 않는다', () => {

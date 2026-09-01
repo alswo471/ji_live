@@ -18,7 +18,20 @@ const LOCALIZED_NAMES: Record<string, { nameKo: string; nameEn: string }> = {
   XRP: { nameKo: '리플', nameEn: 'XRP' },
   DOGE: { nameKo: '도지코인', nameEn: 'Dogecoin' },
   PAXG: { nameKo: '금 연동(PAXG)', nameEn: 'Gold Proxy (PAXG)' },
+  USDTKRW: { nameKo: 'USDT/KRW 합성환율', nameEn: 'USDT/KRW Synthetic Rate' },
 };
+
+/** 운영상 단위 오류만 차단하는 넓은 안전 범위이며 가격 예측 범위가 아니다. */
+export const DERIVATIVE_PRICE_SANITY_BOUNDS = {
+  minExclusive: 0.01,
+  maxExclusive: 100_000,
+} as const;
+
+/** KRW-USDT 단위 오류만 차단하는 넓은 운영 안전 범위이며 환율 전망이 아니다. */
+export const KRW_USDT_SANITY_BOUNDS = {
+  minExclusive: 500,
+  maxExclusive: 3_000,
+} as const;
 
 const BASE_INSTRUMENTS: Instrument[] = [
   { symbol: '005930', name: '삼성전자', assetClass: 'kr-stock', currency: 'KRW', provider: 'hyperliquid', providerSymbol: 'xyz:SMSN' },
@@ -38,11 +51,17 @@ const BASE_INSTRUMENTS: Instrument[] = [
   { symbol: 'XRP', name: 'XRP', assetClass: 'crypto', currency: 'KRW', provider: 'bithumb', providerSymbol: 'KRW-XRP' },
   { symbol: 'DOGE', name: 'Dogecoin', assetClass: 'crypto', currency: 'KRW', provider: 'bithumb', providerSymbol: 'KRW-DOGE' },
   { symbol: 'PAXG', name: '금 연동(PAXG)', assetClass: 'metal', currency: 'USD', provider: 'binance-spot', providerSymbol: 'PAXGUSDT' },
+  { symbol: 'USDTKRW', name: 'USDT/KRW 합성환율', assetClass: 'fx', currency: 'KRW', provider: 'bithumb', providerSymbol: 'KRW-USDT' },
 ];
 
 export const INSTRUMENTS: Instrument[] = BASE_INSTRUMENTS.map((instrument) => ({
   ...instrument,
   ...LOCALIZED_NAMES[instrument.symbol],
+  ...(
+    instrument.assetClass === 'kr-stock' || instrument.assetClass === 'us-stock'
+      ? { priceSanityBounds: DERIVATIVE_PRICE_SANITY_BOUNDS }
+      : {}
+  ),
 }));
 
 export function instrumentsByAssetClass(assetClass: Instrument['assetClass']) {

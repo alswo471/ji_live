@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { fetchBithumbSnapshot } from '@/lib/market/providers/bithumb';
 
+const atFixtureTime = () => new Date(1788226801000);
+
 describe('fetchBithumbSnapshot', () => {
   it('기본 요청에 합성환율용 KRW-USDT를 포함한다', async () => {
     let requestedUrl = '';
@@ -26,6 +28,7 @@ describe('fetchBithumbSnapshot', () => {
           {
             market: 'KRW-BTC',
             trade_price: 149850000,
+            prev_closing_price: 145770000,
             signed_change_rate: 0.028,
             acc_trade_price_24h: 184200000000,
             timestamp: 1788226800000,
@@ -33,6 +36,7 @@ describe('fetchBithumbSnapshot', () => {
           {
             market: 'KRW-ETH',
             trade_price: 6125000,
+            prev_closing_price: 6162600,
             signed_change_rate: -0.0061,
             acc_trade_price_24h: 92000000000,
             timestamp: 1788226800000,
@@ -44,17 +48,19 @@ describe('fetchBithumbSnapshot', () => {
     const snapshot = await fetchBithumbSnapshot(fetcher, [
       'KRW-BTC',
       'KRW-ETH',
-    ]);
+    ], atFixtureTime);
 
     expect(
       snapshot.quotes.find((quote) => quote.symbol === 'BTC'),
     ).toMatchObject({
       price: 149850000,
+      previousClose: 145770000,
       changeRate: 0.028,
       currency: 'KRW',
       provider: 'bithumb',
       priceKind: 'actual-product',
-      comparisonBasis: 'provider-24h',
+      comparisonBasis: 'previous-close',
+      changeRateSource: 'previous-close',
       sourceLabel: 'Bithumb',
     });
     expect(
@@ -73,6 +79,7 @@ describe('fetchBithumbSnapshot', () => {
           {
             market: 'KRW-BTC',
             trade_price: 149850000,
+            prev_closing_price: 145770000,
             signed_change_rate: 0.028,
             acc_trade_price_24h: 184200000000,
             timestamp: 1788226800000,
@@ -80,6 +87,7 @@ describe('fetchBithumbSnapshot', () => {
           {
             market: 'KRW-USDT',
             trade_price: 1380,
+            prev_closing_price: 1378.62,
             signed_change_rate: 0.001,
             acc_trade_price_24h: 1000000,
             timestamp: 1788226800000,
@@ -90,9 +98,15 @@ describe('fetchBithumbSnapshot', () => {
     const snapshot = await fetchBithumbSnapshot(fetcher, [
       'KRW-BTC',
       'KRW-USDT',
-    ]);
+    ], atFixtureTime);
 
-    expect(snapshot.krwPerUsdt).toBe(1380);
+    expect(snapshot.fxRate).toEqual({
+      rate: 1380,
+      provider: 'bithumb',
+      providerSymbol: 'KRW-USDT',
+      asOf: new Date(1788226800000).toISOString(),
+      freshness: 'fresh',
+    });
     expect(snapshot.fxQuote).toMatchObject({
       symbol: 'USDTKRW',
       price: 1380,
@@ -101,7 +115,9 @@ describe('fetchBithumbSnapshot', () => {
       provider: 'bithumb',
       quality: 'estimated',
       priceKind: 'derived-estimate',
-      comparisonBasis: 'provider-24h',
+      previousClose: 1378.62,
+      comparisonBasis: 'previous-close',
+      changeRateSource: 'previous-close',
       sourceLabel: 'Bithumb KRW-USDT',
       estimateInputs: ['KRW-USDT'],
     });
@@ -115,6 +131,7 @@ describe('fetchBithumbSnapshot', () => {
           {
             market: 'KRW-USDT',
             trade_price: 0,
+            prev_closing_price: 1378.62,
             signed_change_rate: 0.001,
             acc_trade_price_24h: 1000000,
             timestamp: 1788226800000,
@@ -122,14 +139,124 @@ describe('fetchBithumbSnapshot', () => {
         ]),
       );
 
-    const snapshot = await fetchBithumbSnapshot(fetcher, ['KRW-USDT']);
+    const snapshot = await fetchBithumbSnapshot(fetcher, ['KRW-USDT'], atFixtureTime);
 
-    expect(snapshot.krwPerUsdt).toBeNull();
+    expect(snapshot.fxRate.rate).toBeNull();
     expect(snapshot.fxQuote).toMatchObject({
       symbol: 'USDTKRW',
       price: null,
       quality: 'unavailable',
       priceKind: 'unavailable',
+    });
+  });
+
+  it('KRW-USDT operational sanity bound 밖의 값은 clamp하지 않고 unavailable로 둔다', async () => {
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([{
+        market: 'KRW-USDT',
+        trade_price: 10_000,
+        prev_closing_price: 9_900,
+        signed_change_rate: 0.01,
+        acc_trade_price_24h: 1_000_000,
+        timestamp: 1788226800000,
+      }]));
+
+    const snapshot = await fetchBithumbSnapshot(
+      fetcher,
+      ['KRW-USDT'],
+      atFixtureTime,
+    );
+
+    expect(snapshot.fxRate.rate).toBeNull();
+    expect(snapshot.fxQuote).toMatchObject({
+      price: null,
+      quality: 'unavailable',
+      priceKind: 'unavailable',
+    });
+  });
+
+  it('유효하지 않은 provider timestamp는 가격을 unavailable로 두고 환율 입력에서 제외한다', async () => {
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([
+        {
+          market: 'KRW-BTC',
+          trade_price: 149850000,
+          prev_closing_price: 145770000,
+          signed_change_rate: 0.028,
+          acc_trade_price_24h: 184200000000,
+          timestamp: 9e15,
+        },
+        {
+          market: 'KRW-USDT',
+          trade_price: 1380,
+          prev_closing_price: 1378.62,
+          signed_change_rate: 0.001,
+          acc_trade_price_24h: 1000000,
+          timestamp: 9e15,
+        },
+      ]));
+
+    const snapshot = await fetchBithumbSnapshot(
+      fetcher,
+      ['KRW-BTC', 'KRW-USDT'],
+      () => new Date('2026-09-01T10:00:00.000Z'),
+    );
+
+    expect(snapshot.fxRate.rate).toBeNull();
+    expect(snapshot.fxQuote).toMatchObject({
+      price: null,
+      asOf: null,
+      quality: 'unavailable',
+    });
+    expect(snapshot.quotes[0]).toMatchObject({
+      price: null,
+      asOf: null,
+      quality: 'unavailable',
+    });
+  });
+
+  it('정책보다 오래된 provider timestamp는 마지막 시각과 값을 stale로 유지한다', async () => {
+    const timestamp = Date.parse('2026-09-01T09:54:59.000Z');
+    const fetcher: typeof fetch = async () =>
+      new Response(JSON.stringify([
+        {
+          market: 'KRW-BTC',
+          trade_price: 149850000,
+          prev_closing_price: 145770000,
+          signed_change_rate: 0.028,
+          acc_trade_price_24h: 184200000000,
+          timestamp,
+        },
+        {
+          market: 'KRW-USDT',
+          trade_price: 1380,
+          prev_closing_price: 1378.62,
+          signed_change_rate: 0.001,
+          acc_trade_price_24h: 1000000,
+          timestamp,
+        },
+      ]));
+
+    const snapshot = await fetchBithumbSnapshot(
+      fetcher,
+      ['KRW-BTC', 'KRW-USDT'],
+      () => new Date('2026-09-01T10:00:00.000Z'),
+    );
+
+    expect(snapshot.fxRate).toMatchObject({
+      rate: 1380,
+      asOf: '2026-09-01T09:54:59.000Z',
+      freshness: 'stale',
+    });
+    expect(snapshot.fxQuote).toMatchObject({
+      price: 1380,
+      asOf: '2026-09-01T09:54:59.000Z',
+      quality: 'stale',
+    });
+    expect(snapshot.quotes[0]).toMatchObject({
+      price: 149850000,
+      asOf: '2026-09-01T09:54:59.000Z',
+      quality: 'stale',
     });
   });
 });
