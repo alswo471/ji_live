@@ -472,7 +472,7 @@ git commit -m "feat(ui): 지투라이브 테마·종목명 전환 추가"
 - Produces: `CandlePoint`, `CandleRange`, `getCandles(symbol, range)`, `GET(request, { params })`
 - Consumes: Toss candles, Binance `/api/v3/klines`, Bithumb minute/day candles and catalog provider routing
 
-- [ ] **Step 1: 정규화와 route 실패 테스트를 작성한다.**
+- [x] **Step 1: 정규화와 route 실패 테스트를 작성한다.**
 
 ```ts
 type CandlePoint = { time: number; open: number; high: number; low: number; close: number; volume: number }
@@ -485,20 +485,20 @@ expect((await getCandles('005930', '1d')).candles[0]).toEqual({
 })
 ```
 
-- [ ] **Step 2: 실패를 확인한다.**
+- [x] **Step 2: 실패를 확인한다.**
 
 Run: `pnpm test -- tests/market/candles.test.ts tests/api/candles-route.test.ts`
 Expected: FAIL with missing candle modules
 
-- [ ] **Step 3: 공급자 adapter와 cache를 구현한다.**
+- [x] **Step 3: 공급자 adapter와 cache를 구현한다.**
 
 `1d`는 1분봉 최대 500개, `1w`는 일봉 7개, `1mo`는 일봉 30개다. Toss는 `nextBefore`로 최대 3페이지, Binance와 Bithumb은 공급자 limit 안에서 한 번 요청한다. 숫자가 잘못된 candle만 제외하고 시간 오름차순으로 정렬한다. 1분봉 TTL은 60초, 일봉 TTL은 6시간이며 동일 요청은 병합한다.
 
-- [ ] **Step 4: route 입력과 미지원 종목을 검증한다.**
+- [x] **Step 4: route 입력과 미지원 종목을 검증한다.**
 
 `range`가 세 값 밖이면 HTTP 400, catalog에 없는 symbol은 HTTP 404, 공급자 장애는 HTTP 200과 `{ candles: [], unavailable: true, message }`로 현재가 상세를 유지한다.
 
-- [ ] **Step 5: 검증하고 커밋한다.**
+- [x] **Step 5: 검증하고 커밋한다.**
 
 Run: `pnpm test -- tests/market/candles.test.ts tests/api/candles-route.test.ts && pnpm lint`
 Expected: PASS

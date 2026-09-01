@@ -5,6 +5,22 @@ export type Confidence = 'high' | 'medium' | 'low';
 export type MarketProvider = 'toss' | 'binance' | 'bithumb';
 export type Currency = 'KRW' | 'USD';
 export type ChangeRateSource = 'provider' | 'previous-close' | null;
+export type CandleRange = '1d' | '1w' | '1mo';
+
+export type CandlePoint = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+export type CandleResponse = {
+  candles: CandlePoint[];
+  unavailable: boolean;
+  message?: string;
+};
 
 export type MarketQuote = {
   symbol: string;
