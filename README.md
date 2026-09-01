@@ -4,6 +4,8 @@
 
 > 지민재의 개인 학습 프로젝트입니다. 바이브코딩을 활용해 기획, UI/UX, 외부 API 연동, 테스트, GitFlow, CI/CD와 배포까지 제품 개발의 전체 과정을 직접 경험하고 기록합니다.
 
+프로젝트가 해결하려는 문제와 제품 원칙은 [프로젝트 기획 요약](./docs/product/PROJECT_BRIEF.md)에 기록합니다.
+
 ## 주요 기능
 
 - 한국 대표 종목 10개와 미국 주요 종목 시세 조회
@@ -122,6 +124,8 @@ chore: 배포 설정 갱신
 - 버전별 기능 추가, 수정과 장애 해결 요약: [CHANGELOG.md](./CHANGELOG.md)
 - 현재 사용법과 기술 구성: `README.md`
 - 향후 긴 장애 분석이나 기술 결정: `docs/troubleshooting/`, `docs/adr/`
+- 기획 의도와 제품 원칙: `docs/product/PROJECT_BRIEF.md`
+- 승인된 기능·아키텍처 설계: `docs/superpowers/specs/`
 - GitHub Wiki: API 연동 가이드나 운영 매뉴얼처럼 길고 자주 참고하는 문서가 늘어날 때 사용
 
 버전은 Semantic Versioning 형식(`MAJOR.MINOR.PATCH`)을 따릅니다.
@@ -145,4 +149,3 @@ chore: 배포 설정 갱신
 ## 주의사항
 
 이 프로젝트는 개인 학습 및 정보 확인용입니다. 제공되는 데이터는 지연되거나 일시적으로 부정확할 수 있으며 투자 권유 또는 투자 판단의 근거로 사용할 수 없습니다.
-
