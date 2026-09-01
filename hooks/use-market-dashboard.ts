@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DashboardResponse } from '@/lib/market/types';
 
-type DashboardState = 'loading' | 'ready' | 'stale' | 'error';
+type DashboardState = 'loading' | 'ready' | 'degraded' | 'stale' | 'error';
+
+function responseState(response: DashboardResponse): DashboardState {
+  const hasDegradedQuote = response.quotes.some(
+    (quote) => quote.quality === 'stale' || quote.quality === 'unavailable',
+  );
+  return response.notices.length > 0 || response.quotes.length === 0 || hasDegradedQuote
+    ? 'degraded'
+    : 'ready';
+}
 
 export function useMarketDashboard(): {
   data: DashboardResponse | null;
@@ -27,7 +36,7 @@ export function useMarketDashboard(): {
         const next = await response.json() as DashboardResponse;
         dataRef.current = next;
         setData(next);
-        setState('ready');
+        setState(responseState(next));
       } catch {
         if (controller.signal.aborted) return;
         setState(dataRef.current ? 'stale' : 'error');
