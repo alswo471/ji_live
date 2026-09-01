@@ -1,0 +1,38 @@
+# 지투라이브 차트 주기·시장 지표 보완 Implementation Plan
+
+**Goal:** 7개 candle 주기, 주기별 시간축과 초기 범위를 제공하고 KOSPI·USD/KRW 상태와 테마 전환 안정성을 보완한다.
+
+**Architecture:** 공급자 adapter는 `CandleInterval`을 받아 native 봉을 사용하거나 Toss 원본 봉을 공통 집계기로 합산한다. 차트는 한 번 생성하고 데이터, 테마, 시간축과 viewport를 독립 effect로 갱신한다. KOSPI 전일 종가는 거래일 cache loader로 조회한다.
+
+**Spec:** `docs/superpowers/specs/2026-09-01-market-chart-timeframes-design.md`
+
+## Task 1: candle 계약과 집계기
+
+- `CandleInterval` 7개 값과 interval별 설정을 실패 테스트로 정의한다.
+- OHLCV 합산과 주·월 경계 테스트를 작성한다.
+- 공통 집계기와 공급자별 원본 요청 설정을 구현한다.
+
+## Task 2: 공급자 adapter와 API
+
+- Toss 1분·일봉 pagination 및 시장 지표 candle endpoint를 검증한다.
+- Binance와 Bithumb의 7개 native interval mapping을 검증한다.
+- candle route를 `interval` query와 주기별 cache header로 변경한다.
+
+## Task 3: 시장 지표 표시
+
+- KOSPI 전일 종가 loader와 등락률 계산 실패 테스트를 작성한다.
+- Toss 환율 `rateChangeType`을 공통 방향 상태로 보존한다.
+- 퍼센트가 없는 환율은 `집계 중` 대신 방향과 등락폭 미제공 안내를 표시한다.
+
+## Task 4: 상세 차트 UI
+
+- 7개 tab, 주기 변경 요청과 모바일 가로 스크롤 테스트를 작성한다.
+- 차트를 한 번 생성하고 테마는 option만 변경하도록 수정한다.
+- interval별 시간축 formatter와 초기 visible range를 적용한다.
+
+## Task 5: 문서와 검증
+
+- README의 배포 URL·환경과 오래된 차트 설명을 최신화한다.
+- CHANGELOG와 기존 1차 설계의 상세 차트 설명을 갱신한다.
+- 관련 테스트, 전체 테스트, lint와 build를 실행한다.
+- 실제 데이터와 4개 viewport의 라이트·다크 전환을 브라우저에서 확인한다.

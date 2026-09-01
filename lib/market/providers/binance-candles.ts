@@ -1,4 +1,4 @@
-import type { CandlePoint, CandleRange, Instrument } from '../types';
+import type { CandleInterval, CandlePoint, Instrument } from '../types';
 
 type BinanceKline = [number, string, string, string, string, string, ...unknown[]];
 
@@ -15,11 +15,19 @@ function normalizeKline(kline: BinanceKline): CandlePoint | null {
 
 export async function fetchBinanceCandles(
   instrument: Instrument,
-  range: CandleRange,
+  interval: CandleInterval,
   fetcher: typeof fetch = fetch,
 ): Promise<CandlePoint[]> {
-  const interval = range === '1d' ? '1m' : '1d';
-  const limit = range === '1d' ? 500 : range === '1w' ? 7 : 30;
+  const limits: Record<CandleInterval, number> = {
+    '1m': 120,
+    '15m': 96,
+    '1h': 120,
+    '4h': 186,
+    '1d': 183,
+    '1w': 104,
+    '1M': 120,
+  };
+  const limit = limits[interval];
   const params = new URLSearchParams({ symbol: instrument.providerSymbol, interval, limit: String(limit) });
   const response = await fetcher(`https://api.binance.com/api/v3/klines?${params.toString()}`, {
     cache: 'no-store',

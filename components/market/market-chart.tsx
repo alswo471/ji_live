@@ -8,19 +8,23 @@ import {
   createChart,
   type IChartApi,
   type ISeriesApi,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { CandlePoint } from '@/lib/market/types';
+import { formatCandleTime, getCandleViewport } from '@/lib/market/candle-intervals';
+import type { CandleInterval, CandlePoint } from '@/lib/market/types';
 import type { Theme } from '@/hooks/use-display-preferences';
 
 export function MarketChart({
   candles,
+  interval,
   label,
   theme,
   state,
   message,
 }: {
   candles: CandlePoint[];
+  interval: CandleInterval;
   label: string;
   theme: Theme;
   state: 'loading' | 'ready' | 'unavailable' | 'error';
@@ -30,24 +34,24 @@ export function MarketChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const viewportIntervalRef = useRef<CandleInterval | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const dark = theme === 'dark';
     const chart = createChart(container, {
       width: container.clientWidth || 800,
       height: container.clientHeight || 360,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: dark ? '#a1a1aa' : '#52525b',
+        textColor: '#52525b',
       },
       grid: {
-        vertLines: { color: dark ? '#ffffff0a' : '#0f172a0a' },
-        horzLines: { color: dark ? '#ffffff12' : '#0f172a10' },
+        vertLines: { color: '#0f172a0a' },
+        horzLines: { color: '#0f172a10' },
       },
-      rightPriceScale: { borderColor: dark ? '#ffffff1a' : '#0f172a1a' },
-      timeScale: { borderColor: dark ? '#ffffff1a' : '#0f172a1a', timeVisible: true },
+      rightPriceScale: { borderColor: '#0f172a1a' },
+      timeScale: { borderColor: '#0f172a1a', timeVisible: true },
     });
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#ef4444', downColor: '#3b82f6', borderVisible: false,
@@ -74,7 +78,44 @@ export function MarketChart({
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    const dark = theme === 'dark';
+    chartRef.current?.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: dark ? '#a1a1aa' : '#52525b',
+      },
+      grid: {
+        vertLines: { color: dark ? '#ffffff0a' : '#0f172a0a' },
+        horzLines: { color: dark ? '#ffffff12' : '#0f172a10' },
+      },
+      rightPriceScale: { borderColor: dark ? '#ffffff1a' : '#0f172a1a' },
+      timeScale: { borderColor: dark ? '#ffffff1a' : '#0f172a1a' },
+    });
   }, [theme]);
+
+  useEffect(() => {
+    const intraday = interval === '1m' || interval === '15m' || interval === '1h' || interval === '4h';
+    const format = (time: Time) => {
+      const timestamp = typeof time === 'number'
+        ? time
+        : typeof time === 'string'
+          ? Date.parse(time) / 1_000
+          : Date.UTC(time.year, time.month - 1, time.day) / 1_000;
+      return formatCandleTime(timestamp, interval);
+    };
+    chartRef.current?.applyOptions({
+      localization: { timeFormatter: (time: Time) => format(time) },
+      timeScale: {
+        timeVisible: intraday,
+        secondsVisible: false,
+        tickMarkFormatter: (time: Time) => format(time),
+      },
+    });
+    viewportIntervalRef.current = null;
+  }, [interval]);
 
   useEffect(() => {
     candleSeriesRef.current?.setData(candles.map((candle) => ({
@@ -89,8 +130,15 @@ export function MarketChart({
       value: candle.volume,
       color: candle.close >= candle.open ? '#ef444466' : '#3b82f666',
     })));
-    if (candles.length) chartRef.current?.timeScale().fitContent();
-  }, [candles, theme]);
+    if (candles.length && viewportIntervalRef.current !== interval) {
+      const lastTime = candles.at(-1)!.time;
+      chartRef.current?.timeScale().setVisibleRange({
+        from: (lastTime - getCandleViewport(interval).visibleSeconds) as UTCTimestamp,
+        to: lastTime as UTCTimestamp,
+      });
+      viewportIntervalRef.current = interval;
+    }
+  }, [candles, interval]);
 
   return <div className="relative overflow-hidden rounded-2xl border bg-card/70">
     <figure ref={containerRef} aria-label={label} className="h-[340px] w-full sm:h-[420px]" />

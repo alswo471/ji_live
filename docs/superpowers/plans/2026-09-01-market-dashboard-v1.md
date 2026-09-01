@@ -462,6 +462,8 @@ git commit -m "feat(ui): 지투라이브 테마·종목명 전환 추가"
 
 ### Task 10: 공급자별 candle 정규화 API
 
+> 이 Task의 1일·1주·1개월 계약은 최초 구현 기록이다. 이후 7개 봉 단위로 확장한 현재 계약과 구현 절차는 `2026-09-01-market-chart-timeframes.md`를 따른다.
+
 **Files:**
 - Modify: `lib/market/types.ts`
 - Create: `lib/market/candles.ts`, `lib/market/providers/toss-candles.ts`, `lib/market/providers/binance-candles.ts`, `lib/market/providers/bithumb-candles.ts`

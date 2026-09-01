@@ -8,14 +8,18 @@ export type TossRequester = (path: string) => Promise<unknown>;
 
 type PriceResponse = { result: Array<{ symbol: string; timestamp: string; lastPrice: string; currency: 'KRW' | 'USD' }> };
 type RankingResponse = { result: { rankings: Array<{ symbol: string; price: { changeRate: string | null }; tradingAmount: string }> } };
-type IndicatorResponse = { result: Array<{ symbol: string; timestamp: string; lastPrice: string }> };
-type ExchangeRateResponse = { result: { rate: string; validFrom: string } };
+type IndicatorResponse = { result: Array<{ symbol: string; timestamp: string | null; lastPrice: string }> };
+type ExchangeRateResponse = { result: { rate: string; rateChangeType?: string | null; validFrom: string } };
 type KrCalendarResponse = { result: { today: { integrated: { preMarket: SessionWindow | null; regularMarket: SessionWindow | null; afterMarket: SessionWindow | null } | null } } };
 type UsCalendarResponse = { result: { today: { dayMarket: SessionWindow | null; preMarket: SessionWindow | null; regularMarket: SessionWindow | null; afterMarket: SessionWindow | null } } };
 
 const STOCKS_AND_QQQ = INSTRUMENTS.filter((item) => item.assetClass === 'kr-stock' || item.assetClass === 'us-stock' || item.symbol === 'QQQ');
 const defaultRequester: TossRequester = (path) => fetchToss(path);
 const defaultPreviousCloseLoader = createPreviousCloseLoader(defaultRequester);
+const defaultIndicatorPreviousCloseLoader = createPreviousCloseLoader(
+  defaultRequester,
+  (target) => `/api/v1/market-indicators/${encodeURIComponent(target.symbol)}/candles?interval=1d&count=2`,
+);
 
 function numberOrNull(value: string | null | undefined) {
   const number = Number(value);
@@ -26,10 +30,22 @@ function qualityFor(session: MarketSession) {
   return session === 'closed' ? 'stale' as const : 'realtime' as const;
 }
 
+function koreaMarketDate(now: Date) {
+  return `${new Date(now.getTime() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10)}T00:00:00+09:00`;
+}
+
+function exchangeDirection(value: string | null | undefined) {
+  if (value === 'UP') return 'up' as const;
+  if (value === 'DOWN') return 'down' as const;
+  if (value === 'EQUAL') return 'flat' as const;
+  return null;
+}
+
 export async function fetchTossMarketSnapshot(
   now = new Date(),
   request: TossRequester = defaultRequester,
   loadPreviousCloses: PreviousCloseLoader = request === defaultRequester ? defaultPreviousCloseLoader : async () => new Map(),
+  loadIndicatorPreviousCloses: PreviousCloseLoader = request === defaultRequester ? defaultIndicatorPreviousCloseLoader : async () => new Map(),
 ): Promise<MarketQuote[]> {
   const symbols = encodeURIComponent(STOCKS_AND_QQQ.map((item) => item.providerSymbol).join(','));
   const [pricesRaw, krRankingRaw, usRankingRaw, indicatorsRaw, exchangeRaw, krCalendarRaw, usCalendarRaw] = await Promise.all([
@@ -100,15 +116,23 @@ export async function fetchTossMarketSnapshot(
   const kospiInstrument = INSTRUMENTS.find((item) => item.symbol === 'KOSPI')!;
   const kospi = indicators.result.find((item) => item.symbol === 'KOSPI');
   const krSession = resolveSession(now, krSessions);
+  const kospiPreviousClose = kospi
+    ? (await loadIndicatorPreviousCloses([{ symbol: kospi.symbol, asOf: kospi.timestamp ?? koreaMarketDate(now) }])).get(kospi.symbol) ?? null
+    : null;
   if (kospi) quotes.push({
     symbol: kospiInstrument.symbol, name: kospiInstrument.name, nameKo: kospiInstrument.nameKo, nameEn: kospiInstrument.nameEn, assetClass: kospiInstrument.assetClass,
-    price: numberOrNull(kospi.lastPrice), currency: kospiInstrument.currency, changeRate: null, previousClose: null, changeRateSource: null, tradingAmount: null,
+    price: numberOrNull(kospi.lastPrice), currency: kospiInstrument.currency,
+    changeRate: calculateChangeRate(numberOrNull(kospi.lastPrice), kospiPreviousClose), previousClose: kospiPreviousClose,
+    changeRateSource: kospiPreviousClose === null ? null : 'previous-close', tradingAmount: null,
     asOf: kospi.timestamp, session: krSession, quality: qualityFor(krSession), provider: 'toss', confidence: null, estimateInputs: [],
   });
   const fxInstrument = INSTRUMENTS.find((item) => item.symbol === 'USDKRW')!;
+  const fxDirection = exchangeDirection(exchange.result.rateChangeType);
   quotes.push({
     symbol: fxInstrument.symbol, name: fxInstrument.name, nameKo: fxInstrument.nameKo, nameEn: fxInstrument.nameEn, assetClass: fxInstrument.assetClass,
-    price: numberOrNull(exchange.result.rate), currency: fxInstrument.currency, changeRate: null, previousClose: null, changeRateSource: null, tradingAmount: null,
+    price: numberOrNull(exchange.result.rate), currency: fxInstrument.currency, changeRate: null,
+    changeDirection: fxDirection,
+    previousClose: null, changeRateSource: fxDirection === null ? null : 'provider-direction', tradingAmount: null,
     asOf: exchange.result.validFrom, session: 'always-open', quality: 'realtime', provider: 'toss', confidence: null, estimateInputs: [],
   });
   return quotes;

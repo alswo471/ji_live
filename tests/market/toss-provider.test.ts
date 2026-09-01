@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fetchTossMarketSnapshot, type TossRequester } from '@/lib/market/providers/toss';
 
 describe('fetchTossMarketSnapshot', () => {
@@ -8,8 +8,8 @@ describe('fetchTossMarketSnapshot', () => {
         { symbol: '005930', timestamp: '2026-09-01T10:00:00+09:00', lastPrice: '84200', currency: 'KRW' },
         { symbol: 'QQQ', timestamp: '2026-09-01T10:00:00+09:00', lastPrice: '612.84', currency: 'USD' },
       ] };
-      if (path.includes('market-indicators/prices')) return { result: [{ symbol: 'KOSPI', timestamp: '2026-09-01T10:00:00+09:00', lastPrice: '2714.08' }] };
-      if (path.startsWith('/api/v1/exchange-rate')) return { result: { rate: '1381.2', validFrom: '2026-09-01T10:00:00+09:00' } };
+      if (path.includes('market-indicators/prices')) return { result: [{ symbol: 'KOSPI', timestamp: null, lastPrice: '2714.08' }] };
+      if (path.startsWith('/api/v1/exchange-rate')) return { result: { rate: '1381.2', rateChangeType: 'UP', validFrom: '2026-09-01T10:00:00+09:00' } };
       if (path === '/api/v1/market-calendar/KR') return { result: { today: { integrated: {
         preMarket: { startTime: '2026-09-01T08:00:00+09:00', endTime: '2026-09-01T09:00:00+09:00' },
         regularMarket: { startTime: '2026-09-01T09:00:00+09:00', endTime: '2026-09-01T15:30:00+09:00' },
@@ -25,12 +25,31 @@ describe('fetchTossMarketSnapshot', () => {
       throw new Error(`예상하지 않은 요청: ${path}`);
     };
 
-    const quotes = await fetchTossMarketSnapshot(new Date('2026-09-01T10:00:00+09:00'), request);
+    const loadIndicatorPreviousCloses = vi.fn(async () => new Map([['KOSPI', 2700]]));
+    const quotes = await fetchTossMarketSnapshot(
+      new Date('2026-09-01T10:00:00+09:00'),
+      request,
+      async () => new Map(),
+      loadIndicatorPreviousCloses,
+    );
 
     expect(quotes.find((quote) => quote.symbol === '005930')).toMatchObject({ price: 84200, changeRate: 0.0145, session: 'regular', quality: 'realtime' });
     expect(quotes.find((quote) => quote.symbol === 'QQQ')).toMatchObject({ name: 'NASDAQ 100 연동(QQQ)', price: 612.84, session: 'day' });
-    expect(quotes.find((quote) => quote.symbol === 'KOSPI')).toMatchObject({ price: 2714.08, session: 'regular' });
-    expect(quotes.find((quote) => quote.symbol === 'USDKRW')).toMatchObject({ price: 1381.2, quality: 'realtime' });
+    expect(quotes.find((quote) => quote.symbol === 'KOSPI')).toMatchObject({
+      price: 2714.08,
+      previousClose: 2700,
+      changeRate: expect.closeTo(0.0052148, 6),
+      changeRateSource: 'previous-close',
+      session: 'regular',
+    });
+    expect(quotes.find((quote) => quote.symbol === 'USDKRW')).toMatchObject({
+      price: 1381.2,
+      changeRate: null,
+      changeDirection: 'up',
+      changeRateSource: 'provider-direction',
+      quality: 'realtime',
+    });
+    expect(loadIndicatorPreviousCloses).toHaveBeenCalledWith([{ symbol: 'KOSPI', asOf: expect.stringMatching(/^2026-09-01/) }]);
   });
 
   it('랭킹 밖 종목은 전일 종가로 실제 등락률을 계산한다', async () => {
@@ -40,7 +59,7 @@ describe('fetchTossMarketSnapshot', () => {
       ] };
       if (path.includes('/api/v1/rankings')) return { result: { rankings: [] } };
       if (path.includes('market-indicators/prices')) return { result: [] };
-      if (path.startsWith('/api/v1/exchange-rate')) return { result: { rate: '1381.2', validFrom: '2026-09-01T10:00:00+09:00' } };
+      if (path.startsWith('/api/v1/exchange-rate')) return { result: { rate: '1381.2', rateChangeType: 'EQUAL', validFrom: '2026-09-01T10:00:00+09:00' } };
       if (path === '/api/v1/market-calendar/KR') return { result: { today: { integrated: {
         preMarket: null,
         regularMarket: { startTime: '2026-09-01T09:00:00+09:00', endTime: '2026-09-01T15:30:00+09:00' },

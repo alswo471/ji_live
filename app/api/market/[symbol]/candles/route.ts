@@ -1,30 +1,34 @@
 import { getCandles } from '@/lib/market/candles';
+import { CANDLE_INTERVALS, getCandleViewport } from '@/lib/market/candle-intervals';
 import { INSTRUMENTS } from '@/lib/market/catalog';
-import type { CandleRange, CandleResponse } from '@/lib/market/types';
+import type { CandleInterval, CandleResponse } from '@/lib/market/types';
 
 export const dynamic = 'force-dynamic';
 
-type CandleGetter = (symbol: string, range: CandleRange) => Promise<CandleResponse>;
-const RANGES = new Set<CandleRange>(['1d', '1w', '1mo']);
+type CandleGetter = (symbol: string, interval: CandleInterval) => Promise<CandleResponse>;
+const INTERVALS = new Set<CandleInterval>(CANDLE_INTERVALS);
 
 export async function handleCandleRequest(
   request: Request,
   rawSymbol: string,
   load: CandleGetter = getCandles,
 ) {
-  const range = new URL(request.url).searchParams.get('range') ?? '1d';
-  if (!RANGES.has(range as CandleRange)) {
-    return Response.json({ error: '지원하지 않는 차트 기간입니다.' }, { status: 400 });
+  const interval = new URL(request.url).searchParams.get('interval') ?? '1m';
+  if (!INTERVALS.has(interval as CandleInterval)) {
+    return Response.json({ error: '지원하지 않는 차트 주기입니다.' }, { status: 400 });
   }
   const symbol = rawSymbol.toUpperCase();
   if (!INSTRUMENTS.some((instrument) => instrument.symbol === symbol)) {
     return Response.json({ error: '지원하지 않는 종목입니다.' }, { status: 404 });
   }
-  return Response.json(await load(symbol, range as CandleRange), {
+  const selectedInterval = interval as CandleInterval;
+  const ttlSeconds = getCandleViewport(selectedInterval).cacheTtlMs / 1_000;
+  const result = await load(symbol, selectedInterval);
+  return Response.json(result, {
     headers: {
-      'Cache-Control': range === '1d'
-        ? 'public, max-age=0, s-maxage=60, stale-while-revalidate=120'
-        : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400',
+      'Cache-Control': result.unavailable
+        ? 'no-store'
+        : `public, max-age=0, s-maxage=${ttlSeconds}, stale-while-revalidate=${ttlSeconds * 2}`,
     },
   });
 }

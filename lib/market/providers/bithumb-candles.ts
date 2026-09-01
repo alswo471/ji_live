@@ -1,4 +1,4 @@
-import type { CandlePoint, CandleRange, Instrument } from '../types';
+import type { CandleInterval, CandlePoint, Instrument } from '../types';
 
 type BithumbCandle = {
   timestamp?: number;
@@ -25,12 +25,19 @@ function normalizeCandle(candle: BithumbCandle): CandlePoint | null {
 
 export async function fetchBithumbCandles(
   instrument: Instrument,
-  range: CandleRange,
+  interval: CandleInterval,
   fetcher: typeof fetch = fetch,
 ): Promise<CandlePoint[]> {
-  const isMinute = range === '1d';
-  const path = isMinute ? '/v1/candles/minutes/1' : '/v1/candles/days';
-  const count = isMinute ? 200 : range === '1w' ? 7 : 30;
+  const settings: Record<CandleInterval, { path: string; count: number }> = {
+    '1m': { path: '/v1/candles/minutes/1', count: 120 },
+    '15m': { path: '/v1/candles/minutes/15', count: 96 },
+    '1h': { path: '/v1/candles/minutes/60', count: 120 },
+    '4h': { path: '/v1/candles/minutes/240', count: 186 },
+    '1d': { path: '/v1/candles/days', count: 183 },
+    '1w': { path: '/v1/candles/weeks', count: 104 },
+    '1M': { path: '/v1/candles/months', count: 120 },
+  };
+  const { path, count } = settings[interval];
   const params = new URLSearchParams({ market: instrument.providerSymbol, count: String(count) });
   const response = await fetcher(`https://api.bithumb.com${path}?${params.toString()}`, {
     cache: 'no-store',

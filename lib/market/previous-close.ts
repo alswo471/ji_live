@@ -22,7 +22,10 @@ export function selectPreviousClose(candles: DailyCandle[], currentTimestamp: st
   return finiteNumber(previous?.closePrice);
 }
 
-export function createPreviousCloseLoader(request: PreviousCloseRequester): PreviousCloseLoader {
+export function createPreviousCloseLoader(
+  request: PreviousCloseRequester,
+  pathFor: (target: PreviousCloseTarget) => string = (target) => `/api/v1/candles?symbol=${encodeURIComponent(target.symbol)}&interval=1d&count=2`,
+): PreviousCloseLoader {
   const cache = new Map<string, number>();
   const inFlight = new Map<string, Promise<number | null>>();
 
@@ -34,7 +37,7 @@ export function createPreviousCloseLoader(request: PreviousCloseRequester): Prev
     if (active) return active;
     const promise = (async () => {
       try {
-        const response = await request(`/api/v1/candles?symbol=${encodeURIComponent(target.symbol)}&interval=1d&count=2`) as CandleResponse;
+        const response = await request(pathFor(target)) as CandleResponse;
         const previousClose = selectPreviousClose(response.result.candles, target.asOf);
         if (previousClose !== null) cache.set(cacheKey, previousClose);
         return previousClose;

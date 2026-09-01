@@ -4,8 +4,9 @@ export type QuoteQuality = 'realtime' | 'delayed' | 'estimated' | 'stale' | 'una
 export type Confidence = 'high' | 'medium' | 'low';
 export type MarketProvider = 'toss' | 'binance' | 'bithumb';
 export type Currency = 'KRW' | 'USD';
-export type ChangeRateSource = 'provider' | 'previous-close' | null;
-export type CandleRange = '1d' | '1w' | '1mo';
+export type ChangeDirection = 'up' | 'down' | 'flat';
+export type ChangeRateSource = 'provider' | 'previous-close' | 'provider-direction' | null;
+export type CandleInterval = '1m' | '15m' | '1h' | '4h' | '1d' | '1w' | '1M';
 
 export type CandlePoint = {
   time: number;
@@ -31,6 +32,7 @@ export type MarketQuote = {
   price: number | null;
   currency: Currency;
   changeRate: number | null;
+  changeDirection?: ChangeDirection | null;
   previousClose: number | null;
   changeRateSource: ChangeRateSource;
   tradingAmount: number | null;

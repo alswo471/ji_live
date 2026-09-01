@@ -72,25 +72,42 @@ async function requestAccessToken() {
   return tokenCache.accessToken;
 }
 
-export async function fetchToss<T>(path: string, headers?: HeadersInit, canRetry = true): Promise<T> {
+function waitForRetry(durationMs: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener('abort', handleAbort);
+      resolve();
+    };
+    const timeout = setTimeout(finish, durationMs);
+    const handleAbort = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', handleAbort);
+      reject(signal?.reason ?? new Error('토스증권 API 요청이 중단되었습니다.'));
+    };
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
+}
+
+export async function fetchToss<T>(path: string, headers?: HeadersInit, canRetry = true, signal?: AbortSignal): Promise<T> {
   const accessToken = await getAccessToken();
   const requestHeaders = new Headers(headers);
   requestHeaders.set('Authorization', `Bearer ${accessToken}`);
   const response = await fetch(`${TOSS_API_URL}${path}`, {
     headers: requestHeaders,
     cache: 'no-store',
+    signal,
   });
 
   if (response.status === 401 && canRetry) {
     tokenCache = null;
-    return fetchToss<T>(path, headers, false);
+    return fetchToss<T>(path, headers, false, signal);
   }
 
   if (response.status === 429 && canRetry) {
     const retryAfter = Number(response.headers.get('Retry-After'));
     const waitMs = Number.isFinite(retryAfter) ? Math.min(Math.max(retryAfter * 1000, 250), 3_000) : 1_000;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-    return fetchToss<T>(path, headers, false);
+    await waitForRetry(waitMs, signal);
+    return fetchToss<T>(path, headers, false, signal);
   }
 
   if (!response.ok) {

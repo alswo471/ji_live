@@ -17,4 +17,10 @@ describe('PriceChange', () => {
     render(<PriceChange value={null} />);
     expect(screen.getByText('집계 중')).toHaveClass('text-muted-foreground');
   });
+
+  it('환율 등락폭이 없으면 공급자가 제공한 방향을 표시한다', () => {
+    render(<PriceChange value={null} direction="up" />);
+    expect(screen.getByText('상승')).toHaveClass('text-rise');
+    expect(screen.getByText('등락폭 미제공')).toBeVisible();
+  });
 });

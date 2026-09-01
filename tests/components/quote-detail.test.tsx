@@ -5,19 +5,27 @@ import { QuoteDetail } from '@/components/market/quote-detail';
 import { MarketChart } from '@/components/market/market-chart';
 import type { MarketQuote } from '@/lib/market/types';
 
-const chartMocks = vi.hoisted(() => ({ setData: vi.fn() }));
+const chartMocks = vi.hoisted(() => ({
+  setData: vi.fn(),
+  applyOptions: vi.fn(),
+  setVisibleRange: vi.fn(),
+  createChart: vi.fn(),
+}));
 
 vi.mock('lightweight-charts', () => ({
   CandlestickSeries: {},
   ColorType: { Solid: 'solid' },
   HistogramSeries: {},
-  createChart: () => ({
+  createChart: (...args: unknown[]) => {
+    chartMocks.createChart(...args);
+    return {
     addSeries: () => ({ setData: chartMocks.setData }),
-    applyOptions: vi.fn(),
+    applyOptions: chartMocks.applyOptions,
     priceScale: () => ({ applyOptions: vi.fn() }),
     remove: vi.fn(),
-    timeScale: () => ({ fitContent: vi.fn() }),
-  }),
+    timeScale: () => ({ fitContent: vi.fn(), setVisibleRange: chartMocks.setVisibleRange }),
+  };
+  },
 }));
 
 const quote: MarketQuote = {
@@ -28,7 +36,10 @@ const quote: MarketQuote = {
 };
 
 describe('QuoteDetail', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
 
   it('현재가·전일 종가와 접근 가능한 기간 탭·차트를 표시한다', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -44,27 +55,40 @@ describe('QuoteDetail', () => {
 
     expect(screen.getByText('전일 종가')).toBeVisible();
     expect(screen.getByText('82,971원')).toBeVisible();
-    expect(screen.getByRole('tab', { name: '1일' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['1분', '15분', '1시간', '4시간', '일봉', '주봉', '월봉']);
+    expect(screen.getByRole('tab', { name: '1분' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '1분' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: '15분' })).toHaveAttribute('tabindex', '-1');
     expect(screen.getByLabelText('삼성전자 가격 차트')).toBeVisible();
     await waitFor(() => expect(screen.getByText('고가')).toBeVisible());
 
-    chartMocks.setData.mockClear();
-    await userEvent.click(screen.getByRole('button', { name: '다크 모드로 전환' }));
-    await waitFor(() => expect(chartMocks.setData.mock.calls.length).toBeGreaterThanOrEqual(2));
+    screen.getByRole('tab', { name: '1분' }).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: '15분' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: '15분' })).toHaveAttribute('aria-selected', 'true');
 
-    await userEvent.click(screen.getByRole('tab', { name: '1주' }));
-    expect(screen.getByRole('tab', { name: '1주' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(screen.getByRole('button', { name: '다크 모드로 전환' }));
+
+    await userEvent.click(screen.getByRole('tab', { name: '4시간' }));
+    expect(screen.getByRole('tab', { name: '4시간' })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/market/005930/candles?interval=4h', expect.anything()));
   });
 });
 
 describe('MarketChart', () => {
-  it('테마가 바뀌어 차트를 재생성해도 기존 candle 데이터를 다시 적용한다', () => {
+  it('테마가 바뀌어도 차트를 재생성하지 않고 candle과 viewport를 유지한다', () => {
     const candles = [{ time: 1788226800, open: 100, high: 110, low: 90, close: 105, volume: 10 }];
-    const view = render(<MarketChart candles={candles} label="가격 차트" theme="light" state="ready" message={null} />);
+    const view = render(<MarketChart candles={candles} interval="1m" label="가격 차트" theme="light" state="ready" message={null} />);
+    expect(chartMocks.createChart).toHaveBeenCalledTimes(1);
+    expect(chartMocks.setVisibleRange).toHaveBeenCalledWith({ from: 1788219600, to: 1788226800 });
     chartMocks.setData.mockClear();
 
-    view.rerender(<MarketChart candles={candles} label="가격 차트" theme="dark" state="ready" message={null} />);
+    view.rerender(<MarketChart candles={candles} interval="1m" label="가격 차트" theme="dark" state="ready" message={null} />);
 
-    expect(chartMocks.setData).toHaveBeenCalledTimes(2);
+    expect(chartMocks.createChart).toHaveBeenCalledTimes(1);
+    expect(chartMocks.applyOptions).toHaveBeenCalledWith(expect.objectContaining({
+      layout: expect.objectContaining({ textColor: '#a1a1aa' }),
+    }));
+    expect(chartMocks.setData).not.toHaveBeenCalled();
   });
 });
