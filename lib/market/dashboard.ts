@@ -1,49 +1,146 @@
 import { createCachedProvider } from './cache';
-import { applyEstimates } from './estimate';
-import { fetchBinanceQuotes } from './providers/binance';
-import { fetchBithumbQuotes } from './providers/bithumb';
-import { fetchTossMarketSnapshot } from './providers/toss';
-import type { DashboardResponse, MarketQuote } from './types';
+import { composeDerivedQuotes } from './derived-quotes';
+import { fetchBinanceFuturesTickers } from './providers/binance-futures';
+import { fetchBinanceSpotQuotes } from './providers/binance';
+import {
+  fetchBithumbSnapshot,
+  type BithumbSnapshot,
+} from './providers/bithumb';
+import { fetchHyperliquidTickers } from './providers/hyperliquid';
+import type { DashboardResponse, DerivativeTicker, MarketQuote } from './types';
 
-type ProviderName = 'toss' | 'binance' | 'bithumb';
-type ProviderLoaders = Record<ProviderName, () => Promise<MarketQuote[]>>;
-const LABELS: Record<ProviderName, string> = { toss: 'Toss', binance: 'Binance', bithumb: 'Bithumb' };
+type ProviderName =
+  | 'hyperliquid'
+  | 'binanceFutures'
+  | 'binanceSpot'
+  | 'bithumb';
+export type DashboardLoaders = {
+  hyperliquid: () => Promise<DerivativeTicker[]>;
+  binanceFutures: () => Promise<DerivativeTicker[]>;
+  binanceSpot: () => Promise<MarketQuote[]>;
+  bithumb: () => Promise<BithumbSnapshot>;
+};
+const LABELS: Record<ProviderName, string> = {
+  hyperliquid: 'Hyperliquid',
+  binanceFutures: 'Binance 선물',
+  binanceSpot: 'Binance 현물',
+  bithumb: 'Bithumb',
+};
 
-export function createDashboardService(loaders: ProviderLoaders) {
+function readProviderResult<T>(
+  name: ProviderName,
+  result: PromiseSettledResult<{ value: T; stale: boolean }>,
+  notices: string[],
+) {
+  if (result.status === 'rejected') {
+    notices.push(`${LABELS[name]} 시세를 불러오지 못했습니다.`);
+    return { value: null, stale: false };
+  }
+  if (result.value.stale)
+    notices.push(`${LABELS[name]}의 마지막 정상 시세를 표시합니다.`);
+  return result.value;
+}
+
+function markQuoteStale(quote: MarketQuote, stale: boolean) {
+  return stale && quote.quality !== 'unavailable'
+    ? { ...quote, quality: 'stale' as const }
+    : quote;
+}
+
+export function createDashboardService(loaders: DashboardLoaders) {
   const providers = {
-    toss: createCachedProvider({ ttlMs: 5_000, failureThreshold: 2, cooldownMs: 30_000, load: loaders.toss }),
-    binance: createCachedProvider({ ttlMs: 5_000, failureThreshold: 2, cooldownMs: 30_000, load: loaders.binance }),
-    bithumb: createCachedProvider({ ttlMs: 5_000, failureThreshold: 2, cooldownMs: 30_000, load: loaders.bithumb }),
+    hyperliquid: createCachedProvider({
+      ttlMs: 5_000,
+      failureThreshold: 2,
+      cooldownMs: 30_000,
+      load: loaders.hyperliquid,
+    }),
+    binanceFutures: createCachedProvider({
+      ttlMs: 5_000,
+      failureThreshold: 2,
+      cooldownMs: 30_000,
+      load: loaders.binanceFutures,
+    }),
+    binanceSpot: createCachedProvider({
+      ttlMs: 5_000,
+      failureThreshold: 2,
+      cooldownMs: 30_000,
+      load: loaders.binanceSpot,
+    }),
+    bithumb: createCachedProvider({
+      ttlMs: 5_000,
+      failureThreshold: 2,
+      cooldownMs: 30_000,
+      load: loaders.bithumb,
+    }),
   };
 
   return {
     async getDashboard(now = new Date()): Promise<DashboardResponse> {
-      const names = Object.keys(providers) as ProviderName[];
-      const settled = await Promise.allSettled(names.map((name) => providers[name].get()));
-      const quoteMap = new Map<string, MarketQuote>();
+      const settled = await Promise.allSettled([
+        providers.hyperliquid.get(),
+        providers.binanceFutures.get(),
+        providers.binanceSpot.get(),
+        providers.bithumb.get(),
+      ]);
       const notices: string[] = [];
+      const hyperliquid = readProviderResult(
+        'hyperliquid',
+        settled[0],
+        notices,
+      );
+      const binanceFutures = readProviderResult(
+        'binanceFutures',
+        settled[1],
+        notices,
+      );
+      const binanceSpot = readProviderResult(
+        'binanceSpot',
+        settled[2],
+        notices,
+      );
+      const bithumb = readProviderResult('bithumb', settled[3], notices);
+      const derivativeQuotes = composeDerivedQuotes(
+        [...(hyperliquid.value ?? []), ...(binanceFutures.value ?? [])],
+        bithumb.value?.krwPerUsdt ?? null,
+      ).map((quote) =>
+        markQuoteStale(
+          quote,
+          (quote.provider === 'hyperliquid' && hyperliquid.stale) ||
+            (quote.provider === 'binance-futures' && binanceFutures.stale) ||
+            (quote.assetClass === 'kr-stock' && bithumb.stale),
+        ),
+      );
+      const actualQuotes = [
+        ...(binanceSpot.value ?? []).map((quote) =>
+          markQuoteStale(quote, binanceSpot.stale),
+        ),
+        ...(bithumb.value?.quotes ?? []).map((quote) =>
+          markQuoteStale(quote, bithumb.stale),
+        ),
+        ...(bithumb.value
+          ? [markQuoteStale(bithumb.value.fxQuote, bithumb.stale)]
+          : []),
+      ];
+      const quoteMap = new Map<string, MarketQuote>();
 
-      settled.forEach((result, index) => {
-        const name = names[index];
-        if (result.status === 'rejected') {
-          notices.push(`${LABELS[name]} 시세를 불러오지 못했습니다.`);
-          return;
-        }
-        if (result.value.stale) notices.push(`${LABELS[name]}의 마지막 정상 시세를 표시합니다.`);
-        for (const quote of result.value.value) {
-          quoteMap.set(quote.symbol, result.value.stale && quote.quality !== 'unavailable' ? { ...quote, quality: 'stale' } : quote);
-        }
-      });
+      for (const quote of [...derivativeQuotes, ...actualQuotes])
+        quoteMap.set(quote.symbol, quote);
 
-      return { quotes: applyEstimates([...quoteMap.values()]), fetchedAt: now.toISOString(), notices };
+      return {
+        quotes: [...quoteMap.values()],
+        fetchedAt: now.toISOString(),
+        notices,
+      };
     },
   };
 }
 
 const defaultService = createDashboardService({
-  toss: () => fetchTossMarketSnapshot(),
-  binance: () => fetchBinanceQuotes(),
-  bithumb: () => fetchBithumbQuotes(),
+  hyperliquid: () => fetchHyperliquidTickers(),
+  binanceFutures: () => fetchBinanceFuturesTickers(),
+  binanceSpot: () => fetchBinanceSpotQuotes(),
+  bithumb: () => fetchBithumbSnapshot(),
 });
 
 export const getDashboard = (now?: Date) => defaultService.getDashboard(now);

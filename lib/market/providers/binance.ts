@@ -78,5 +78,3 @@ export async function fetchBinanceSpotQuotes(
     } satisfies MarketQuote;
   });
 }
-
-export const fetchBinanceQuotes = fetchBinanceSpotQuotes;
