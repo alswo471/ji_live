@@ -4,7 +4,7 @@
 
 > 지민재의 개인 학습 프로젝트입니다. 바이브코딩을 활용해 기획, UI/UX, 외부 API 연동, 테스트, GitFlow, CI/CD와 배포까지 제품 개발의 전체 과정을 직접 경험하고 기록합니다.
 
-프로젝트가 해결하려는 문제와 제품 원칙은 [프로젝트 기획 요약](./docs/product/PROJECT_BRIEF.md)에 기록합니다.
+프로젝트가 해결하려는 문제와 제품 원칙은 [프로젝트 소개](./docs/product/프로젝트_소개.md)에 기록합니다. 전체 문서는 [문서 안내](./docs/README.md)에서 확인할 수 있습니다.
 
 ## 주요 기능
 
@@ -116,7 +116,7 @@ GitFlow를 기준으로 운영합니다.
 - `release/*`: 배포 준비
 - `hotfix/*`: 운영 긴급 수정
 
-규모가 있는 기능은 현재 작업 폴더를 보호하기 위해 Git worktree에서 구현합니다. 사용 방법과 병합 흐름은 [Worktree 작업 가이드](./docs/workflow/WORKTREE.md)를 따릅니다.
+규모가 있는 기능은 현재 작업 폴더를 보호하기 위해 Git worktree에서 구현합니다. 사용 방법과 병합 흐름은 [Git Worktree 작업 가이드](./docs/workflow/Git_Worktree_작업_가이드.md)를 따릅니다.
 
 커밋 메시지는 Conventional Commits의 prefix를 사용하고 설명은 한국어를 기본으로 합니다.
 
@@ -132,7 +132,9 @@ chore: 배포 설정 갱신
 - 버전별 기능 추가, 수정과 장애 해결 요약: [CHANGELOG.md](./CHANGELOG.md)
 - 현재 사용법과 기술 구성: `README.md`
 - 향후 긴 장애 분석이나 기술 결정: `docs/troubleshooting/`, `docs/adr/`
-- 기획 의도와 제품 원칙: `docs/product/PROJECT_BRIEF.md`
+- 전체 문서 목차: `docs/README.md`
+- 기획 의도와 제품 원칙: `docs/product/프로젝트_소개.md`
+- 기획 변화와 기술 의사결정: `docs/product/프로젝트_개발_히스토리.md`
 - 승인된 기능·아키텍처 설계: `docs/superpowers/specs/`
 - GitHub Wiki: API 연동 가이드나 운영 매뉴얼처럼 길고 자주 참고하는 문서가 늘어날 때 사용
 
