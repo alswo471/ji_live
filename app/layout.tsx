@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OO라이브 | 한국·미국 주식 대시보드',
-  description: '한국과 미국의 주요 주식 흐름을 빠르게 확인하는 실시간 시장 대시보드',
+  title: '지투라이브 | 멀티자산 마켓 콕핏',
+  description: '한국·미국 주식과 암호화폐의 실제 시세 및 시장 세션을 확인하는 공개 대시보드',
 };
 
 export default function RootLayout({
