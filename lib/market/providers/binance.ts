@@ -69,6 +69,7 @@ export async function fetchBinanceSpotQuotes(
       changeRateSource: price === null || percent === null ? null : 'provider',
       tradingAmount: finitePositive(ticker.quoteVolume),
       tradingAmountCurrency: 'USDT',
+      volumeKind: null,
       asOf: assessed.asOf,
       session: 'always-open',
       quality: price === null

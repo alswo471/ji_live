@@ -27,6 +27,7 @@ const quote = (overrides: Partial<MarketQuote>): MarketQuote => ({
   previousClose: null,
   changeRateSource: 'provider',
   tradingAmount: 1_000,
+  volumeKind: null,
   asOf: '2026-09-01T10:00:00.000Z',
   session: 'always-open',
   quality: 'realtime',

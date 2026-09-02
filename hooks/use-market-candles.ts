@@ -5,15 +5,21 @@ import { getCandleViewport } from '@/lib/market/candle-intervals';
 import type { CandleInterval, CandlePoint, CandleResponse } from '@/lib/market/types';
 
 type CandleState = 'loading' | 'ready' | 'unavailable' | 'error';
+type CandleMetadata = Pick<
+  CandleResponse,
+  'priceKind' | 'volumeKind' | 'sourceLabel' | 'estimateInputs'
+>;
 
 export function useMarketCandles(symbol: string, range: CandleInterval): {
   candles: CandlePoint[];
   state: CandleState;
   message: string | null;
+  metadata: CandleMetadata | null;
 } {
   const [candles, setCandles] = useState<CandlePoint[]>([]);
   const [state, setState] = useState<CandleState>('loading');
   const [message, setMessage] = useState<string | null>(null);
+  const [metadata, setMetadata] = useState<CandleMetadata | null>(null);
   const requestKey = `${symbol}:${range}`;
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
@@ -39,6 +45,12 @@ export function useMarketCandles(symbol: string, range: CandleInterval): {
         if (cancelled || generation !== requestGeneration) return;
         setCandles(next.candles);
         setMessage(next.message ?? null);
+        setMetadata({
+          priceKind: next.priceKind,
+          volumeKind: next.volumeKind,
+          sourceLabel: next.sourceLabel,
+          estimateInputs: next.estimateInputs,
+        });
         setState(next.unavailable ? 'unavailable' : 'ready');
         setLoadedKey(activeKey);
       } catch {
@@ -65,6 +77,6 @@ export function useMarketCandles(symbol: string, range: CandleInterval): {
   }, [range, symbol]);
 
   return loadedKey === requestKey
-    ? { candles, state, message }
-    : { candles: [], state: 'loading', message: null };
+    ? { candles, state, message, metadata }
+    : { candles: [], state: 'loading', message: null, metadata: null };
 }

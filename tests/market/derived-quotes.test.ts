@@ -26,6 +26,18 @@ const fx = (overrides: Partial<FxConversionInput> = {}): FxConversionInput => ({
 });
 
 describe('composeDerivedQuotes', () => {
+  it('한국 파생 추정가에 KST 시장 세션과 파생 거래대금 의미를 전달한다', () => {
+    const quote = composeDerivedQuotes([derivative()], fx(), {
+      now: () => new Date('2026-09-03T01:00:00.000Z'),
+    }).find((item) => item.symbol === '005930');
+
+    expect(quote).toMatchObject({
+      session: 'krx-nxt-overlap',
+      volumeKind: 'derivative-notional',
+      comparisonBasis: 'provider-24h',
+    });
+  });
+
   it('한국 파생 가격과 거래대금을 합성환율로 원화 환산한다', () => {
     const quotes = composeDerivedQuotes([derivative()], fx());
 

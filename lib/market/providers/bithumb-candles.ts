@@ -11,9 +11,9 @@ type BithumbCandle = {
 };
 
 function normalizeCandle(candle: BithumbCandle): CandlePoint | null {
-  const time = candle.timestamp === undefined
+  const time = candle.candle_date_time_utc
     ? Date.parse(`${candle.candle_date_time_utc}Z`) / 1_000
-    : candle.timestamp / 1_000;
+    : Number(candle.timestamp) / 1_000;
   const open = Number(candle.opening_price);
   const high = Number(candle.high_price);
   const low = Number(candle.low_price);

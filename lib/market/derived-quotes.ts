@@ -1,4 +1,5 @@
 import { INSTRUMENTS, KRW_USDT_SANITY_BOUNDS } from './catalog';
+import { resolveKrMarketSession } from './kr-market-session';
 import type {
   DerivativeTicker,
   FxConversionInput,
@@ -32,7 +33,10 @@ function oldestTimestamp(...values: string[]) {
   return new Date(Math.min(...timestamps)).toISOString();
 }
 
-export function createUnavailableQuote(instrument: Instrument): MarketQuote {
+export function createUnavailableQuote(
+  instrument: Instrument,
+  options: { now?: () => Date; holidays?: ReadonlySet<string> } = {},
+): MarketQuote {
   return {
     symbol: instrument.symbol,
     name: instrument.name,
@@ -46,8 +50,11 @@ export function createUnavailableQuote(instrument: Instrument): MarketQuote {
     changeRateSource: null,
     tradingAmount: null,
     tradingAmountCurrency: null,
+    volumeKind: null,
     asOf: null,
-    session: 'always-open',
+    session: instrument.assetClass === 'kr-stock'
+      ? resolveKrMarketSession(options.now?.() ?? new Date(), options.holidays)
+      : 'always-open',
     quality: 'unavailable',
     provider: instrument.provider,
     providerSymbol: instrument.providerSymbol,
@@ -86,6 +93,7 @@ function validTicker(
 export function composeDerivedQuotes(
   tickers: DerivativeTicker[],
   fx: FxConversionInput | null,
+  options: { now?: () => Date; holidays?: ReadonlySet<string> } = {},
 ): MarketQuote[] {
   return INSTRUMENTS
     .filter((instrument) =>
@@ -97,20 +105,20 @@ export function composeDerivedQuotes(
           item.providerSymbol === instrument.providerSymbol,
       );
       if (!validTicker(ticker, instrument))
-        return createUnavailableQuote(instrument);
+        return createUnavailableQuote(instrument, options);
 
       let rate = 1;
       let asOf: string | null = ticker.asOf;
       let fxStale = false;
       let estimateInputs = [ticker.providerSymbol];
       if (instrument.assetClass === 'kr-stock') {
-        if (!validFxInput(fx)) return createUnavailableQuote(instrument);
+        if (!validFxInput(fx)) return createUnavailableQuote(instrument, options);
         rate = fx.rate;
         asOf = oldestTimestamp(ticker.asOf, fx.asOf);
         fxStale = fx.freshness === 'stale';
         estimateInputs = [ticker.providerSymbol, fx.providerSymbol];
       }
-      if (asOf === null) return createUnavailableQuote(instrument);
+      if (asOf === null) return createUnavailableQuote(instrument, options);
 
       const changeRate =
         ticker.changeRate !== null && Number.isFinite(ticker.changeRate)
@@ -139,8 +147,11 @@ export function composeDerivedQuotes(
           instrument.assetClass === 'kr-stock'
             ? 'KRW'
             : ticker.tradingAmountCurrency,
+        volumeKind: 'derivative-notional',
         asOf,
-        session: 'always-open',
+        session: instrument.assetClass === 'kr-stock'
+          ? resolveKrMarketSession(options.now?.() ?? new Date(), options.holidays)
+          : 'always-open',
         quality: stale ? 'stale' : 'estimated',
         provider: ticker.provider,
         providerSymbol: ticker.providerSymbol,

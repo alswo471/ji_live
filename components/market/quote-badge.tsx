@@ -1,5 +1,23 @@
 import { Badge } from '@/components/ui/badge';
+import { KR_MARKET_SESSION_LABELS } from '@/lib/market/kr-market-session';
 import type { MarketQuote } from '@/lib/market/types';
+
+const KR_SESSION_KEYS = new Set(Object.keys(KR_MARKET_SESSION_LABELS));
+
+function KrSessionBadge({ quote }: { quote: MarketQuote }) {
+  if (
+    quote.assetClass !== 'kr-stock' ||
+    !KR_SESSION_KEYS.has(quote.session)
+  ) return null;
+  const label = KR_MARKET_SESSION_LABELS[
+    quote.session as keyof typeof KR_MARKET_SESSION_LABELS
+  ];
+  return (
+    <Badge variant="outline" className="border-primary/25 text-foreground">
+      {label}
+    </Badge>
+  );
+}
 
 const COMPARISON_LABEL = {
   'provider-24h': '해외 파생상품 기준 · 24시간 전 대비',
@@ -73,6 +91,7 @@ export function QuoteBadge({ quote }: { quote: MarketQuote }) {
         <Badge className="border-amber-500/40 bg-amber-500/12 text-amber-800 dark:text-amber-200">
           24시간 추정가
         </Badge>
+        <KrSessionBadge quote={quote} />
         {quote.comparisonBasis && (
           <span className="whitespace-nowrap text-[11px] text-muted-foreground">
             {COMPARISON_LABEL[quote.comparisonBasis]}

@@ -121,6 +121,7 @@ export async function fetchBithumbSnapshot(
         ? null
         : finitePositive(usdtTicker?.acc_trade_price_24h),
     tradingAmountCurrency: krwPerUsdt === null ? null : 'KRW',
+    volumeKind: null,
     asOf: krwPerUsdt === null ? null : fxFreshness.asOf,
     session: 'always-open',
     quality: krwPerUsdt === null
@@ -176,6 +177,7 @@ export async function fetchBithumbSnapshot(
         changeRateSource: changeRate === null ? null : 'previous-close',
         tradingAmount: finitePositive(ticker.acc_trade_price_24h),
         tradingAmountCurrency: 'KRW',
+        volumeKind: null,
         asOf: price === null ? null : freshness.asOf,
         session: 'always-open',
         quality: price === null

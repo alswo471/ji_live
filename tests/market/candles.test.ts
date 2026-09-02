@@ -8,6 +8,19 @@ const paxg = INSTRUMENTS.find((item) => item.symbol === 'PAXG')!;
 const bitcoin = INSTRUMENTS.find((item) => item.symbol === 'BTC')!;
 const tesla = INSTRUMENTS.find((item) => item.symbol === 'TSLA')!;
 
+function bithumbCandle(minute: number) {
+  const time = minute * 60_000;
+  return {
+    timestamp: time,
+    candle_date_time_utc: new Date(time).toISOString().slice(0, 19),
+    opening_price: 100,
+    high_price: 110,
+    low_price: 90,
+    trade_price: 105,
+    candle_acc_trade_volume: 10,
+  };
+}
+
 describe('candle provider adapters', () => {
   it.each([
     ['1m', '1m'],
@@ -116,21 +129,76 @@ describe('candle provider adapters', () => {
       expect(fetcher.mock.calls[0][0]).toContain(path);
     },
   );
+
+  it('Bithumb candle 시작 시각을 마지막 체결 timestamp보다 우선한다', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify([
+      {
+        timestamp: 1788313981000,
+        candle_date_time_utc: '2026-09-02T01:53:00',
+        opening_price: 1380,
+        high_price: 1381,
+        low_price: 1380,
+        trade_price: 1381,
+        candle_acc_trade_volume: 31.197,
+      },
+    ]), { status: 200 }));
+
+    const candles = await fetchBithumbCandles(bitcoin, '1m', fetcher);
+
+    expect(candles[0].time).toBe(1788313980);
+  });
+
+  it('보조지표가 없으면 1분봉 화면 수량만 한 번 요청한다', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify([
+      bithumbCandle(1),
+    ]), { status: 200 }));
+
+    await fetchBithumbCandles(bitcoin, '1m', fetcher);
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][0]).toEqual(expect.stringContaining('count=120'));
+  });
+
 });
 
 describe('createCandleService', () => {
-  it('한국 파생 추정가의 원화 환산 이력이 없으면 오해 없는 미지원 응답을 반환한다', async () => {
-    const loadHyperliquid = vi.fn(async () => []);
+  it('한국 파생 candle과 시점별 환율 candle을 원화 추정 이력으로 합성한다', async () => {
+    const loadHyperliquid = vi.fn(async () => [
+      { time: 100, open: 60, high: 61, low: 59, close: 60.5, volume: 1_000 },
+    ]);
+    const loadFx = vi.fn(async () => [
+      { time: 100, open: 1_380, high: 1_382, low: 1_368, close: 1_381, volume: 10 },
+    ]);
     const service = createCandleService({
       loaders: { hyperliquid: loadHyperliquid },
+      fxLoader: loadFx,
     });
 
-    await expect(service.getCandles('005930', '1m')).resolves.toEqual({
+    await expect(service.getCandles('005930', '1m')).resolves.toMatchObject({
+      candles: [{ time: 100, close: 83_551, volume: 1_000 }],
+      unavailable: false,
+      priceKind: 'derived-estimate',
+      volumeKind: 'derivative-contracts',
+      sourceLabel: 'Hyperliquid 파생상품 × Bithumb KRW-USDT',
+      estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
+    });
+    expect(loadHyperliquid).toHaveBeenCalledTimes(1);
+    expect(loadFx).toHaveBeenCalledTimes(1);
+  });
+
+  it('한국 파생 또는 환율 candle이 비면 숫자를 만들지 않는다', async () => {
+    const service = createCandleService({
+      loaders: { hyperliquid: vi.fn(async () => []) },
+      fxLoader: vi.fn(async () => [
+        { time: 100, open: 1_380, high: 1_382, low: 1_368, close: 1_381, volume: 10 },
+      ]),
+    });
+
+    await expect(service.getCandles('005930', '1m')).resolves.toMatchObject({
       candles: [],
       unavailable: true,
-      message: '원화 환산 추정 차트는 준비 중입니다.',
+      message: '원화 추정 차트 입력을 잠시 불러오지 못했습니다.',
     });
-    expect(loadHyperliquid).not.toHaveBeenCalled();
   });
 
   it('동일한 분봉 요청을 병합하고 60초 동안 재사용한다', async () => {
