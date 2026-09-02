@@ -14,6 +14,7 @@ const paxg: MarketQuote = {
   changeRateSource: 'provider',
   tradingAmount: 14_000_000,
   tradingAmountCurrency: 'USDT',
+  volumeKind: null,
   asOf: '2026-09-01T10:00:00+09:00',
   session: 'always-open',
   quality: 'realtime',

@@ -25,6 +25,7 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ s
     changeRateSource: null,
     tradingAmount: null,
     tradingAmountCurrency: null,
+    volumeKind: null,
     asOf: null,
     session: instrument.assetClass === 'crypto' || instrument.assetClass === 'metal' || instrument.assetClass === 'fx' ? 'always-open' : 'closed',
     quality: 'unavailable',

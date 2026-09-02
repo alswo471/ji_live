@@ -7,6 +7,7 @@ const quote: MarketQuote = {
   symbol: '005930', name: '삼성전자', assetClass: 'kr-stock', price: 84200, currency: 'KRW',
   changeRate: 0.01, previousClose: null, changeRateSource: null, tradingAmount: 1000, asOf: '2026-09-01T10:00:00+09:00', session: 'closed',
   tradingAmountCurrency: 'KRW', quality: 'estimated', provider: 'hyperliquid', providerSymbol: 'xyz:SMSN', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
+  volumeKind: 'derivative-notional',
   priceKind: 'derived-estimate', comparisonBasis: 'provider-24h', sourceLabel: 'Hyperliquid 파생상품',
 };
 
@@ -16,7 +17,17 @@ describe('QuoteBadge', () => {
   it('파생 추정가의 가격 성격과 비교 기준을 표시한다', () => {
     render(<QuoteBadge quote={quote} />);
     expect(screen.getByText('24시간 추정가')).toBeVisible();
+    expect(screen.getByText('휴장 중 추정')).toBeVisible();
     expect(screen.getByText('해외 파생상품 기준 · 24시간 전 대비')).toBeVisible();
+  });
+
+  it.each([
+    ['nxt-pre', '프리마켓 추정'],
+    ['krx-nxt-overlap', '정규장 추정'],
+    ['nxt-after', '애프터마켓 추정'],
+  ] as const)('%s 세션을 %s 문구로 구분한다', (session, label) => {
+    render(<QuoteBadge quote={{ ...quote, session }} />);
+    expect(screen.getByText(label)).toBeVisible();
   });
 
   it('Bithumb 합성환율을 해외 파생상품으로 오인하지 않게 표시한다', () => {

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QuoteDetail } from '@/components/market/quote-detail';
@@ -9,6 +9,8 @@ const chartMocks = vi.hoisted(() => ({
   setData: vi.fn(),
   applyOptions: vi.fn(),
   setVisibleRange: vi.fn(),
+  setMarkers: vi.fn(),
+  addSeries: vi.fn((..._args: unknown[]) => ({ setData: vi.fn(), applyOptions: vi.fn() })),
   createChart: vi.fn(),
 }));
 
@@ -16,13 +18,22 @@ vi.mock('lightweight-charts', () => ({
   CandlestickSeries: {},
   ColorType: { Solid: 'solid' },
   HistogramSeries: {},
+  LineSeries: {},
+  TickMarkType: { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 },
+  createSeriesMarkers: () => ({ setMarkers: chartMocks.setMarkers }),
   createChart: (...args: unknown[]) => {
     chartMocks.createChart(...args);
     return {
-    addSeries: () => ({ setData: chartMocks.setData }),
+    addSeries: (...seriesArgs: unknown[]) => {
+      const series = chartMocks.addSeries(...seriesArgs);
+      return { ...series, setData: chartMocks.setData };
+    },
     applyOptions: chartMocks.applyOptions,
     priceScale: () => ({ applyOptions: vi.fn() }),
     remove: vi.fn(),
+    removeSeries: vi.fn(),
+    subscribeCrosshairMove: vi.fn(),
+    unsubscribeCrosshairMove: vi.fn(),
     timeScale: () => ({ fitContent: vi.fn(), setVisibleRange: chartMocks.setVisibleRange }),
   };
   },
@@ -32,6 +43,7 @@ const quote: MarketQuote = {
   symbol: '005930', name: '삼성전자', nameKo: '삼성전자', nameEn: 'Samsung Electronics', assetClass: 'kr-stock', price: 84000,
   currency: 'KRW', changeRate: 0.0124, previousClose: null, changeRateSource: 'provider', tradingAmount: 184_200_000_000,
   tradingAmountCurrency: 'KRW',
+  volumeKind: 'derivative-notional',
   asOf: '2026-09-01T10:00:00+09:00', session: 'always-open', quality: 'estimated',
   provider: 'hyperliquid', providerSymbol: 'xyz:SMSN', confidence: null, estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
   priceKind: 'derived-estimate', comparisonBasis: 'provider-24h', sourceLabel: 'Hyperliquid 파생상품',
@@ -51,6 +63,10 @@ describe('QuoteDetail', () => {
       return new Response(JSON.stringify({
         candles: [{ time: 1788226800, open: 83000, high: 84500, low: 82800, close: 84000, volume: 1000 }],
         unavailable: false,
+        priceKind: 'derived-estimate',
+        volumeKind: 'derivative-contracts',
+        sourceLabel: 'Hyperliquid 파생상품 × Bithumb KRW-USDT',
+        estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
       }), { status: 200 });
     });
 
@@ -61,6 +77,8 @@ describe('QuoteDetail', () => {
     expect(screen.getByText('24시간 전')).toBeVisible();
     expect(screen.getByText('Hyperliquid 파생상품')).toBeVisible();
     expect(screen.getByText('USDT/KRW 환산')).toBeVisible();
+    expect(screen.getByText('추종상품 거래량')).toBeVisible();
+    expect(screen.getByText(/실제 KRX·NXT 거래량이 아닙니다/)).toBeVisible();
     expect(screen.getByText(/실제 주식 가격이 아닌 해외 파생상품 기반 참고 추정가/)).toBeVisible();
     expect(screen.getByText('기준 시각')).toBeVisible();
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['1분', '15분', '1시간', '4시간', '일봉', '주봉', '월봉']);
@@ -68,7 +86,21 @@ describe('QuoteDetail', () => {
     expect(screen.getByRole('tab', { name: '1분' })).toHaveAttribute('tabindex', '0');
     expect(screen.getByRole('tab', { name: '15분' })).toHaveAttribute('tabindex', '-1');
     expect(screen.getByLabelText('삼성전자 가격 차트')).toBeVisible();
+    expect(screen.queryByRole('toolbar', { name: '차트 선 그리기 도구' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '추세선 그리기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '보조지표 설정' })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('고가')).toBeVisible());
+
+    const summary = screen.getByRole('group', { name: '종목 시세 요약' });
+    expect(within(summary).getByRole('heading', { name: '삼성전자' })).toBeVisible();
+    expect(within(summary).getByText('84,000원')).toBeVisible();
+    expect(within(summary).getByText('+1.24%')).toBeVisible();
+
+    const chartOhlc = screen.getByRole('group', { name: '차트 OHLC' });
+    expect(within(chartOhlc).getByText('시 83,000원')).toBeVisible();
+    expect(within(chartOhlc).getByText('고 84,500원')).toBeVisible();
+    expect(within(chartOhlc).getByText('저 82,800원')).toBeVisible();
+    expect(within(chartOhlc).getByText('종 84,000원')).toBeVisible();
 
     screen.getByRole('tab', { name: '1분' }).focus();
     await userEvent.keyboard('{ArrowRight}');
@@ -217,5 +249,14 @@ describe('MarketChart', () => {
     };
     expect(options.localization.priceFormatter(366.48)).toBe('366.48 USDT');
     expect(options.localization.priceFormatter(366.48)).not.toContain('$');
+  });
+
+  it('거래량 마지막 값을 가격 통화로 오인하는 축 라벨을 표시하지 않는다', () => {
+    render(<MarketChart candles={[]} interval="1m" label="가격 차트" currency="KRW" theme="light" state="ready" message={null} />);
+
+    expect(chartMocks.addSeries.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+      lastValueVisible: false,
+      priceLineVisible: false,
+    }));
   });
 });

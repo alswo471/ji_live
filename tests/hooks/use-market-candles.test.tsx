@@ -10,12 +10,22 @@ describe('useMarketCandles', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       candles: [{ time: 1788226800, open: 100, high: 110, low: 90, close: 105, volume: 10 }],
       unavailable: false,
+      priceKind: 'derived-estimate',
+      volumeKind: 'derivative-contracts',
+      sourceLabel: 'Hyperliquid 파생상품 × Bithumb KRW-USDT',
+      estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
     }), { status: 200 }));
 
     const { result, unmount } = renderHook(() => useMarketCandles('005930', '1d'));
 
     await waitFor(() => expect(result.current.state).toBe('ready'));
     expect(result.current.candles[0].close).toBe(105);
+    expect(result.current.metadata).toEqual({
+      priceKind: 'derived-estimate',
+      volumeKind: 'derivative-contracts',
+      sourceLabel: 'Hyperliquid 파생상품 × Bithumb KRW-USDT',
+      estimateInputs: ['xyz:SMSN', 'KRW-USDT'],
+    });
     expect(fetch).toHaveBeenCalledWith('/api/market/005930/candles?interval=1d', expect.objectContaining({ cache: 'default' }));
     unmount();
   });

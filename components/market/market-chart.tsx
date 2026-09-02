@@ -1,17 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   CandlestickSeries,
   ColorType,
   HistogramSeries,
+  TickMarkType,
   createChart,
+  createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { formatCandleTime, getCandleViewport } from '@/lib/market/candle-intervals';
+import { getCandleViewport } from '@/lib/market/candle-intervals';
+import {
+  findCandleExtrema,
+  formatChartAxisTick,
+  formatChartCrosshairTime,
+  type ChartTickKind,
+} from '@/lib/market/chart-indicators';
 import type { CandleInterval, CandlePoint, Currency } from '@/lib/market/types';
 import type { Theme } from '@/hooks/use-display-preferences';
 
@@ -36,7 +45,9 @@ export function MarketChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const markerRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const viewportIntervalRef = useRef<CandleInterval | null>(null);
+  const [activeCandle, setActiveCandle] = useState<CandlePoint | null>(null);
 
   const formatPrice = useCallback((price: number) => {
     const formatted = new Intl.NumberFormat(
@@ -75,11 +86,24 @@ export function MarketChart({
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: '',
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
     chart.priceScale('').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
+    markerRef.current = createSeriesMarkers(candleSeries);
+
+    const handleCrosshairMove = (param: Parameters<Parameters<IChartApi['subscribeCrosshairMove']>[0]>[0]) => {
+      const point = param.seriesData.get(candleSeries);
+      if (point && 'open' in point && 'high' in point && 'low' in point && 'close' in point && typeof param.time === 'number') {
+        setActiveCandle({ time: param.time, open: point.open, high: point.high, low: point.low, close: point.close, volume: 0 });
+      } else {
+        setActiveCandle(null);
+      }
+    };
+    chart.subscribeCrosshairMove(handleCrosshairMove);
 
     const resize = () => chart.applyOptions({ width: container.clientWidth || 800 });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
@@ -88,10 +112,12 @@ export function MarketChart({
     return () => {
       observer?.disconnect();
       window.removeEventListener('resize', resize);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      markerRef.current = null;
     };
   }, [formatPrice]);
 
@@ -113,23 +139,30 @@ export function MarketChart({
 
   useEffect(() => {
     const intraday = interval === '1m' || interval === '15m' || interval === '1h' || interval === '4h';
-    const format = (time: Time) => {
+    const timestampOf = (time: Time) => {
       const timestamp = typeof time === 'number'
         ? time
         : typeof time === 'string'
           ? Date.parse(time) / 1_000
           : Date.UTC(time.year, time.month - 1, time.day) / 1_000;
-      return formatCandleTime(timestamp, interval);
+      return timestamp;
     };
+    const tickKind = (value: TickMarkType): ChartTickKind => value === TickMarkType.Year
+      ? 'year'
+      : value === TickMarkType.Month
+        ? 'month'
+        : value === TickMarkType.DayOfMonth
+          ? 'day'
+          : 'time';
     chartRef.current?.applyOptions({
       localization: {
         priceFormatter: formatPrice,
-        timeFormatter: (time: Time) => format(time),
+        timeFormatter: (time: Time) => formatChartCrosshairTime(timestampOf(time), interval),
       },
       timeScale: {
         timeVisible: intraday,
         secondsVisible: false,
-        tickMarkFormatter: (time: Time) => format(time),
+        tickMarkFormatter: (time: Time, type: TickMarkType) => formatChartAxisTick(timestampOf(time), interval, tickKind(type)),
       },
     });
     viewportIntervalRef.current = null;
@@ -148,6 +181,11 @@ export function MarketChart({
       value: candle.volume,
       color: candle.close >= candle.open ? '#ef444466' : '#3b82f666',
     })));
+    const extrema = findCandleExtrema(candles);
+    markerRef.current?.setMarkers(extrema ? [
+      { id: 'loaded-high', time: extrema.high.time as UTCTimestamp, position: 'atPriceTop', price: extrema.high.price, shape: 'circle', color: '#ef4444', text: `고가 ${formatPrice(extrema.high.price)}`, size: 0.7 },
+      { id: 'loaded-low', time: extrema.low.time as UTCTimestamp, position: 'atPriceBottom', price: extrema.low.price, shape: 'circle', color: '#3b82f6', text: `저가 ${formatPrice(extrema.low.price)}`, size: 0.7 },
+    ] : []);
     if (candles.length && viewportIntervalRef.current !== interval) {
       const lastTime = candles.at(-1)!.time;
       chartRef.current?.timeScale().setVisibleRange({
@@ -156,12 +194,27 @@ export function MarketChart({
       });
       viewportIntervalRef.current = interval;
     }
-  }, [candles, interval]);
+  }, [candles, formatPrice, interval]);
 
-  return <div className="relative overflow-hidden rounded-2xl border bg-card/70">
-    <figure ref={containerRef} aria-label={label} className="h-[340px] w-full sm:h-[420px]" />
-    {state !== 'ready' && <div className="pointer-events-none absolute inset-0 grid place-items-center bg-card/75 px-6 text-center text-sm text-muted-foreground backdrop-blur-sm" aria-live="polite">
-      {state === 'loading' ? '차트 데이터를 불러오는 중입니다…' : message ?? '표시할 차트 데이터가 없습니다.'}
-    </div>}
+  const displayedCandle = activeCandle ?? candles.at(-1) ?? null;
+  const oldestCandle = candles.at(0) ?? null;
+
+  return <div className="overflow-hidden rounded-2xl border bg-card/70">
+    <div className="relative">
+      {displayedCandle && <fieldset aria-label="차트 OHLC" className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-x-3 gap-y-1 rounded-lg bg-card/85 px-2.5 py-1.5 font-mono text-[11px] font-bold tabular-nums shadow-sm backdrop-blur-sm sm:text-xs">
+        <span>시 {formatPrice(displayedCandle.open)}</span>
+        <span className="text-rise">고 {formatPrice(displayedCandle.high)}</span>
+        <span className="text-fall">저 {formatPrice(displayedCandle.low)}</span>
+        <span>종 {formatPrice(displayedCandle.close)}</span>
+      </fieldset>}
+      <figure ref={containerRef} aria-label={label} className="h-[340px] w-full sm:h-[420px]" />
+      {state !== 'ready' && <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-card/75 px-6 text-center text-sm text-muted-foreground backdrop-blur-sm" aria-live="polite">
+        {state === 'loading' ? '차트 데이터를 불러오는 중입니다…' : message ?? '표시할 차트 데이터가 없습니다.'}
+      </div>}
+    </div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[11px] text-muted-foreground">
+      <span>{oldestCandle ? `확보 데이터 시작 ${formatChartCrosshairTime(oldestCandle.time, interval)}` : '확보 데이터 확인 중'}</span>
+      <span>공급자 상장 이후 실제 데이터만 제공합니다.</span>
+    </div>
   </div>;
 }
