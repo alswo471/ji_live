@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-02
+
 ### 추가
 
 - Hyperliquid·Binance 파생상품 기반 한국·미국 주식 24시간 추정가 추가
@@ -145,6 +147,7 @@
 - GitHub Actions 기반 lint 및 production build 검사
 
 [Unreleased]: https://github.com/alswo471/ji_live/compare/main...develop
+[0.4.0]: https://github.com/alswo471/ji_live/compare/b10bcb8...v0.4.0
 [0.3.3]: https://github.com/alswo471/ji_live/compare/b10bcb8...main
 [0.3.2]: https://github.com/alswo471/ji_live/compare/113cc05...b10bcb8
 [0.3.1]: https://github.com/alswo471/ji_live/compare/a65203d...113cc05
