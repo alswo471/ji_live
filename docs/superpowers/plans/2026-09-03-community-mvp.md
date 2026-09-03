@@ -12,15 +12,16 @@
 
 ## Execution Status (2026-09-03)
 
-| Task                                         | Status    |
-| -------------------------------------------- | --------- |
-| 1. Worktree·Supabase configuration           | Completed |
-| 2. Schema·RLS·atomic abuse controls          | Completed |
-| 3. Auth·Turnstile·validation·HMAC            | Completed |
-| 4. Public read API                           | Completed |
-| 5. API-only write·delete·report              | Completed |
-| 6. Anonymous session·Community UI            | Completed |
-| 7–9. Moderation·legal/retention·release gate | Next      |
+| Task                                       | Status    |
+| ------------------------------------------ | --------- |
+| 1. Worktree·Supabase configuration         | Completed |
+| 2. Schema·RLS·atomic abuse controls        | Completed |
+| 3. Auth·Turnstile·validation·HMAC          | Completed |
+| 4. Public read API                         | Completed |
+| 5. API-only write·delete·report            | Completed |
+| 6. Anonymous session·Community UI          | Completed |
+| 7. Moderation console·admin authentication | Completed |
+| 8–9. Legal/retention·release gate          | Next      |
 
 ## Global Constraints
 
@@ -706,6 +707,13 @@ git commit -m "feat(community): 익명 게시글과 댓글 UI 추가"
 - Create: `tests/community/admin-auth.test.ts`
 - Create: `tests/community/moderation-service.test.ts`
 - Create: `tests/api/community-admin-routes.test.ts`
+- Create: `tests/community/moderation-migration-contract.test.ts`
+- Create: `tests/components/admin-login.test.tsx`
+- Create: `tests/components/moderation-queue.test.tsx`
+- Create: `supabase/migrations/202609030002_community_moderation.sql`
+- Create: `supabase/tests/community_moderation.test.sql`
+- Modify: `lib/community/write-service.ts`
+- Modify: `tests/community/write-service.test.ts`
 
 **Interfaces:**
 
@@ -715,21 +723,21 @@ git commit -m "feat(community): 익명 게시글과 댓글 UI 추가"
 - API: `GET /api/admin/community/reports`
 - API: `POST /api/admin/community/actions`
 
-- [ ] **Step 1: Write failing admin authorization tests**
+- [x] **Step 1: Write failing admin authorization tests**
 
 Cover anonymous JWT rejection, authenticated permanent user without `community_admins` row rejection, configured admin success, expired sanction handling, and response/log omission of admin email and access token.
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run: `pnpm test -- tests/community/admin-auth.test.ts tests/community/moderation-service.test.ts tests/api/community-admin-routes.test.ts`
 
 Expected: FAIL because admin modules are missing.
 
-- [ ] **Step 3: Implement admin-only authentication**
+- [x] **Step 3: Implement admin-only authentication**
 
 The admin page supports Supabase email OTP for the site owner only. `requireCommunityAdmin` verifies the JWT and then an active `community_admins.user_id` row. Public users never see email login and cannot self-enroll as admins. Initial admin UUID is inserted manually in Supabase Dashboard after the owner's email account is created; no bootstrap endpoint is exposed.
 
-- [ ] **Step 4: Implement moderation actions**
+- [x] **Step 4: Implement moderation actions**
 
 Allowed action input is a closed union:
 
@@ -758,11 +766,11 @@ export type ModerationAction =
 
 Validate reason length `5–500`, record every action in `community_moderation_actions`, and update report status in the same operation. UI requires confirmation for delete/restrict and shows no public reporter identity.
 
-- [ ] **Step 5: Verify authorization and audit behavior**
+- [x] **Step 5: Verify authorization and audit behavior**
 
 Run the focused tests, then locally attempt each admin endpoint with no JWT, anonymous JWT, non-admin permanent JWT and admin JWT. Expected statuses: 401, 403, 403 and 200. Confirm each successful mutation creates one audit row.
 
-- [ ] **Step 6: Commit moderation**
+- [x] **Step 6: Commit moderation**
 
 ```bash
 git add lib/community app/admin app/api/admin components/community tests/community tests/api/community-admin-routes.test.ts

@@ -20,12 +20,22 @@
 - idempotency key로 재시도 중복 작성을 방지하고 첫 write에서 안정적인 익명 nickname 프로필 생성
 - 기존 테마를 유지한 마켓·커뮤니티 공통 header와 반응형 익명 feed·글·댓글·신고 UI 추가
 - 기존 anonymous session 재사용과 CAPTCHA 기반 익명 계정 최초 생성 흐름 추가
+- 등록된 운영자만 사용하는 email OTP 기반 Community moderation console 추가
+- 신고 queue에서 콘텐츠 숨김·복원·삭제와 작성자 기간 제한을 수행하는 관리 API 추가
+- 콘텐츠 조치·신고 해결·감사 로그를 하나의 database transaction으로 처리하는 moderation RPC 추가
 
 ### 문서
 
 - Mac에서 Windows로 작업 PC를 변경할 때 필요한 WSL2·GitHub SSH·Docker·Codex skill 복원 절차와 커뮤니티 구현 재개 지점 추가
 - Community MVP의 anonymous Auth, RLS, local migration, Seoul region과 Free plan backup 관련 공식 근거 추가
 - Cloudflare Turnstile token의 server-side 검증, 5분·1회 사용 제한과 fail-closed 처리 근거 추가
+- 관리자 OTP, 신고자 비공개, atomic moderation과 사용자 제한의 선택 이유·검증 이력 추가
+
+### 보안
+
+- 관리자 JWT를 server에서 다시 검증하고 `community_admins` 등록 여부를 확인한 뒤에만 관리 API 허용
+- 신고자 신원과 관리자 인증정보를 API 응답·운영 로그에서 제외하고 browser role의 moderation RPC 실행 차단
+- 활성 사용자 제한을 게시글·댓글 작성 전에 검사하고 만료된 제한은 자동으로 제외
 
 ## [0.4.0] - 2026-09-02
 

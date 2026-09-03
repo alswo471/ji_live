@@ -36,6 +36,7 @@ export interface CommunityOwnership {
 }
 
 export interface CommunityWriteRepository {
+  isRestricted(actorId: string): Promise<boolean>;
   findPostByIdempotency(
     actorId: string,
     key: string,
@@ -180,6 +181,19 @@ const COMMENT_COLUMNS =
   'id,post_id,author_id,author_name,body,status,created_at';
 
 export const communityWriteRepository: CommunityWriteRepository = {
+  async isRestricted(actorId) {
+    const { data, error } = await getServerSupabase()
+      .from('community_sanctions')
+      .select('id')
+      .eq('user_id', actorId)
+      .is('revoked_at', null)
+      .gt('ends_at', new Date().toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (error) providerError(error);
+    return Boolean(data);
+  },
+
   async findPostByIdempotency(actorId, key) {
     const { data, error } = await getServerSupabase()
       .from('community_posts')
@@ -408,6 +422,19 @@ async function consume(
   }
 }
 
+async function ensureCanWrite(
+  actor: CommunityActor,
+  repository: CommunityWriteRepository,
+) {
+  if (await repository.isRestricted(actor.id)) {
+    throw new CommunityWriteError(
+      403,
+      'community_write_restricted',
+      '운영정책 위반으로 작성이 일시 제한되었습니다.',
+    );
+  }
+}
+
 export async function createPost(
   actor: CommunityActor,
   input: PostInput,
@@ -421,6 +448,7 @@ export async function createPost(
   );
   if (existing) return toPost(existing);
 
+  await ensureCanWrite(actor, repository);
   await consume(actor, context, 'post', 3, 600, repository);
   const authorName = await repository.getOrCreateProfileName(
     actor.id,
@@ -445,6 +473,7 @@ export async function createComment(
   );
   if (existing) return toComment(existing);
 
+  await ensureCanWrite(actor, repository);
   await consume(actor, context, 'comment', 10, 600, repository);
   const authorName = await repository.getOrCreateProfileName(
     actor.id,

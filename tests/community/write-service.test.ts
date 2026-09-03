@@ -65,6 +65,7 @@ function repository(
   overrides: Partial<CommunityWriteRepository> = {},
 ): CommunityWriteRepository {
   return {
+    isRestricted: async () => false,
     findPostByIdempotency: async () => null,
     findCommentByIdempotency: async () => null,
     consumeRateLimit: async () => true,
@@ -138,6 +139,22 @@ describe('community write rate limits', () => {
 });
 
 describe('createPost', () => {
+  it('rejects an actively restricted author before consuming rate quota', async () => {
+    const repo = repository({
+      isRestricted: async () => true,
+      consumeRateLimit: async () => {
+        throw new Error('restricted actor must not consume rate quota');
+      },
+    });
+
+    await expect(
+      createPost(ACTOR, POST_INPUT, { abuseKey: ABUSE_KEY }, repo),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: 'community_write_restricted',
+    });
+  });
+
   it('returns the actor-owned existing row for an idempotent retry without another rate event', async () => {
     const existing = postRecord();
     const repo = repository({
