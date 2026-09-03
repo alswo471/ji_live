@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 문서
+
+- Mac에서 Windows로 작업 PC를 변경할 때 필요한 WSL2·GitHub SSH·Docker·Codex skill 복원 절차와 커뮤니티 구현 재개 지점 추가
+
 ## [0.4.0] - 2026-09-02
 
 ### 추가
