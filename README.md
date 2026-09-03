@@ -30,6 +30,7 @@
 | UI / Chart | shadcn/ui, Base UI, Lucide React, TradingView Lightweight Charts |
 | Data | Hyperliquid Public API, Binance Public API, Bithumb Public API |
 | Community backend | Supabase Postgres/Auth, Row Level Security |
+| Abuse protection | Cloudflare Turnstile, daily HMAC rate key |
 | Package manager | pnpm |
 | Code quality | Oxlint, Oxfmt |
 | CI/CD | GitHub Actions, Slack Incoming Webhook |
