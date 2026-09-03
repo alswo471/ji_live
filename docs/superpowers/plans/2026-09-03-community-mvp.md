@@ -19,8 +19,8 @@
 | 3. Auth·Turnstile·validation·HMAC            | Completed |
 | 4. Public read API                           | Completed |
 | 5. API-only write·delete·report              | Completed |
-| 6. Anonymous session·Community UI            | Next      |
-| 7–9. Moderation·legal/retention·release gate | Pending   |
+| 6. Anonymous session·Community UI            | Completed |
+| 7–9. Moderation·legal/retention·release gate | Next      |
 
 ## Global Constraints
 

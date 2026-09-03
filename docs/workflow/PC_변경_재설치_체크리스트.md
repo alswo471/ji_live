@@ -187,11 +187,11 @@ local database를 옮기기 위해 기존 Mac의 Docker volume을 복사하지 �
 이 섹션은 2026-09-03 기준 기록이며, 재설치 시 반드시 GitHub 최신 이력과 비교한다.
 
 - 작업 branch: `feature/community-mvp`
-- 완료: community environment 경계, local Supabase schema·RLS, anonymous Auth·Turnstile·validation·abuse key, public read API, API-only post·comment·delete·report write
+- 완료: community environment 경계, local Supabase schema·RLS, anonymous Auth·Turnstile·validation·abuse key, public read/write API, anonymous session·Community UI
 - 관련 commit: `3aad1d9`, `05f716e`, `5f556ce`, `8fbb68b`, `ce6ab41` 및 GitHub의 후속 Task 5 commit
-- 미완료: 구현 계획 Task 6 anonymous session과 Community UI
+- 미완료: 구현 계획 Task 7 moderation console과 admin authentication
 - 기존 Mac local runtime: Colima + Docker CLI
-- 재개 순서: Docker 확인 → `supabase db reset` → Task 6 session hook 테스트 우선 구현
+- 재개 순서: Docker 확인 → `supabase db reset` → Task 7 admin auth 테스트 우선 구현
 - 기준 문서: [익명 커뮤니티 설계](../superpowers/specs/2026-09-03-익명-커뮤니티-설계.md), [커뮤니티 구현 계획](../superpowers/plans/2026-09-03-community-mvp.md)
 
 별도의 `feature/market-dashboard-v1-design`은 과거 설계 기록 보존용 branch다. 커뮤니티 구현 branch에 필요한 최신 설계와 계획이 포함되어 있으므로 새 구현 기준으로 merge하지 않는다.

@@ -1,12 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Activity, RefreshCw, TrendingUp } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Activity } from 'lucide-react';
 import { IndicatorGrid } from '@/components/market/indicator-grid';
-import { DisplayControls } from '@/components/market/display-controls';
 import { MarketStatusBar } from '@/components/market/market-status-bar';
 import { QuoteTable } from '@/components/market/quote-table';
+import { SiteHeader } from '@/components/site/site-header';
 import { useMarketDashboard } from '@/hooks/use-market-dashboard';
 import { useDisplayPreferences } from '@/hooks/use-display-preferences';
 import type { AssetClass } from '@/lib/market/types';
@@ -28,7 +27,7 @@ export default function Home() {
     <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_0%,var(--brand-soft),transparent_32%)] opacity-60" />
     <div className="relative mx-auto min-h-screen w-full max-w-[1440px] border-x border-border bg-background/80">
       <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-xl">
-        <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20"><TrendingUp className="size-5" /></span><div className="min-w-0"><p className="truncate text-[10px] font-bold tracking-[.2em] text-primary">MARKET COCKPIT</p><h1 className="truncate text-lg font-black tracking-[-.04em]">지투라이브</h1></div></div><div className="flex items-center gap-2"><DisplayControls {...preferences} /><Button variant="outline" size="icon" className="hidden size-11 rounded-xl bg-card/60 sm:inline-flex" onClick={() => void refresh()} aria-label="시장 데이터 새로고침"><RefreshCw className={state === 'loading' ? 'animate-spin' : ''} /></Button></div></div>
+        <SiteHeader current="market" refreshing={state === 'loading'} onRefresh={() => void refresh()} />
         <MarketStatusBar state={state} fetchedAt={data?.fetchedAt} />
       </header>
       <div className="px-4 pb-12 pt-8 sm:px-6 lg:px-8">

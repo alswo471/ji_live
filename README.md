@@ -21,6 +21,7 @@
 - GitHub Actions 품질 검사 결과 Slack 알림
 - 데스크톱과 모바일을 고려한 반응형 화면
 - 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
+- 마켓·커뮤니티 공통 navigation과 반응형 익명 feed·작성·댓글·신고 UI
 
 ## 기술 스택
 
@@ -89,7 +90,7 @@ pnpm install
 
 Community 기능은 기본적으로 비활성화되어 있으며 실제 secret은 `.env.local`에만 저장합니다. Local database를 개발할 때는 Docker 호환 runtime을 실행한 후 아래 command를 사용합니다.
 
-Community 공개 API는 feature flag가 켜지기 전에는 404를 반환합니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 현재는 UI와 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
+Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활성화됩니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 현재는 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
 
 ```bash
 pnpm dlx supabase start

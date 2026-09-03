@@ -18,6 +18,8 @@
 - anonymous JWT·Turnstile·daily HMAC을 검증한 게시글·댓글·소유자 삭제·신고 API 추가
 - 게시글 3회/10분, 댓글 10회/10분, 신고 10회/1시간을 actor와 abuse key로 동시 집계하는 제한 추가
 - idempotency key로 재시도 중복 작성을 방지하고 첫 write에서 안정적인 익명 nickname 프로필 생성
+- 기존 테마를 유지한 마켓·커뮤니티 공통 header와 반응형 익명 feed·글·댓글·신고 UI 추가
+- 기존 anonymous session 재사용과 CAPTCHA 기반 익명 계정 최초 생성 흐름 추가
 
 ### 문서
 
