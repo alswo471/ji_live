@@ -9,6 +9,7 @@ import {
   type TurnstileChallengeHandle,
 } from '@/components/community/turnstile-challenge';
 import { SiteHeader } from '@/components/site/site-header';
+import { SiteFooter } from '@/components/site/site-footer';
 import { useCommunityPosts } from '@/hooks/use-community-posts';
 import { useCommunitySession } from '@/hooks/use-community-session';
 import { communityWrite } from '@/lib/community/browser-api';
@@ -85,6 +86,7 @@ export default function CommunityPage() {
             </div>
           )}
         </div>
+        <SiteFooter />
       </div>
     </main>
   );

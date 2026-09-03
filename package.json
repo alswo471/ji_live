@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "check:community-release": "node scripts/check-community-release.mjs",
+    "backup:community": "bash scripts/backup-community-db.sh"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

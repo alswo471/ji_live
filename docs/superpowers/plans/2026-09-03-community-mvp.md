@@ -21,7 +21,8 @@
 | 5. API-only write·delete·report            | Completed |
 | 6. Anonymous session·Community UI          | Completed |
 | 7. Moderation console·admin authentication | Completed |
-| 8–9. Legal/retention·release gate          | Next      |
+| 8. Legal/retention·release gate            | Completed |
+| 9. End-to-end security·staging gate        | Next      |
 
 ## Global Constraints
 
@@ -798,6 +799,11 @@ git commit -m "feat(community): 신고 검토와 moderation console 추가"
 - Create: `tests/legal/community-policy.test.ts`
 - Create: `tests/api/community-retention-route.test.ts`
 - Create: `tests/scripts/community-release-gate.test.ts`
+- Create: `supabase/migrations/202609030003_community_retention.sql`
+- Create: `supabase/tests/community_retention.test.sql`
+- Create: `app/about/page.tsx`
+- Create: `components/site/legal-document.tsx`
+- Create: `docs/operations/Community_백업과_복구.md`
 
 **Interfaces:**
 
@@ -805,7 +811,7 @@ git commit -m "feat(community): 신고 검토와 moderation console 추가"
 - Produces: `assertCommunityReleaseConfig(env): void`
 - API: `POST /api/internal/community-retention` protected by server-only scheduler secret
 
-- [ ] **Step 1: Write failing policy and release-gate tests**
+- [x] **Step 1: Write failing policy and release-gate tests**
 
 Tests must assert exact `24 hours`, `30 days`, `90 days` retention values; required privacy sections; links to terms/guidelines/rights pages; and release rejection when any of these are absent:
 
@@ -826,19 +832,19 @@ const REQUIRED_RELEASE_ENV = [
 
 The contact URL must be HTTPS. The release script must call Supabase Management API `GET /v1/projects/{SUPABASE_PROJECT_REF}` with the protected release-only access token and assert that the returned region equals `ap-northeast-2`; a generic APAC region is rejected. `SUPABASE_ACCESS_TOKEN` is used only by the release check and is not copied into the application runtime environment.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run: `pnpm test -- tests/legal/community-policy.test.ts tests/api/community-retention-route.test.ts tests/scripts/community-release-gate.test.ts`
 
 Expected: FAIL because policy, route and release script are missing.
 
-- [ ] **Step 3: Implement legal pages from one typed policy source**
+- [x] **Step 3: Implement legal pages from one typed policy source**
 
 Create clear Korean pages covering processing purpose/items/legal basis/retention/destruction, data-subject requests, security measures, processor/overseas-processing facts, operator contact, content rules, copyright/rights requests and investment-information limitations. Do not claim that a disclaimer legalizes unlicensed market data, copied news or unlawful advice.
 
 Before enabling production, compare displayed processor and overseas-processing fields against the then-current Supabase DPA, subprocessor list and project settings. If the legal entity, country, processing purpose, transfer method or retention period is not verified, `check:community-release` must fail rather than publish guessed text.
 
-- [ ] **Step 4: Implement retention deletion with fail-closed authentication**
+- [x] **Step 4: Implement retention deletion with fail-closed authentication**
 
 The internal route uses a constant-time comparison against `COMMUNITY_RETENTION_SECRET`, then deletes:
 
@@ -849,11 +855,11 @@ The internal route uses a constant-time comparison against `COMMUNITY_RETENTION_
 
 Return counts only. Never return deleted content, user IDs or access credentials.
 
-- [ ] **Step 5: Add free-tier backup command**
+- [x] **Step 5: Add free-tier backup command**
 
 `scripts/backup-community-db.sh` must use `supabase db dump`, write to an operator-selected directory argument, create files with restrictive permissions, and refuse workspace/root/home-directory destinations. It must not commit dumps. Document a weekly encrypted off-site backup procedure because Supabase Free does not include automatic backups.
 
-- [ ] **Step 6: Add footer and release gate**
+- [x] **Step 6: Add footer and release gate**
 
 `SiteFooter` links privacy, terms, guidelines, rights/contact and project introduction pages. Keep `NEXT_PUBLIC_COMMUNITY_ENABLED=false` until the real rights-contact URL, Supabase project, Turnstile keys, admin account, retention scheduler and displayed processing facts pass:
 
@@ -861,7 +867,7 @@ Run: `pnpm check:community-release`
 
 Expected before real configuration: non-zero exit naming missing variable names only. Expected in configured staging: exit 0.
 
-- [ ] **Step 7: Verify and commit legal/operations support**
+- [x] **Step 7: Verify and commit legal/operations support**
 
 Run: `pnpm test && pnpm lint && pnpm build`
 

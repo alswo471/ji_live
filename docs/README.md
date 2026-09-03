@@ -50,6 +50,7 @@ GitHub에서 프로젝트를 처음 보거나 과거 의사결정을 다시 확�
 
 - [Git Worktree 작업 가이드](./workflow/Git_Worktree_작업_가이드.md)
 - [PC 변경 재설치 체크리스트](./workflow/PC_변경_재설치_체크리스트.md)
+- [Community 백업과 복구](./operations/Community_백업과_복구.md)
 - [버전별 변경 이력](../CHANGELOG.md)
 - [현재 실행 방법과 기술 스택](../README.md)
 

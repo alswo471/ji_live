@@ -99,6 +99,7 @@ Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활
 pnpm dlx supabase start
 pnpm dlx supabase db reset
 pnpm dlx supabase db lint --local
+pnpm dlx supabase test db
 ```
 
 Local Supabase는 개발 전용이며 외부 네트워크에 공개하지 않습니다.
@@ -126,6 +127,14 @@ pnpm test
 pnpm lint
 pnpm build
 ```
+
+Community 공개 전에는 실제 환경변수, 서울 region, 등록된 관리자, 자동 파기 scheduler와 처리위탁·국외 처리 사실을 확인합니다. 값이 없거나 확인되지 않으면 검사가 실패하는 것이 정상입니다.
+
+```bash
+pnpm check:community-release
+```
+
+Supabase Free plan에서는 주 1회 이상 암호화된 off-site logical backup을 생성하고 정기적으로 복구를 검증합니다. 상세 절차는 [Community 백업과 복구](./docs/operations/Community_백업과_복구.md)를 따릅니다.
 
 `main` 브랜치에 push하면 GitHub Actions가 의존성 설치, lint와 production build를 검사합니다. 검사 결과는 설정된 Slack 채널로 전송됩니다.
 
@@ -163,6 +172,7 @@ chore: 배포 설정 갱신
 - 기획 의도와 제품 원칙: `docs/product/프로젝트_소개.md`
 - 기획 변화와 기술 의사결정: `docs/product/프로젝트_개발_히스토리.md`
 - 공식 참고자료와 선정 이유: `docs/reference/참고자료와_선정이유.md`
+- Community 백업·복구 운영 절차: `docs/operations/Community_백업과_복구.md`
 - 승인된 기능·아키텍처 설계: `docs/superpowers/specs/`
 - GitHub Wiki: API 연동 가이드나 운영 매뉴얼처럼 길고 자주 참고하는 문서가 늘어날 때 사용
 

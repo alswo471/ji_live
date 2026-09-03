@@ -23,6 +23,10 @@
 - 등록된 운영자만 사용하는 email OTP 기반 Community moderation console 추가
 - 신고 queue에서 콘텐츠 숨김·복원·삭제와 작성자 기간 제한을 수행하는 관리 API 추가
 - 콘텐츠 조치·신고 해결·감사 로그를 하나의 database transaction으로 처리하는 moderation RPC 추가
+- 개인정보처리방침·이용약관·커뮤니티 운영정책·권리침해 문의·소개 페이지와 공통 footer 추가
+- 24시간·30일·90일 자동 파기, legal hold와 scheduler 전용 retention API 추가
+- 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·scheduler를 확인하는 release gate 추가
+- workspace 밖의 지정 경로에 권한을 제한한 Supabase logical dump를 만드는 backup command 추가
 
 ### 문서
 
@@ -30,6 +34,7 @@
 - Community MVP의 anonymous Auth, RLS, local migration, Seoul region과 Free plan backup 관련 공식 근거 추가
 - Cloudflare Turnstile token의 server-side 검증, 5분·1회 사용 제한과 fail-closed 처리 근거 추가
 - 관리자 OTP, 신고자 비공개, atomic moderation과 사용자 제한의 선택 이유·검증 이력 추가
+- 개인정보·약관 작성 근거와 Free plan 주간 암호화 backup·격리 복구 절차 추가
 
 ### 보안
 

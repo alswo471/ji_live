@@ -5,6 +5,7 @@ import { Activity } from 'lucide-react';
 import { IndicatorGrid } from '@/components/market/indicator-grid';
 import { MarketStatusBar } from '@/components/market/market-status-bar';
 import { QuoteTable } from '@/components/market/quote-table';
+import { SiteFooter } from '@/components/site/site-footer';
 import { SiteHeader } from '@/components/site/site-header';
 import { useMarketDashboard } from '@/hooks/use-market-dashboard';
 import { useDisplayPreferences } from '@/hooks/use-display-preferences';
@@ -34,8 +35,8 @@ export default function Home() {
         <section><div className="mb-5"><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-primary"><Activity className="size-4" />Live market pulse</p><h2 className="mt-2 text-3xl font-black tracking-[-.055em] sm:text-5xl">시장의 지금을 한 화면에.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">해외 파생상품으로 한국·미국 주식의 24시간 참고 추정가를 확인합니다. 암호화폐와 PAXG는 표시된 거래상품의 실제 가격입니다.</p></div><IndicatorGrid quotes={indicators} nameLocale={preferences.nameLocale} /></section>
         <section className="mt-10"><div className="mb-4 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold text-muted-foreground">PUBLIC MARKET BOARD</p><h2 className="mt-1 text-2xl font-black tracking-tight">주요 자산</h2></div><div className="flex min-h-11 rounded-xl border bg-card/60 p-1" role="tablist" aria-label="자산 시장 선택">{TABS.map((item) => <button key={item.value} type="button" role="tab" aria-selected={tab === item.value} onClick={() => setTab(item.value)} className={`min-h-11 rounded-lg px-4 text-sm font-bold transition-colors ${tab === item.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{item.label}</button>)}</div></div>{state === 'loading' && !data ? <div className="rounded-2xl border bg-card/50 px-6 py-16 text-center text-sm text-muted-foreground">시장 데이터를 연결하고 있습니다…</div> : <QuoteTable quotes={quotes} nameLocale={preferences.nameLocale} />}</section>
         {!!data?.notices.length && <aside className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-400/10 p-4 text-sm text-amber-950 dark:text-amber-100"><strong>데이터 안내</strong><ul className="mt-2 space-y-1 text-xs opacity-75">{data.notices.map((notice) => <li key={notice}>· {notice}</li>)}</ul></aside>}
-        <footer className="mt-10 border-t border-border py-6 text-xs leading-5 text-muted-foreground">주식 가격은 KRX·미국 거래소의 실제 체결가가 아닌 해외 파생상품 기반 참고 추정가입니다. 투자 판단 전 공식 거래소·증권사 가격을 확인하세요.</footer>
       </div>
+      <SiteFooter />
     </div>
   </main>;
 }
