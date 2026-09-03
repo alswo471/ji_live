@@ -40,3 +40,5 @@ next-env.d.ts
 /work/
 /.superpowers/
 /.worktrees/
+/supabase/.branches/
+/supabase/.temp/

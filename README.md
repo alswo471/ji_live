@@ -29,6 +29,7 @@
 | Framework / Build | Vinext, Vite 8 |
 | UI / Chart | shadcn/ui, Base UI, Lucide React, TradingView Lightweight Charts |
 | Data | Hyperliquid Public API, Binance Public API, Bithumb Public API |
+| Community backend | Supabase Postgres/Auth, Row Level Security |
 | Package manager | pnpm |
 | Code quality | Oxlint, Oxfmt |
 | CI/CD | GitHub Actions, Slack Incoming Webhook |
@@ -67,6 +68,7 @@
 
 - Node.js 22 이상
 - pnpm 11 이상
+- Community database 개발 시 Docker 호환 runtime
 
 pnpm이 없다면 Corepack으로 활성화할 수 있습니다.
 
@@ -82,6 +84,16 @@ pnpm install
 ```
 
 필수 환경변수는 없습니다. 모든 시장 데이터는 자격증명이 필요 없는 공개 API에서 조회합니다.
+
+Community 기능은 기본적으로 비활성화되어 있으며 실제 secret은 `.env.local`에만 저장합니다. Local database를 개발할 때는 Docker 호환 runtime을 실행한 후 아래 command를 사용합니다.
+
+```bash
+pnpm dlx supabase start
+pnpm dlx supabase db reset
+pnpm dlx supabase db lint --local
+```
+
+Local Supabase는 개발 전용이며 외부 네트워크에 공개하지 않습니다.
 
 ### 3. 개발 서버 실행
 

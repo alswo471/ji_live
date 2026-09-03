@@ -173,7 +173,7 @@ Docker가 정상 실행되는지 먼저 확인한다.
 docker version
 ```
 
-현재 작업 이력상 local Supabase migration 구현은 아직 시작 전이다. 따라서 새 PC에서는 먼저 [커뮤니티 구현 계획](../superpowers/plans/2026-09-03-community-mvp.md)을 읽고 Task 2부터 재개한다. migration이 commit된 이후에는 다음 방식으로 local database를 재생성한다.
+Local Supabase migration은 Git에 기록되므로 새 PC에서는 다음 방식으로 database를 재생성한다.
 
 ```bash
 pnpm dlx supabase start
@@ -187,11 +187,11 @@ local database를 옮기기 위해 기존 Mac의 Docker volume을 복사하지 �
 이 섹션은 2026-09-03 기준 기록이며, 재설치 시 반드시 GitHub 최신 이력과 비교한다.
 
 - 작업 branch: `feature/community-mvp`
-- 완료: community environment 경계와 `.env.example` 문서화
-- 관련 commit: `3aad1d9`, `05f716e`
-- 미완료: 구현 계획 Task 2 local Supabase schema·RLS·seed
-- 기존 차단 원인: Mac에 Docker·Podman·Colima·local PostgreSQL 실행 환경이 없음
-- 재개 순서: Docker 확인 → local Supabase 실행 → Task 2 테스트 우선 구현
+- 완료: community environment 경계, local Supabase schema·RLS와 atomic abuse control
+- 관련 commit: `3aad1d9`, `05f716e` 및 GitHub의 후속 Task 2 commit
+- 미완료: 구현 계획 Task 3 anonymous Auth·Turnstile·validation·abuse key
+- 기존 Mac local runtime: Colima + Docker CLI
+- 재개 순서: Docker 확인 → `supabase db reset` → Task 3 테스트 우선 구현
 - 기준 문서: [익명 커뮤니티 설계](../superpowers/specs/2026-09-03-익명-커뮤니티-설계.md), [커뮤니티 구현 계획](../superpowers/plans/2026-09-03-community-mvp.md)
 
 별도의 `feature/market-dashboard-v1-design`은 과거 설계 기록 보존용 branch다. 커뮤니티 구현 branch에 필요한 최신 설계와 계획이 포함되어 있으므로 새 구현 기준으로 merge하지 않는다.

@@ -6,9 +6,15 @@
 
 ## [Unreleased]
 
+### 추가
+
+- 익명 커뮤니티의 게시글·댓글·신고·관리 table과 API-only write를 위한 RLS 보안 정책 추가
+- 사용자와 daily abuse key를 함께 집계하는 atomic rate limit 및 10명 신고·긴급 신고 임시 숨김 RPC 추가
+
 ### 문서
 
 - Mac에서 Windows로 작업 PC를 변경할 때 필요한 WSL2·GitHub SSH·Docker·Codex skill 복원 절차와 커뮤니티 구현 재개 지점 추가
+- Community MVP의 anonymous Auth, RLS, local migration, Seoul region과 Free plan backup 관련 공식 근거 추가
 
 ## [0.4.0] - 2026-09-02
 
