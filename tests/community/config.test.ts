@@ -37,6 +37,14 @@ describe('community config', () => {
     expect(() => getCommunityPublicConfig()).toThrow('NEXT_PUBLIC_SUPABASE_URL');
   });
 
+  it('rejects a non-HTTP Supabase URL', () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'ftp://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test';
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = 'site-key';
+
+    expect(() => getCommunityPublicConfig()).toThrow('NEXT_PUBLIC_SUPABASE_URL');
+  });
+
   it('returns the required server-only configuration', () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_SECRET_KEY = 'sb_secret_test';

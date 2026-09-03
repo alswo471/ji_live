@@ -20,7 +20,10 @@ function getRequiredEnvironmentVariable(name: string) {
 function getSupabaseUrl() {
   const value = getRequiredEnvironmentVariable('NEXT_PUBLIC_SUPABASE_URL');
   try {
-    new URL(value);
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error();
+    }
   } catch {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL');
   }
