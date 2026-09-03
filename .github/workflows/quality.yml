@@ -2,9 +2,9 @@ name: Quality checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   push:
-    branches: [main]
+    branches: [main, develop]
 
 concurrency:
   group: quality-${{ github.ref }}
@@ -39,6 +39,17 @@ jobs:
       - name: Check code
         run: pnpm lint
 
+      - name: Run unit and migration contract tests
+        run: pnpm test
+
+      - name: Scan tracked files for secret-shaped values
+        shell: bash
+        run: |
+          if git grep -En '(sb_secret_[A-Za-z0-9_-]{24,}|sbp_[A-Za-z0-9]{24,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,})' -- .; then
+            echo 'Secret-shaped value found in tracked files.' >&2
+            exit 1
+          fi
+
       - name: Build production site
         run: pnpm build
 
@@ -67,7 +78,7 @@ jobs:
             --arg repository "$REPOSITORY" \
             --arg branch "$BRANCH" \
             --arg url "$COMMIT_URL" \
-            '{text: ("*OO라이브 GitHub 알림*\n" + $status + "\n• 저장소: " + $repository + "\n• 브랜치: " + $branch + "\n• 커밋: " + $url)}')
+            '{text: ("*지투라이브 GitHub 알림*\n" + $status + "\n• 저장소: " + $repository + "\n• 브랜치: " + $branch + "\n• 커밋: " + $url)}')
           curl --fail --silent --show-error \
             -H 'Content-Type: application/json' \
             --data "$PAYLOAD" \

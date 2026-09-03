@@ -128,6 +128,17 @@ pnpm lint
 pnpm build
 ```
 
+Local Supabase를 포함한 Community 보안 통합 검사는 database를 reset한 격리 개발 환경에서 실행합니다. 실제 local Auth·RLS·RPC와 Cloudflare 공식 test key를 사용하며 production 데이터에는 실행하지 않습니다.
+
+```bash
+pnpm dlx supabase start
+pnpm dlx supabase db reset
+RUN_LOCAL_SUPABASE_TESTS=true pnpm vitest run tests/integration/community-security.test.ts
+pnpm dlx supabase test db
+pnpm dlx supabase db lint --local
+pnpm dlx supabase stop
+```
+
 Community 공개 전에는 실제 환경변수, 서울 region, 등록된 관리자, 자동 파기 scheduler와 처리위탁·국외 처리 사실을 확인합니다. 값이 없거나 확인되지 않으면 검사가 실패하는 것이 정상입니다.
 
 ```bash
@@ -137,6 +148,8 @@ pnpm check:community-release
 Supabase Free plan에서는 주 1회 이상 암호화된 off-site logical backup을 생성하고 정기적으로 복구를 검증합니다. 상세 절차는 [Community 백업과 복구](./docs/operations/Community_백업과_복구.md)를 따릅니다.
 
 `main` 브랜치에 push하면 GitHub Actions가 의존성 설치, lint와 production build를 검사합니다. 검사 결과는 설정된 Slack 채널로 전송됩니다.
+
+`develop`·`main` push와 해당 branch 대상 pull request에서는 unit·migration contract test, lint, secret-shaped value scan과 production build를 실행합니다. 실제 Supabase·Turnstile secret이 필요한 release gate는 보호된 Oracle 배포 환경에서 Community 활성화 직전에만 실행합니다.
 
 ## 배포
 

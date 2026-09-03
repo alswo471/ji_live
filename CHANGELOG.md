@@ -27,6 +27,7 @@
 - 24시간·30일·90일 자동 파기, legal hold와 scheduler 전용 retention API 추가
 - 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·scheduler를 확인하는 release gate 추가
 - workspace 밖의 지정 경로에 권한을 제한한 Supabase logical dump를 만드는 backup command 추가
+- 실제 local Supabase Auth·RLS·RPC와 Cloudflare test key를 사용하는 Community 보안 통합 검사 추가
 
 ### 문서
 
@@ -41,6 +42,7 @@
 - 관리자 JWT를 server에서 다시 검증하고 `community_admins` 등록 여부를 확인한 뒤에만 관리 API 허용
 - 신고자 신원과 관리자 인증정보를 API 응답·운영 로그에서 제외하고 browser role의 moderation RPC 실행 차단
 - 활성 사용자 제한을 게시글·댓글 작성 전에 검사하고 만료된 제한은 자동으로 제외
+- `develop`·`main` CI에 전체 test와 secret-shaped value scan을 추가하고 production secret 없는 일반 CI와 release gate 분리
 
 ## [0.4.0] - 2026-09-02
 

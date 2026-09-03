@@ -12,17 +12,17 @@
 
 ## Execution Status (2026-09-03)
 
-| Task                                       | Status    |
-| ------------------------------------------ | --------- |
-| 1. Worktree·Supabase configuration         | Completed |
-| 2. Schema·RLS·atomic abuse controls        | Completed |
-| 3. Auth·Turnstile·validation·HMAC          | Completed |
-| 4. Public read API                         | Completed |
-| 5. API-only write·delete·report            | Completed |
-| 6. Anonymous session·Community UI          | Completed |
-| 7. Moderation console·admin authentication | Completed |
-| 8. Legal/retention·release gate            | Completed |
-| 9. End-to-end security·staging gate        | Next      |
+| Task                                       | Status                |
+| ------------------------------------------ | --------------------- |
+| 1. Worktree·Supabase configuration         | Completed             |
+| 2. Schema·RLS·atomic abuse controls        | Completed             |
+| 3. Auth·Turnstile·validation·HMAC          | Completed             |
+| 4. Public read API                         | Completed             |
+| 5. API-only write·delete·report            | Completed             |
+| 6. Anonymous session·Community UI          | Completed             |
+| 7. Moderation console·admin authentication | Completed             |
+| 8. Legal/retention·release gate            | Completed             |
+| 9. End-to-end security·staging gate        | Staging input pending |
 
 ## Global Constraints
 
@@ -896,7 +896,7 @@ git commit -m "feat(community): privacy 정책과 운영 release gate 추가"
 - Consumes all prior tasks
 - Produces a disabled-by-default, staging-verifiable community build and operational checklist
 
-- [ ] **Step 1: Write integration security tests against local Supabase**
+- [x] **Step 1: Write integration security tests against local Supabase**
 
 Create two anonymous users, one permanent non-admin and one seeded admin. Prove:
 
@@ -911,7 +911,7 @@ Create two anonymous users, one permanent non-admin and one seeded admin. Prove:
 9. retention removes only expired, non-held records;
 10. API responses never contain `author_id`, raw IP, abuse key, reporter ID or secrets.
 
-- [ ] **Step 2: Run the complete local security suite**
+- [x] **Step 2: Run the complete local security suite**
 
 Run:
 
@@ -927,11 +927,13 @@ pnpm dlx supabase stop
 
 Expected: every command exits 0. Record exact results; do not replace failed integration checks with mocks.
 
-- [ ] **Step 3: Extend CI without requiring production secrets**
+Recorded 2026-09-03: local database reset 후 Cloudflare 공식 dummy test key를 사용한 opt-in integration 포함 Vitest `52 files / 339 tests`, Oxlint, production build, schema lint와 pgTAP `3 files / 33 tests`가 통과했다.
+
+- [x] **Step 3: Extend CI without requiring production secrets**
 
 Keep community disabled in generic CI. Add unit tests, migration contract checks and secret-pattern scanning. Do not run production release gate in pull-request CI without protected environment values; run it in the Oracle deployment job immediately before enabling community.
 
-- [ ] **Step 4: Synchronize project documentation**
+- [x] **Step 4: Synchronize project documentation**
 
 Update current capability and setup in `README.md`, add this spec/plan to `docs/README.md`, add community scope and exclusions to `프로젝트_소개.md`, and record purpose, rejected direct-write design, 10-report decision, legal limitations, operational burden and future review conditions in `프로젝트_개발_히스토리.md`. Record only checks that actually ran.
 
@@ -946,14 +948,14 @@ pnpm dev -- --hostname 0.0.0.0
 
 Manually verify anonymous first visit, refresh persistence, post/comment/delete/report, admin moderation, light/dark mode, 375px mobile and keyboard-only navigation. Verify Supabase Dashboard shows no raw IP column and no public write policy.
 
-- [ ] **Step 6: Final atomic commit**
+- [x] **Step 6: Final atomic commit**
 
 ```bash
 git add .github tests/integration README.md CHANGELOG.md docs
 git commit -m "test(community): security 검증과 운영 문서 정리"
 ```
 
-- [ ] **Step 7: Prepare review without merging or releasing**
+- [x] **Step 7: Prepare review without merging or releasing**
 
 Run:
 
