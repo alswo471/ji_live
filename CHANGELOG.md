@@ -13,6 +13,8 @@
 - anonymous JWT 검증, Turnstile server 검증과 원본 IP를 저장하지 않는 daily HMAC abuse key 추가
 - HTML·위험 링크·단축 URL·중복 링크·길이·UUID를 제한하는 게시글·댓글·신고 validation 추가
 - 사용자 UUID를 노출하지 않는 안정적인 익명 닉네임 생성 규칙 추가
+- visible 게시글 목록·상세·댓글을 opaque cursor로 조회하는 Community API 추가
+- 공개 DTO에서 작성자 UUID·상태·신고·관리 필드를 제거하고 선택적 소유권 여부만 제공
 
 ### 문서
 

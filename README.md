@@ -88,6 +88,8 @@ pnpm install
 
 Community 기능은 기본적으로 비활성화되어 있으며 실제 secret은 `.env.local`에만 저장합니다. Local database를 개발할 때는 Docker 호환 runtime을 실행한 후 아래 command를 사용합니다.
 
+Community 공개 read API도 feature flag가 켜지기 전에는 404를 반환합니다. 활성화된 환경에서는 visible 게시글·댓글만 반환하고 사용자 UUID와 내부 관리 필드는 공개 DTO에서 제외합니다.
+
 ```bash
 pnpm dlx supabase start
 pnpm dlx supabase db reset
