@@ -1,10 +1,14 @@
-import { authenticateCommunityUser } from '@/lib/community/auth';
+import {
+  authenticateCommunityUser,
+  CommunityAuthError,
+} from '@/lib/community/auth';
 import { isCommunityEnabled } from '@/lib/community/config';
 import {
   getPost,
   CommunityReadInputError,
   isCommunityUuid,
 } from '@/lib/community/read-service';
+import { deletePost, CommunityWriteError } from '@/lib/community/write-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,4 +67,66 @@ export async function GET(
 ) {
   const { id } = await context.params;
   return handleGetPostRequest(request, id);
+}
+
+export interface CommunityDeletePostRouteDependencies {
+  enabled: typeof isCommunityEnabled;
+  authenticate: typeof authenticateCommunityUser;
+  deletePost: typeof deletePost;
+}
+
+const deleteDependencies: CommunityDeletePostRouteDependencies = {
+  enabled: isCommunityEnabled,
+  authenticate: authenticateCommunityUser,
+  deletePost,
+};
+
+export async function handleDeletePostRequest(
+  request: Request,
+  rawId: string,
+  dependencies: CommunityDeletePostRouteDependencies = deleteDependencies,
+) {
+  if (!dependencies.enabled()) {
+    return noStoreJson({ error: '페이지를 찾을 수 없습니다.' }, 404);
+  }
+  if (!isCommunityUuid(rawId)) {
+    return noStoreJson(
+      { code: 'invalid_post_id', error: '게시글 정보를 확인할 수 없습니다.' },
+      400,
+    );
+  }
+
+  try {
+    const actor = await dependencies.authenticate(request);
+    await dependencies.deletePost(actor, rawId.toLowerCase());
+    return new Response(null, {
+      status: 204,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch (error) {
+    if (
+      error instanceof CommunityAuthError ||
+      error instanceof CommunityWriteError
+    ) {
+      return noStoreJson(
+        { code: error.code, error: error.message },
+        error.status,
+      );
+    }
+    return noStoreJson(
+      {
+        code: 'community_write_unavailable',
+        error: '커뮤니티 요청을 처리하지 못했습니다.',
+      },
+      503,
+    );
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> | { id: string } },
+) {
+  const { id } = await context.params;
+  return handleDeletePostRequest(request, id);
 }

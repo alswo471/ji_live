@@ -10,6 +10,18 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-03-익명-커뮤니티-설계.md`
 
+## Execution Status (2026-09-03)
+
+| Task                                         | Status    |
+| -------------------------------------------- | --------- |
+| 1. Worktree·Supabase configuration           | Completed |
+| 2. Schema·RLS·atomic abuse controls          | Completed |
+| 3. Auth·Turnstile·validation·HMAC            | Completed |
+| 4. Public read API                           | Completed |
+| 5. API-only write·delete·report              | Completed |
+| 6. Anonymous session·Community UI            | Next      |
+| 7–9. Moderation·legal/retention·release gate | Pending   |
+
 ## Global Constraints
 
 - Implementation worktree는 `develop`의 v0.4.0에서 `feature/community-mvp`로 생성한다.
@@ -31,6 +43,7 @@
 ### Task 1: Isolated Worktree와 Supabase Configuration
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
 - Create: `.env.example`
@@ -41,6 +54,7 @@
 - Import: `docs/superpowers/plans/2026-09-03-community-mvp.md`
 
 **Interfaces:**
+
 - Produces: `getCommunityPublicConfig(): CommunityPublicConfig`
 - Produces: `getCommunityServerConfig(): CommunityServerConfig`
 - Produces: `isCommunityEnabled(): boolean`
@@ -68,7 +82,10 @@ Create `tests/community/config.test.ts`:
 
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
-import { getCommunityPublicConfig, getCommunityServerConfig } from '@/lib/community/config';
+import {
+  getCommunityPublicConfig,
+  getCommunityServerConfig,
+} from '@/lib/community/config';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -135,7 +152,10 @@ let browserClient: SupabaseClient | undefined;
 
 export function getBrowserSupabase() {
   const config = getCommunityPublicConfig();
-  browserClient ??= createClient(config.supabaseUrl, config.supabasePublishableKey);
+  browserClient ??= createClient(
+    config.supabaseUrl,
+    config.supabasePublishableKey,
+  );
   return browserClient;
 }
 
@@ -165,12 +185,14 @@ git commit -m "chore(community): Supabase 환경 경계와 작업 문서 추가"
 ### Task 2: Database Schema, RLS와 Atomic Abuse Controls
 
 **Files:**
+
 - Create: `supabase/config.toml`
 - Create: `supabase/migrations/202609030001_community_schema.sql`
 - Create: `tests/community/migration-contract.test.ts`
 - Modify: `docs/reference/참고자료와_선정이유.md`
 
 **Interfaces:**
+
 - Produces tables: `community_profiles`, `community_posts`, `community_comments`, `community_reports`, `community_sanctions`, `community_moderation_actions`, `community_rate_events`, `community_admins`
 - Produces RPC: `consume_community_rate_limit(uuid, text, text, integer, integer): boolean`
 - Produces RPC: `submit_community_report(uuid, text, text, uuid, text, text): jsonb`
@@ -183,12 +205,21 @@ Create `tests/community/migration-contract.test.ts`:
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const sql = readFileSync('supabase/migrations/202609030001_community_schema.sql', 'utf8');
+const sql = readFileSync(
+  'supabase/migrations/202609030001_community_schema.sql',
+  'utf8',
+);
 
 describe('community migration contract', () => {
-  it.each(['community_posts', 'community_comments', 'community_reports', 'community_admins'])(
-    'enables RLS on %s',
-    (table) => expect(sql).toContain(`alter table public.${table} enable row level security`),
+  it.each([
+    'community_posts',
+    'community_comments',
+    'community_reports',
+    'community_admins',
+  ])('enables RLS on %s', (table) =>
+    expect(sql).toContain(
+      `alter table public.${table} enable row level security`,
+    ),
   );
 
   it('revokes browser write access', () => {
@@ -292,6 +323,7 @@ git commit -m "feat(community): 게시판 schema와 RLS 보안 정책 추가"
 ### Task 3: Authentication, Turnstile, Validation과 Abuse Key
 
 **Files:**
+
 - Create: `lib/community/types.ts`
 - Create: `lib/community/auth.ts`
 - Create: `lib/community/turnstile.ts`
@@ -305,6 +337,7 @@ git commit -m "feat(community): 게시판 schema와 RLS 보안 정책 추가"
 - Create: `tests/community/validation.test.ts`
 
 **Interfaces:**
+
 - Produces: `authenticateCommunityUser(request: Request): Promise<CommunityActor>`
 - Produces: `verifyTurnstile(token: string, remoteIp?: string): Promise<boolean>`
 - Produces: `createDailyAbuseKey(ip: string, now?: Date): Promise<string>`
@@ -319,13 +352,21 @@ Define exact limits in `lib/community/types.ts`:
 
 ```ts
 export const COMMUNITY_LIMITS = {
-  titleMin: 2, titleMax: 80, bodyMax: 3000,
-  commentMax: 1000, reportDetailMax: 500,
+  titleMin: 2,
+  titleMax: 80,
+  bodyMax: 3000,
+  commentMax: 1000,
+  reportDetailMax: 500,
 } as const;
 
 export type ReportReason =
-  | 'privacy' | 'illegal' | 'copyright' | 'harassment'
-  | 'spam' | 'financial_solicitation' | 'other';
+  | 'privacy'
+  | 'illegal'
+  | 'copyright'
+  | 'harassment'
+  | 'spam'
+  | 'financial_solicitation'
+  | 'other';
 
 export interface PostInput {
   title: string;
@@ -349,7 +390,10 @@ Use a `CommunityInputError` carrying `code` and safe Korean `message`. Parse unk
 
 ```ts
 export class CommunityInputError extends Error {
-  constructor(public readonly code: string, message: string) {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -393,6 +437,7 @@ git commit -m "feat(community): anonymous auth와 write 검증 계층 추가"
 ### Task 4: Public Read API와 Repository
 
 **Files:**
+
 - Create: `lib/community/repository.ts`
 - Create: `lib/community/read-service.ts`
 - Create: `app/api/community/posts/route.ts`
@@ -402,6 +447,7 @@ git commit -m "feat(community): anonymous auth와 write 검증 계층 추가"
 - Create: `tests/api/community-read-routes.test.ts`
 
 **Interfaces:**
+
 - Produces: `listPosts(cursor: string | null, limit: number): Promise<PostPage>`
 - Produces: `getPost(id: string): Promise<CommunityPostDetail | null>`
 - Produces: `listComments(postId: string, cursor: string | null, limit: number): Promise<CommentPage>`
@@ -470,6 +516,7 @@ git commit -m "feat(community): 공개 게시글과 댓글 조회 API 추가"
 ### Task 5: API-only Post, Comment, Delete와 Report Writes
 
 **Files:**
+
 - Create: `lib/community/write-service.ts`
 - Modify: `app/api/community/posts/route.ts`
 - Modify: `app/api/community/posts/[id]/route.ts`
@@ -480,6 +527,7 @@ git commit -m "feat(community): 공개 게시글과 댓글 조회 API 추가"
 - Create: `tests/api/community-write-routes.test.ts`
 
 **Interfaces:**
+
 - Produces: `createPost(actor, input, context): Promise<CommunityPostDetail>`
 - Produces: `createComment(actor, postId, input, context): Promise<CommunityComment>`
 - Produces: `deletePost(actor, postId): Promise<void>`
@@ -496,9 +544,12 @@ it.each([
   ['post', 3, 600],
   ['comment', 10, 600],
   ['report', 10, 3600],
-])('%s consumes the configured atomic rate limit', async (action, limit, windowSeconds) => {
-  // assert repository.consumeRateLimit receives the exact tuple
-});
+])(
+  '%s consumes the configured atomic rate limit',
+  async (action, limit, windowSeconds) => {
+    // assert repository.consumeRateLimit receives the exact tuple
+  },
+);
 ```
 
 Also verify: JWT actor ID overrides any body author ID, non-owner delete is 403, idempotency returns the existing row, one user cannot report twice, general report 9 remains visible, general report 10 hides, and privacy/illegal report 1 hides.
@@ -516,7 +567,8 @@ Every modifying handler performs this order:
 ```ts
 const actor = await authenticateCommunityUser(request);
 const turnstileToken = request.headers.get('x-turnstile-token') ?? '';
-if (!(await verifyTurnstile(turnstileToken, clientIp))) throw new CommunityHttpError(403, '사람인지 확인하지 못했습니다.');
+if (!(await verifyTurnstile(turnstileToken, clientIp)))
+  throw new CommunityHttpError(403, '사람인지 확인하지 못했습니다.');
 const abuseKey = await createDailyAbuseKey(clientIp);
 const input = validatePostInput(await request.json());
 return createPost(actor, input, { abuseKey });
@@ -563,6 +615,7 @@ git commit -m "feat(community): 검증된 API-only 게시글 write 흐름 추가
 **Required implementation skill:** `ui-ux-pro-max`
 
 **Files:**
+
 - Create: `hooks/use-community-session.ts`
 - Create: `hooks/use-community-posts.ts`
 - Create: `components/community/turnstile-challenge.tsx`
@@ -581,6 +634,7 @@ git commit -m "feat(community): 검증된 API-only 게시글 write 흐름 추가
 - Create: `tests/components/report-dialog.test.tsx`
 
 **Interfaces:**
+
 - Produces: `useCommunitySession(): CommunitySessionState`
 - Produces: `useCommunityPosts(): CommunityPostsState`
 - Produces: `TurnstileChallenge.execute(): Promise<string>`
@@ -641,6 +695,7 @@ git commit -m "feat(community): 익명 게시글과 댓글 UI 추가"
 ### Task 7: Moderation Console과 Admin Authentication
 
 **Files:**
+
 - Create: `lib/community/admin-auth.ts`
 - Create: `lib/community/moderation-service.ts`
 - Create: `app/admin/community/page.tsx`
@@ -653,6 +708,7 @@ git commit -m "feat(community): 익명 게시글과 댓글 UI 추가"
 - Create: `tests/api/community-admin-routes.test.ts`
 
 **Interfaces:**
+
 - Produces: `requireCommunityAdmin(request: Request): Promise<CommunityAdmin>`
 - Produces: `listModerationQueue(cursor: string | null): Promise<ModerationPage>`
 - Produces: `moderateContent(admin, input): Promise<void>`
@@ -679,9 +735,24 @@ Allowed action input is a closed union:
 
 ```ts
 export type ModerationAction =
-  | { type: 'hide'; targetType: 'post' | 'comment'; targetId: string; reason: string }
-  | { type: 'restore'; targetType: 'post' | 'comment'; targetId: string; reason: string }
-  | { type: 'delete'; targetType: 'post' | 'comment'; targetId: string; reason: string }
+  | {
+      type: 'hide';
+      targetType: 'post' | 'comment';
+      targetId: string;
+      reason: string;
+    }
+  | {
+      type: 'restore';
+      targetType: 'post' | 'comment';
+      targetId: string;
+      reason: string;
+    }
+  | {
+      type: 'delete';
+      targetType: 'post' | 'comment';
+      targetId: string;
+      reason: string;
+    }
   | { type: 'restrict'; userId: string; until: string; reason: string };
 ```
 
@@ -703,6 +774,7 @@ git commit -m "feat(community): 신고 검토와 moderation console 추가"
 ### Task 8: Legal Pages, Retention Job와 Free-tier Backup
 
 **Files:**
+
 - Create: `lib/legal/community-policy.ts`
 - Create: `app/legal/privacy/page.tsx`
 - Create: `app/legal/terms/page.tsx`
@@ -720,6 +792,7 @@ git commit -m "feat(community): 신고 검토와 moderation console 추가"
 - Create: `tests/scripts/community-release-gate.test.ts`
 
 **Interfaces:**
+
 - Produces: `COMMUNITY_RETENTION_POLICY`
 - Produces: `assertCommunityReleaseConfig(env): void`
 - API: `POST /api/internal/community-retention` protected by server-only scheduler secret
@@ -794,6 +867,7 @@ git commit -m "feat(community): privacy 정책과 운영 release gate 추가"
 ### Task 9: End-to-end Security Verification, Documentation과 Staging Gate
 
 **Files:**
+
 - Create: `tests/integration/community-security.test.ts`
 - Modify: `.github/workflows/quality.yml`
 - Modify: `README.md`
@@ -804,6 +878,7 @@ git commit -m "feat(community): privacy 정책과 운영 release gate 추가"
 - Modify: `docs/reference/참고자료와_선정이유.md`
 
 **Interfaces:**
+
 - Consumes all prior tasks
 - Produces a disabled-by-default, staging-verifiable community build and operational checklist
 

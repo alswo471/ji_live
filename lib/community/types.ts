@@ -80,3 +80,8 @@ export interface CommentPage {
   items: CommunityComment[];
   nextCursor: string | null;
 }
+
+export interface ReportReceipt {
+  accepted: true;
+  temporarilyHidden: boolean;
+}

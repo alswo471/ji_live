@@ -20,32 +20,33 @@
 - API 실패 시 임시 숫자 대신 데이터 미제공 또는 갱신 지연 상태 표시
 - GitHub Actions 품질 검사 결과 Slack 알림
 - 데스크톱과 모바일을 고려한 반응형 화면
+- 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
 
 ## 기술 스택
 
-| 구분 | 기술 |
-| --- | --- |
-| Frontend | React 19, TypeScript, Tailwind CSS 4 |
-| Framework / Build | Vinext, Vite 8 |
-| UI / Chart | shadcn/ui, Base UI, Lucide React, TradingView Lightweight Charts |
-| Data | Hyperliquid Public API, Binance Public API, Bithumb Public API |
-| Community backend | Supabase Postgres/Auth, Row Level Security |
-| Abuse protection | Cloudflare Turnstile, daily HMAC rate key |
-| Package manager | pnpm |
-| Code quality | Oxlint, Oxfmt |
-| CI/CD | GitHub Actions, Slack Incoming Webhook |
-| Version control | Git, GitHub, GitFlow |
+| 구분              | 기술                                                             |
+| ----------------- | ---------------------------------------------------------------- |
+| Frontend          | React 19, TypeScript, Tailwind CSS 4                             |
+| Framework / Build | Vinext, Vite 8                                                   |
+| UI / Chart        | shadcn/ui, Base UI, Lucide React, TradingView Lightweight Charts |
+| Data              | Hyperliquid Public API, Binance Public API, Bithumb Public API   |
+| Community backend | Supabase Postgres/Auth, Row Level Security                       |
+| Abuse protection  | Cloudflare Turnstile, daily HMAC rate key                        |
+| Package manager   | pnpm                                                             |
+| Code quality      | Oxlint, Oxfmt                                                    |
+| CI/CD             | GitHub Actions, Slack Incoming Webhook                           |
+| Version control   | Git, GitHub, GitFlow                                             |
 
 ## 데이터 갱신 구조
 
 브라우저는 화면이 보이는 동안 5초마다 `/api/dashboard`를 조회합니다. 서버는 Hyperliquid·Binance·Bithumb 공급자를 각각 cache하고, 같은 시점의 중복 요청을 하나로 합칩니다. 숨겨진 브라우저 탭에서는 polling을 중단하며, 공급자 하나가 실패해도 다른 자산군은 계속 제공합니다.
 
-| 데이터 | 갱신/캐시 주기 |
-| --- | --- |
-| 현재 시세와 24시간 추정가 | 5초 |
-| 1분·15분·1시간 차트 | 60초 |
-| 4시간 차트 | 30분 |
-| 일봉·주봉·월봉 차트 | 6시간 |
+| 데이터                    | 갱신/캐시 주기 |
+| ------------------------- | -------------- |
+| 현재 시세와 24시간 추정가 | 5초            |
+| 1분·15분·1시간 차트       | 60초           |
+| 4시간 차트                | 30분           |
+| 일봉·주봉·월봉 차트       | 6시간          |
 
 ### 데이터 출처와 표시 기준
 
@@ -88,7 +89,7 @@ pnpm install
 
 Community 기능은 기본적으로 비활성화되어 있으며 실제 secret은 `.env.local`에만 저장합니다. Local database를 개발할 때는 Docker 호환 runtime을 실행한 후 아래 command를 사용합니다.
 
-Community 공개 read API도 feature flag가 켜지기 전에는 404를 반환합니다. 활성화된 환경에서는 visible 게시글·댓글만 반환하고 사용자 UUID와 내부 관리 필드는 공개 DTO에서 제외합니다.
+Community 공개 API는 feature flag가 켜지기 전에는 404를 반환합니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 현재는 UI와 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
 
 ```bash
 pnpm dlx supabase start

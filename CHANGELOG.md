@@ -15,6 +15,9 @@
 - 사용자 UUID를 노출하지 않는 안정적인 익명 닉네임 생성 규칙 추가
 - visible 게시글 목록·상세·댓글을 opaque cursor로 조회하는 Community API 추가
 - 공개 DTO에서 작성자 UUID·상태·신고·관리 필드를 제거하고 선택적 소유권 여부만 제공
+- anonymous JWT·Turnstile·daily HMAC을 검증한 게시글·댓글·소유자 삭제·신고 API 추가
+- 게시글 3회/10분, 댓글 10회/10분, 신고 10회/1시간을 actor와 abuse key로 동시 집계하는 제한 추가
+- idempotency key로 재시도 중복 작성을 방지하고 첫 write에서 안정적인 익명 nickname 프로필 생성
 
 ### 문서
 

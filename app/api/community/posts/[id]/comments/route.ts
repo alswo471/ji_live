@@ -1,4 +1,11 @@
-import { authenticateCommunityUser } from '@/lib/community/auth';
+import {
+  createDailyAbuseKey,
+  CommunitySecurityError,
+} from '@/lib/community/abuse-key';
+import {
+  authenticateCommunityUser,
+  CommunityAuthError,
+} from '@/lib/community/auth';
 import { isCommunityEnabled } from '@/lib/community/config';
 import {
   listComments,
@@ -6,6 +13,15 @@ import {
   isCommunityUuid,
   validateCommunityCursor,
 } from '@/lib/community/read-service';
+import { verifyTurnstile } from '@/lib/community/turnstile';
+import {
+  CommunityInputError,
+  validateCommentInput,
+} from '@/lib/community/validation';
+import {
+  createComment,
+  CommunityWriteError,
+} from '@/lib/community/write-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,4 +97,94 @@ export async function GET(
 ) {
   const { id } = await context.params;
   return handleListCommentsRequest(request, id);
+}
+
+export interface CommunityCommentWriteRouteDependencies {
+  enabled: typeof isCommunityEnabled;
+  authenticate: typeof authenticateCommunityUser;
+  verifyHuman: typeof verifyTurnstile;
+  createAbuseKey: typeof createDailyAbuseKey;
+  createComment: typeof createComment;
+}
+
+const writeDependencies: CommunityCommentWriteRouteDependencies = {
+  enabled: isCommunityEnabled,
+  authenticate: authenticateCommunityUser,
+  verifyHuman: verifyTurnstile,
+  createAbuseKey: createDailyAbuseKey,
+  createComment,
+};
+
+export async function handleCreateCommentRequest(
+  request: Request,
+  rawPostId: string,
+  dependencies: CommunityCommentWriteRouteDependencies = writeDependencies,
+) {
+  if (!dependencies.enabled()) {
+    return noStoreJson({ error: '페이지를 찾을 수 없습니다.' }, 404);
+  }
+  if (!isCommunityUuid(rawPostId)) {
+    return noStoreJson(
+      { code: 'invalid_post_id', error: '게시글 정보를 확인할 수 없습니다.' },
+      400,
+    );
+  }
+
+  try {
+    const actor = await dependencies.authenticate(request);
+    const clientIp = request.headers.get('cf-connecting-ip') ?? '';
+    if (
+      !(await dependencies.verifyHuman(
+        request.headers.get('x-turnstile-token') ?? '',
+        clientIp,
+      ))
+    ) {
+      return noStoreJson(
+        {
+          code: 'human_verification_failed',
+          error: '사용자 확인에 실패했습니다.',
+        },
+        403,
+      );
+    }
+    const abuseKey = await dependencies.createAbuseKey(clientIp);
+    const input = validateCommentInput(await request.json());
+    return noStoreJson(
+      await dependencies.createComment(actor, rawPostId.toLowerCase(), input, {
+        abuseKey,
+      }),
+      201,
+    );
+  } catch (error) {
+    if (
+      error instanceof CommunityAuthError ||
+      error instanceof CommunityWriteError
+    ) {
+      return noStoreJson(
+        { code: error.code, error: error.message },
+        error.status,
+      );
+    }
+    if (error instanceof CommunityInputError) {
+      return noStoreJson({ code: error.code, error: error.message }, 400);
+    }
+    if (error instanceof CommunitySecurityError) {
+      return noStoreJson({ code: error.code, error: error.message }, 403);
+    }
+    return noStoreJson(
+      {
+        code: 'community_write_unavailable',
+        error: '커뮤니티 요청을 처리하지 못했습니다.',
+      },
+      503,
+    );
+  }
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> | { id: string } },
+) {
+  const { id } = await context.params;
+  return handleCreateCommentRequest(request, id);
 }

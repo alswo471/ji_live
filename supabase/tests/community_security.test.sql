@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(13);
+select plan(14);
 
 insert into auth.users (id, email, raw_user_meta_data)
 select
@@ -156,6 +156,22 @@ select is(
   ),
   'hidden',
   'the post is hidden at ten valid general reports'
+);
+
+select throws_ok(
+  $$
+    select public.submit_community_report(
+      md5('10')::uuid,
+      repeat('10', 32),
+      'post',
+      '10000000-0000-0000-0000-000000000001',
+      'spam',
+      ''
+    )
+  $$,
+  '23505',
+  'community report already submitted',
+  'the same actor cannot report the same target twice'
 );
 
 insert into public.community_posts (
