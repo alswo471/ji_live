@@ -8,8 +8,9 @@ import {
 describe('community legal policy', () => {
   it('uses the approved retention periods', () => {
     expect(COMMUNITY_RETENTION_POLICY.abuseKeyHours).toBe(24);
-    expect(COMMUNITY_RETENTION_POLICY.deletedContentDays).toBe(30);
-    expect(COMMUNITY_RETENTION_POLICY.closedModerationDays).toBe(90);
+    expect(COMMUNITY_RETENTION_POLICY.deletedContentDays).toBe(365);
+    expect(COMMUNITY_RETENTION_POLICY.closedModerationDays).toBe(365);
+    expect(COMMUNITY_RETENTION_POLICY.closedSanctionDays).toBe(365);
     expect(COMMUNITY_RETENTION_POLICY.inactiveAnonymousUserDays).toBe(90);
   });
 

@@ -16,6 +16,7 @@ function dependencies(
       comments: 3,
       reports: 4,
       moderationActions: 5,
+      sanctions: 2,
       anonymousUsers: 6,
     }),
     ...overrides,
@@ -73,7 +74,32 @@ describe('community retention route', () => {
       comments: 3,
       reports: 4,
       moderationActions: 5,
+      sanctions: 2,
       anonymousUsers: 6,
     });
+  });
+
+  it('rejects a retention result that omits sanction counts', async () => {
+    const response = await handleCommunityRetentionRequest(
+      new Request('http://localhost/api/internal/community-retention', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer retention-secret-at-least-32-characters',
+        },
+      }),
+      dependencies({
+        runRetention: async () =>
+          ({
+            rateEvents: 2,
+            posts: 1,
+            comments: 3,
+            reports: 4,
+            moderationActions: 5,
+            anonymousUsers: 6,
+          }) as never,
+      }),
+    );
+
+    expect(response.status).toBe(503);
   });
 });

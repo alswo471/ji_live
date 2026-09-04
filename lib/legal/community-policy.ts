@@ -1,7 +1,8 @@
 export const COMMUNITY_RETENTION_POLICY = {
   abuseKeyHours: 24,
-  deletedContentDays: 30,
-  closedModerationDays: 90,
+  deletedContentDays: 365,
+  closedModerationDays: 365,
+  closedSanctionDays: 365,
   inactiveAnonymousUserDays: 90,
 } as const;
 
@@ -46,7 +47,7 @@ export const COMMUNITY_PRIVACY_SECTIONS: readonly CommunityPolicySection[] = [
     id: 'retention',
     title: '4. 보유기간',
     paragraphs: [
-      'daily HMAC 식별값과 rate event는 최대 24시간, 삭제된 게시글·댓글은 접근을 차단한 뒤 최대 30일, 종료된 신고·관리 기록은 최대 90일 보관합니다. 공개 작성물과 진행 중 신고가 없는 비활성 익명 계정은 마지막 활동 후 90일이 지나면 파기 대상이 됩니다.',
+      'daily HMAC 식별값과 rate event는 최대 24시간, 작성자·관리자 삭제 콘텐츠와 처리된 신고·관리 기록, 종료된 제재는 접근을 제한한 뒤 최대 1년 보관합니다. 이 기간은 분쟁 대응과 오조치 복구를 위한 운영정책입니다. 공개 작성물과 진행 중 신고가 없는 비활성 익명 계정은 마지막 활동 후 90일이 지나면 파기 대상이 됩니다.',
       '법령상 보존 또는 진행 중인 분쟁 대응이 필요한 자료는 해당 목적에 필요한 범위와 기간 동안 legal hold로 분리한 뒤 사유가 종료되면 파기합니다.',
     ],
   },

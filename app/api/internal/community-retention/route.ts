@@ -9,13 +9,14 @@ export type CommunityRetentionCounts = {
   comments: number;
   reports: number;
   moderationActions: number;
+  sanctions: number;
   anonymousUsers: number;
 };
 
 export interface CommunityRetentionDependencies {
   enabled: () => boolean;
   secret: () => string;
-  runRetention: () => Promise<CommunityRetentionCounts>;
+  runRetention: () => Promise<unknown>;
 }
 
 function safeEqual(left: string, right: string) {
@@ -40,6 +41,7 @@ function parseCounts(value: unknown): CommunityRetentionCounts {
     'comments',
     'reports',
     'moderationActions',
+    'sanctions',
     'anonymousUsers',
   ] as const;
   return Object.fromEntries(
@@ -61,7 +63,7 @@ const dependencies: CommunityRetentionDependencies = {
       'run_community_retention',
     );
     if (error) throw new Error('community retention failed');
-    return parseCounts(data);
+    return data;
   },
 };
 
@@ -91,7 +93,7 @@ export async function handleCommunityRetentionRequest(
     return json({ error: '자동 파기 요청을 인증하지 못했습니다.' }, 401);
   }
   try {
-    return json(await deps.runRetention(), 200);
+    return json(parseCounts(await deps.runRetention()), 200);
   } catch {
     return json({ error: '자동 파기 작업을 완료하지 못했습니다.' }, 503);
   }

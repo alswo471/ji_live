@@ -6,6 +6,11 @@ const sql = readFileSync(
   'utf8',
 ).toLowerCase();
 
+const retentionSql = readFileSync(
+  'supabase/migrations/202609040002_community_one_year_retention.sql',
+  'utf8',
+).toLowerCase();
+
 describe('community admin console migration', () => {
   it('records delete source and one-year purge time', () => {
     expect(sql).toContain('deletion_source');
@@ -25,5 +30,13 @@ describe('community admin console migration', () => {
     expect(sql).toContain(
       'revoke all on public.community_admin_content from anon, authenticated',
     );
+  });
+
+  it('uses one-year purge boundaries for protected retention records', () => {
+    expect(retentionSql).toContain('p.purge_at <= p_now');
+    expect(retentionSql).toContain('c.purge_at <= p_now');
+    expect(retentionSql).toContain("interval '1 year'");
+    expect(retentionSql).toContain('s.revoked_at is not null');
+    expect(retentionSql).toContain("'sanctions'");
   });
 });
