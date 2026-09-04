@@ -15,6 +15,9 @@ const authorDeleted: AdminContentItem = {
   deletionSource: 'author',
   deletedAt: '2026-09-04T05:00:00.000Z',
   purgeAt: '2027-09-04T05:00:00.000Z',
+  hiddenSource: null,
+  hiddenReason: null,
+  hiddenAt: null,
   createdAt: '2026-09-03T05:00:00.000Z',
 };
 
@@ -124,6 +127,31 @@ describe('AdminContentList', () => {
       'bg-card',
       'lg:grid-cols-[minmax(0,1fr)_20rem]',
     );
+  });
+
+  it('shows the source, reason, and action time for hidden content', () => {
+    render(
+      <AdminContentList
+        items={[
+          {
+            ...authorDeleted,
+            status: 'hidden',
+            deletionSource: null,
+            deletedAt: null,
+            purgeAt: null,
+            hiddenSource: 'automatic',
+            hiddenReason: '서로 다른 네트워크의 신고 10건',
+            hiddenAt: '2026-09-04T06:00:00.000Z',
+          },
+        ]}
+        onAction={async () => undefined}
+      />,
+    );
+
+    expect(screen.getByText('자동 숨김')).toBeInTheDocument();
+    expect(screen.getByText('숨김 사유')).toBeInTheDocument();
+    expect(screen.getByText('서로 다른 네트워크의 신고 10건')).toBeInTheDocument();
+    expect(screen.getByText('숨김 시각')).toBeInTheDocument();
   });
 
   it('does not render raw identifiers or private transport fields', () => {

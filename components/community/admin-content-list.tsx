@@ -120,6 +120,16 @@ function ContentCard({
               {item.deletionSource === 'author' ? '사용자 삭제' : '관리자 삭제'}
             </span>
           )}
+          {item.status === 'hidden' && item.hiddenSource ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-primary">
+              {item.hiddenSource === 'automatic' ? (
+                <AlertTriangle aria-hidden="true" className="size-3.5" />
+              ) : (
+                <ShieldCheck aria-hidden="true" className="size-3.5" />
+              )}
+              {item.hiddenSource === 'automatic' ? '자동 숨김' : '관리자 숨김'}
+            </span>
+          ) : null}
         </div>
 
         {item.title && (
@@ -139,14 +149,28 @@ function ContentCard({
           </div>
           <div>
             <dt className="font-semibold text-foreground">
-              {item.status === 'deleted' ? '삭제 시각' : '작성 시각'}
+              {item.status === 'deleted'
+                ? '삭제 시각'
+                : item.status === 'hidden'
+                  ? '숨김 시각'
+                  : '작성 시각'}
             </dt>
             <dd className="mt-1">
               {formatDate(
-                item.status === 'deleted' ? item.deletedAt : item.createdAt,
+                item.status === 'deleted'
+                  ? item.deletedAt
+                  : item.status === 'hidden'
+                    ? item.hiddenAt
+                    : item.createdAt,
               )}
             </dd>
           </div>
+          {item.status === 'hidden' && item.hiddenReason ? (
+            <div className="sm:col-span-2">
+              <dt className="font-semibold text-foreground">숨김 사유</dt>
+              <dd className="mt-1 break-words">{item.hiddenReason}</dd>
+            </div>
+          ) : null}
         </dl>
         {item.purgeAt && (
           <p className="mt-4 inline-flex flex-wrap items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs font-semibold text-destructive">

@@ -11,12 +11,21 @@ import type { ReportReason, ReportTargetType } from './types';
 export type ModerationAction =
   | {
       type: 'hide' | 'restore' | 'delete';
+      reportId?: string;
+      targetType: ReportTargetType;
+      targetId: string;
+      reason: string;
+    }
+  | {
+      type: 'dismiss';
+      reportId: string;
       targetType: ReportTargetType;
       targetId: string;
       reason: string;
     }
   | {
       type: 'restrict';
+      reportId: string;
       targetType: ReportTargetType;
       targetId: string;
       until: string;
@@ -195,29 +204,15 @@ export const moderationRepository: ModerationRepository = {
       return;
     }
 
-    const contentAction = action.type !== 'restrict';
-    let targetAuthorId: string | null = null;
-    if (action.type === 'restrict') {
-      const table =
-        action.targetType === 'post' ? 'community_posts' : 'community_comments';
-      const { data, error } = await client
-        .from(table)
-        .select('author_id')
-        .eq('id', action.targetId)
-        .maybeSingle();
-      if (error) failProvider(error);
-      if (!data) failProvider({ code: 'P0002' });
-      targetAuthorId = string(object(data), 'author_id');
-    }
-
     const { error } = await client.rpc('moderate_community_content', {
       p_admin_id: adminId,
       p_action: action.type,
-      p_target_type: contentAction ? action.targetType : 'user',
-      p_target_id: contentAction ? action.targetId : null,
-      p_user_id: targetAuthorId,
-      p_until: contentAction ? null : action.until,
+      p_target_type: action.targetType,
+      p_target_id: action.targetId,
+      p_user_id: null,
+      p_until: action.type === 'restrict' ? action.until : null,
       p_reason: action.reason,
+      p_report_id: action.reportId ?? null,
     });
     if (error) failProvider(error);
   },
@@ -257,6 +252,7 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
     type !== 'hide' &&
     type !== 'restore' &&
     type !== 'delete' &&
+    type !== 'dismiss' &&
     type !== 'restrict' &&
     type !== 'unrestrict'
   ) {
@@ -278,6 +274,42 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
     }
     return { type, sanctionId: sanctionId.toLowerCase(), reason };
   }
+  const targetType = row.targetType;
+  const targetId = row.targetId;
+  if (
+    (targetType !== 'post' && targetType !== 'comment') ||
+    typeof targetId !== 'string' ||
+    !isCommunityUuid(targetId)
+  ) {
+    throw new CommunityModerationError(
+      400,
+      'invalid_moderation_target',
+      '관리할 콘텐츠를 확인해 주세요.',
+    );
+  }
+  const reportId = row.reportId;
+  if (
+    (type === 'dismiss' || type === 'restrict') &&
+    (typeof reportId !== 'string' || !isCommunityUuid(reportId))
+  ) {
+    throw new CommunityModerationError(
+      400,
+      'invalid_report_id',
+      '처리할 신고를 확인해 주세요.',
+    );
+  }
+  if (
+    reportId !== undefined &&
+    (typeof reportId !== 'string' || !isCommunityUuid(reportId))
+  ) {
+    throw new CommunityModerationError(
+      400,
+      'invalid_report_id',
+      '처리할 신고를 확인해 주세요.',
+    );
+  }
+  const normalizedReportId =
+    typeof reportId === 'string' ? reportId.toLowerCase() : undefined;
   if (type === 'restrict') {
     if ('userId' in row) {
       throw new CommunityModerationError(
@@ -286,20 +318,7 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
         '관리 조치 내용을 확인해 주세요.',
       );
     }
-    const targetType = row.targetType;
-    const targetId = row.targetId;
     const until = row.until;
-    if (
-      (targetType !== 'post' && targetType !== 'comment') ||
-      typeof targetId !== 'string' ||
-      !isCommunityUuid(targetId)
-    ) {
-      throw new CommunityModerationError(
-        400,
-        'invalid_moderation_target',
-        '관리할 콘텐츠를 확인해 주세요.',
-      );
-    }
     if (
       typeof until !== 'string' ||
       Number.isNaN(Date.parse(until)) ||
@@ -314,27 +333,25 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
     }
     return {
       type,
+      reportId: normalizedReportId!,
       targetType,
       targetId: targetId.toLowerCase(),
       until,
       reason,
     };
   }
-  const targetType = row.targetType;
-  const targetId = row.targetId;
-  if (
-    (targetType !== 'post' && targetType !== 'comment') ||
-    typeof targetId !== 'string' ||
-    !isCommunityUuid(targetId)
-  ) {
-    throw new CommunityModerationError(
-      400,
-      'invalid_moderation_target',
-      '관리할 콘텐츠를 확인해 주세요.',
-    );
+  if (type === 'dismiss') {
+    return {
+      type,
+      reportId: normalizedReportId!,
+      targetType,
+      targetId: targetId.toLowerCase(),
+      reason,
+    };
   }
   return {
     type,
+    ...(normalizedReportId ? { reportId: normalizedReportId } : {}),
     targetType,
     targetId: targetId.toLowerCase(),
     reason,

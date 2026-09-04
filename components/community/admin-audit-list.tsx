@@ -1,4 +1,4 @@
-import { Ban, EyeOff, RotateCcw, Trash2, Undo2 } from 'lucide-react';
+import { Ban, CircleX, EyeOff, RotateCcw, Trash2, Undo2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type {
@@ -13,6 +13,7 @@ const ACTION_DETAILS: Record<
   hide: { label: '숨김', icon: EyeOff },
   restore: { label: '복구', icon: RotateCcw },
   delete: { label: '삭제 대기', icon: Trash2 },
+  dismiss: { label: '신고 기각', icon: CircleX },
   restrict: { label: '활동 제한', icon: Ban },
   unrestrict: { label: '제한 해제', icon: Undo2 },
 };
@@ -106,6 +107,16 @@ export function AdminAuditList({
                       </dt>
                       <dd className="break-words text-card-foreground">
                         {item.targetUserLabel}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {item.deletionSource ? (
+                    <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-2">
+                      <dt>삭제 주체</dt>
+                      <dd className="break-words text-card-foreground">
+                        {item.deletionSource === 'author'
+                          ? '사용자 삭제'
+                          : '관리자 삭제'}
                       </dd>
                     </div>
                   ) : null}

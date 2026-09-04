@@ -10,11 +10,13 @@ export type AdminTab = 'reports' | 'hidden' | 'trash' | 'sanctions' | 'audit';
 export type AdminContentStatus = 'hidden' | 'deleted';
 export type AdminContentTargetType = 'post' | 'comment';
 export type AdminDeletionSource = 'author' | 'admin';
+export type AdminHiddenSource = 'automatic' | 'admin';
 export type AdminSanctionState = 'active' | 'ended';
 export type AdminAuditAction =
   | 'hide'
   | 'restore'
   | 'delete'
+  | 'dismiss'
   | 'restrict'
   | 'unrestrict';
 export type AdminAuditTargetType = AdminContentTargetType | 'user';
@@ -37,6 +39,9 @@ export interface AdminContentItem {
   deletionSource: AdminDeletionSource | null;
   deletedAt: string | null;
   purgeAt: string | null;
+  hiddenSource: AdminHiddenSource | null;
+  hiddenReason: string | null;
+  hiddenAt: string | null;
   createdAt: string;
 }
 
@@ -58,6 +63,7 @@ export interface AdminAuditItem {
   targetUserLabel: string | null;
   targetTitle: string | null;
   targetBody: string | null;
+  deletionSource: AdminDeletionSource | null;
   reason: string;
   createdAt: string;
 }
@@ -84,6 +90,9 @@ export interface AdminContentRecord {
   deletionSource: AdminDeletionSource | null;
   deletedAt: string | null;
   purgeAt: string | null;
+  hiddenSource: AdminHiddenSource | null;
+  hiddenReason: string | null;
+  hiddenAt: string | null;
   createdAt: string;
 }
 
@@ -106,6 +115,7 @@ export interface AdminAuditRecord {
   targetAuthorId: string | null;
   targetTitle: string | null;
   targetBody: string | null;
+  deletionSource: AdminDeletionSource | null;
   reason: string;
   createdAt: string;
 }
@@ -130,6 +140,7 @@ export interface AdminSanctionQuery {
 export interface AdminAuditQuery {
   action: AdminAuditAction | 'all';
   targetType: AdminAuditTargetType | 'all';
+  deletionSource: AdminDeletionSource | 'all';
   from: string | null;
   to: string | null;
   search: string;
@@ -310,11 +321,18 @@ function deletionSource(value: unknown): AdminDeletionSource | null {
   return value;
 }
 
+function hiddenSource(value: unknown): AdminHiddenSource | null {
+  if (value === null) return null;
+  if (value !== 'automatic' && value !== 'admin') unavailable();
+  return value;
+}
+
 function auditAction(value: unknown): AdminAuditAction {
   if (
     value !== 'hide' &&
     value !== 'restore' &&
     value !== 'delete' &&
+    value !== 'dismiss' &&
     value !== 'restrict' &&
     value !== 'unrestrict'
   ) {
@@ -336,6 +354,9 @@ function toContentRecord(value: unknown): AdminContentRecord {
     deletionSource: deletionSource(row.deletion_source),
     deletedAt: nullableString(row, 'deleted_at'),
     purgeAt: nullableString(row, 'purge_at'),
+    hiddenSource: hiddenSource(row.hidden_source),
+    hiddenReason: nullableString(row, 'hidden_reason'),
+    hiddenAt: nullableString(row, 'hidden_at'),
     createdAt: string(row, 'created_at'),
   };
 }
@@ -379,9 +400,9 @@ function toAuditRecord(value: unknown): AdminAuditRecord {
         : target
           ? string(target, 'author_id')
           : null,
-    targetTitle:
-      type === 'post' && target ? nullableString(target, 'title') : null,
-    targetBody: target ? string(target, 'body') : null,
+    targetTitle: nullableString(row, 'target_title_snapshot'),
+    targetBody: nullableString(row, 'target_body_snapshot'),
+    deletionSource: deletionSource(row.deletion_source),
     reason: string(row, 'reason'),
     createdAt: string(row, 'created_at'),
   };
@@ -435,11 +456,11 @@ export const adminConsoleRepository: AdminConsoleRepository = {
   },
 
   async findContent(input) {
-    const sortColumn = input.status === 'deleted' ? 'deleted_at' : 'created_at';
+    const sortColumn = input.status === 'deleted' ? 'deleted_at' : 'hidden_at';
     let query = getServerSupabase()
       .from('community_admin_content')
       .select(
-        'target_type,target_id,author_id,author_name,title,body,status,deletion_source,deleted_at,purge_at,created_at',
+        'target_type,target_id,author_id,author_name,title,body,status,deletion_source,deleted_at,purge_at,hidden_source,hidden_reason,hidden_at,created_at',
       )
       .eq('status', input.status);
     if (input.targetType !== 'all') {
@@ -495,16 +516,22 @@ export const adminConsoleRepository: AdminConsoleRepository = {
     let query = getServerSupabase()
       .from('community_moderation_actions')
       .select(
-        'id,admin_id,action,target_type,post_id,comment_id,user_id,reason,created_at,community_posts(id,author_id,title,body),community_comments(id,author_id,body)',
+        'id,admin_id,action,target_type,post_id,comment_id,user_id,reason,created_at,target_title_snapshot,target_body_snapshot,deletion_source,community_posts(author_id),community_comments(author_id)',
       );
     if (input.action !== 'all') query = query.eq('action', input.action);
     if (input.targetType !== 'all') {
       query = query.eq('target_type', input.targetType);
     }
+    if (input.deletionSource !== 'all') {
+      query = query.eq('deletion_source', input.deletionSource);
+    }
     if (input.from) query = query.gte('created_at', input.from);
     if (input.to) query = query.lt('created_at', input.to);
     if (input.search) {
-      query = query.ilike('reason', `%${escapeSearch(input.search)}%`);
+      const pattern = quotePostgrestValue(`%${escapeSearch(input.search)}%`);
+      query = query.or(
+        `reason.ilike.${pattern},target_title_snapshot.ilike.${pattern},target_body_snapshot.ilike.${pattern}`,
+      );
     }
     if (input.cursor) {
       query = query.or(
@@ -604,10 +631,16 @@ export async function listAdminContent(
     deletionSource: item.deletionSource,
     deletedAt: item.deletedAt,
     purgeAt: item.purgeAt,
+    hiddenSource: item.hiddenSource,
+    hiddenReason: item.hiddenReason,
+    hiddenAt: item.hiddenAt,
     createdAt: item.createdAt,
   }));
   return createPage(items, limit, (item) => ({
-    sortAt: item.deletedAt ?? item.createdAt,
+    sortAt:
+      item.status === 'hidden'
+        ? (item.hiddenAt ?? item.createdAt)
+        : (item.deletedAt ?? item.createdAt),
     targetType: item.targetType,
     targetId: item.targetId,
   }));
@@ -666,6 +699,7 @@ export async function listAdminAudit(
     selectedAction !== 'hide' &&
     selectedAction !== 'restore' &&
     selectedAction !== 'delete' &&
+    selectedAction !== 'dismiss' &&
     selectedAction !== 'restrict' &&
     selectedAction !== 'unrestrict'
   ) {
@@ -680,11 +714,20 @@ export async function listAdminAudit(
   ) {
     invalid('invalid_target_type', '관리 대상 유형을 확인해 주세요.');
   }
+  const selectedDeletionSource = row.deletionSource ?? 'all';
+  if (
+    selectedDeletionSource !== 'all' &&
+    selectedDeletionSource !== 'author' &&
+    selectedDeletionSource !== 'admin'
+  ) {
+    invalid('invalid_deletion_source', '삭제 주체를 확인해 주세요.');
+  }
   const period = getAuditPeriod(row.from, row.to);
   const limit = getLimit(row.limit);
   const rows = await repository.findAudit({
     action: selectedAction,
     targetType: selectedTargetType,
+    deletionSource: selectedDeletionSource,
     ...period,
     search: getSearch(row.search),
     cursor: decodeCursor(row.cursor),
@@ -700,6 +743,7 @@ export async function listAdminAudit(
       : null,
     targetTitle: item.targetTitle,
     targetBody: item.targetBody,
+    deletionSource: item.deletionSource,
     reason: item.reason,
     createdAt: item.createdAt,
   }));

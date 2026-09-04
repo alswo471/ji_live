@@ -74,11 +74,14 @@ export function AdminConsoleFilters({
               <NativeSelectOption value="all">전체 대상</NativeSelectOption>
               <NativeSelectOption value="post">게시글</NativeSelectOption>
               <NativeSelectOption value="comment">댓글</NativeSelectOption>
+              {tab === 'audit' ? (
+                <NativeSelectOption value="user">사용자</NativeSelectOption>
+              ) : null}
             </NativeSelect>
           </div>
         )}
 
-        {tab === 'trash' && (
+        {(tab === 'trash' || tab === 'audit') && (
           <div className="min-w-0 space-y-1.5">
             <label
               htmlFor="admin-deletion-source"
@@ -151,6 +154,7 @@ export function AdminConsoleFilters({
               <NativeSelectOption value="hide">숨김</NativeSelectOption>
               <NativeSelectOption value="restore">복구</NativeSelectOption>
               <NativeSelectOption value="delete">삭제 대기</NativeSelectOption>
+              <NativeSelectOption value="dismiss">신고 기각</NativeSelectOption>
               <NativeSelectOption value="restrict">
                 작성 제한
               </NativeSelectOption>

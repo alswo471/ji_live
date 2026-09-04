@@ -366,7 +366,7 @@ describe('community admin routes', () => {
     let input: unknown;
     const response = await handleAdminAuditRequest(
       new Request(
-        'http://localhost/api/admin/community/audit?action=unrestrict&targetType=user&from=2026-09-01&to=2026-09-04&query=%20review%20&cursor=next&adminId=leak',
+        'http://localhost/api/admin/community/audit?action=dismiss&targetType=user&deletionSource=author&from=2026-09-01&to=2026-09-04&query=%20review%20&cursor=next&adminId=leak',
       ),
       auditDependencies({
         listAudit: async (value) => {
@@ -378,8 +378,9 @@ describe('community admin routes', () => {
 
     expect(response.status).toBe(200);
     expect(input).toEqual({
-      action: 'unrestrict',
+      action: 'dismiss',
       targetType: 'user',
+      deletionSource: 'author',
       from: '2026-09-01',
       to: '2026-09-04',
       search: ' review ',

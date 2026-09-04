@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Ban, CheckCircle2, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Ban, CheckCircle2, CircleX, Eye, EyeOff, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,8 +47,10 @@ function ModerationCard({
   const errorId = `${fieldId}-error`;
   const dialogErrorId = `${fieldId}-dialog-error`;
   const restrictionId = `${fieldId}-restriction`;
+  const customRestrictionId = `${fieldId}-custom-restriction`;
   const [reason, setReason] = useState('');
   const [restrictionDays, setRestrictionDays] = useState('1');
+  const [customRestrictionUntil, setCustomRestrictionUntil] = useState('');
   const [confirmationType, setConfirmationType] = useState<
     'delete' | 'restrict'
   >('delete');
@@ -85,7 +87,7 @@ function ModerationCard({
   }
 
   function prepare(
-    type: 'hide' | 'restore' | 'delete' | 'restrict',
+    type: 'hide' | 'restore' | 'delete' | 'dismiss' | 'restrict',
     trigger?: HTMLButtonElement,
   ) {
     const normalizedReason = reason.trim();
@@ -104,6 +106,7 @@ function ModerationCard({
     void execute(
       {
         type,
+        reportId: item.id,
         targetType: item.targetType,
         targetId: item.targetId,
         reason: normalizedReason,
@@ -118,6 +121,7 @@ function ModerationCard({
       void execute(
         {
           type: 'delete',
+          reportId: item.id,
           targetType: item.targetType,
           targetId: item.targetId,
           reason: normalizedReason,
@@ -125,15 +129,27 @@ function ModerationCard({
         'dialog',
       );
     } else if (confirmationType === 'restrict') {
-      const until = new Date(
-        Date.now() + Number(restrictionDays) * 24 * 60 * 60 * 1000,
-      ).toISOString();
+      const untilDate =
+        restrictionDays === 'custom'
+          ? new Date(customRestrictionUntil)
+          : new Date(
+              Date.now() + Number(restrictionDays) * 24 * 60 * 60 * 1000,
+            );
+      if (
+        Number.isNaN(untilDate.getTime()) ||
+        untilDate.getTime() <= Date.now()
+      ) {
+        setDialogError('현재보다 이후인 제한 종료 시각을 입력해 주세요.');
+        document.getElementById(customRestrictionId)?.focus();
+        return;
+      }
       void execute(
         {
           type: 'restrict',
+          reportId: item.id,
           targetType: item.targetType,
           targetId: item.targetId,
-          until,
+          until: untilDate.toISOString(),
           reason: normalizedReason,
         },
         'dialog',
@@ -220,6 +236,17 @@ function ModerationCard({
             <EyeOff aria-hidden="true" /> 숨김
           </Button>
         )}
+        {item.targetStatus === 'visible' ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            disabled={submitting}
+            onClick={() => prepare('dismiss')}
+          >
+            <CircleX aria-hidden="true" /> 신고 기각
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="destructive"
@@ -284,7 +311,30 @@ function ModerationCard({
                 <option value="1">24시간</option>
                 <option value="7">7일</option>
                 <option value="30">30일</option>
+                <option value="custom">직접 지정</option>
               </select>
+              {restrictionDays === 'custom' ? (
+                <div className="mt-3">
+                  <label
+                    htmlFor={customRestrictionId}
+                    className="text-sm font-semibold"
+                  >
+                    제한 종료 시각
+                  </label>
+                  <input
+                    id={customRestrictionId}
+                    type="datetime-local"
+                    value={customRestrictionUntil}
+                    aria-invalid={Boolean(dialogError)}
+                    aria-describedby={dialogError ? dialogErrorId : undefined}
+                    onChange={(event) => {
+                      setCustomRestrictionUntil(event.target.value);
+                      setDialogError(null);
+                    }}
+                    className="mt-2 min-h-11 w-full rounded-lg border bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
           {dialogError ? (

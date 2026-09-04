@@ -11,6 +11,7 @@ const item: AdminAuditItem = {
   targetUserLabel: '익명 사용자 #F52B',
   targetTitle: '복구한 게시글',
   targetBody: '운영 검토 후 복구된 내용입니다.',
+  deletionSource: 'author',
   reason: '오조치 확인 후 복구',
   createdAt: '2026-09-04T05:00:00.000Z',
 };
@@ -26,9 +27,20 @@ describe('AdminAuditList', () => {
     expect(screen.getByText('익명 사용자 #F52B')).toBeInTheDocument();
     expect(screen.queryByText('처리자')).not.toBeInTheDocument();
     expect(screen.getByText('오조치 확인 후 복구')).toBeInTheDocument();
+    expect(screen.getByText('사용자 삭제')).toBeInTheDocument();
     expect(screen.getByText(/2026/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('labels non-punitive report dismissal', () => {
+    render(
+      <AdminAuditList
+        items={[{ ...item, action: 'dismiss', deletionSource: null }]}
+      />,
+    );
+
+    expect(screen.getByText('신고 기각')).toBeInTheDocument();
   });
 
   it('never renders raw UUID, email, IP, reporter, abuse key or secret fields', () => {

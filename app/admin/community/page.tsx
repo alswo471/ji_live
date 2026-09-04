@@ -32,7 +32,15 @@ import { getBrowserSupabase } from '@/lib/community/supabase';
 import type { ModerationQueueItem } from '@/lib/community/moderation-service';
 
 const TABS: AdminTab[] = ['reports', 'hidden', 'trash', 'sanctions', 'audit'];
-const TARGET_TYPES: FilterValues['targetType'][] = ['all', 'post', 'comment'];
+const CONTENT_TARGET_TYPES: FilterValues['targetType'][] = [
+  'all',
+  'post',
+  'comment',
+];
+const AUDIT_TARGET_TYPES: FilterValues['targetType'][] = [
+  ...CONTENT_TARGET_TYPES,
+  'user',
+];
 const DELETION_SOURCES: FilterValues['deletionSource'][] = [
   'all',
   'author',
@@ -44,6 +52,7 @@ const AUDIT_ACTIONS: FilterValues['action'][] = [
   'hide',
   'restore',
   'delete',
+  'dismiss',
   'restrict',
   'unrestrict',
 ];
@@ -71,9 +80,13 @@ function selectedDate(value: string | null) {
     : '';
 }
 
-function filtersFrom(params: URLSearchParams): FilterValues {
+function filtersFrom(params: URLSearchParams, tab: AdminTab): FilterValues {
   return {
-    targetType: allowedValue(params.get('targetType'), TARGET_TYPES, 'all'),
+    targetType: allowedValue(
+      params.get('targetType'),
+      tab === 'audit' ? AUDIT_TARGET_TYPES : CONTENT_TARGET_TYPES,
+      'all',
+    ),
     deletionSource: allowedValue(
       params.get('deletionSource'),
       DELETION_SOURCES,
@@ -101,7 +114,10 @@ function filterUrl(tab: AdminTab, filters: FilterValues) {
   ) {
     params.set('targetType', filters.targetType);
   }
-  if (tab === 'trash' && filters.deletionSource !== 'all') {
+  if (
+    (tab === 'trash' || tab === 'audit') &&
+    filters.deletionSource !== 'all'
+  ) {
     params.set('deletionSource', filters.deletionSource);
   }
   if (tab === 'sanctions' && filters.sanctionState !== 'active') {
@@ -125,7 +141,7 @@ function AdminConsole() {
   const search = searchParams?.toString() ?? '';
   const params = useMemo(() => new URLSearchParams(search), [search]);
   const tab = selectedTab(params.get('tab'));
-  const filters = useMemo(() => filtersFrom(params), [params]);
+  const filters = useMemo(() => filtersFrom(params, tab), [params, tab]);
   const admin = useCommunityAdmin(tab, filters);
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
   const [sessionActionError, setSessionActionError] = useState<string | null>(

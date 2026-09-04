@@ -60,7 +60,11 @@ describe('AdminConsoleFilters', () => {
       'date',
     );
     expect(screen.getByLabelText('운영 로그 검색')).toBeInTheDocument();
-    expect(screen.queryByLabelText('삭제 주체')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('삭제 주체')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '사용자' })).toHaveValue('user');
+    expect(screen.getByRole('option', { name: '신고 기각' })).toHaveValue(
+      'dismiss',
+    );
   });
 
   it('limits search to 100 characters and requests a cursor reset', () => {

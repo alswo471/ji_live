@@ -22,10 +22,17 @@ import type {
 } from '@/lib/community/moderation-service';
 
 export interface AdminConsoleFilters {
-  targetType: 'all' | 'post' | 'comment';
+  targetType: 'all' | 'post' | 'comment' | 'user';
   deletionSource: 'all' | 'author' | 'admin';
   sanctionState: 'active' | 'ended';
-  action: 'all' | 'hide' | 'restore' | 'delete' | 'restrict' | 'unrestrict';
+  action:
+    | 'all'
+    | 'hide'
+    | 'restore'
+    | 'delete'
+    | 'dismiss'
+    | 'restrict'
+    | 'unrestrict';
   from?: string;
   to?: string;
   query: string;
@@ -84,6 +91,9 @@ function listUrl(
     if (filters.action !== 'all') params.set('action', filters.action);
     if (filters.targetType !== 'all') {
       params.set('targetType', filters.targetType);
+    }
+    if (filters.deletionSource !== 'all') {
+      params.set('deletionSource', filters.deletionSource);
     }
     if (filters.from) params.set('from', filters.from);
     if (filters.to) params.set('to', filters.to);

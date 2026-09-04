@@ -19,6 +19,7 @@ vi.mock('@/lib/community/supabase', () => ({
 const ADMIN = { id: '10000000-0000-4000-8000-000000000001' };
 const POST_ID = '20000000-0000-4000-8000-000000000001';
 const AUTHOR_ID = '30000000-0000-4000-8000-000000000001';
+const REPORT_ID = '40000000-0000-4000-8000-000000000001';
 const SANCTION_ID = '50000000-0000-4000-8000-000000000001';
 const SECRET = 'test-secret-at-least-32-characters';
 
@@ -30,7 +31,7 @@ function report(
   overrides: Partial<ModerationReportRecord> = {},
 ): ModerationReportRecord {
   return {
-    id: '40000000-0000-4000-8000-000000000001',
+    id: REPORT_ID,
     targetType: 'post',
     targetId: POST_ID,
     targetAuthorId: AUTHOR_ID,
@@ -77,30 +78,13 @@ describe('listModerationQueue', () => {
 });
 
 describe('moderationRepository', () => {
-  it('resolves the target author immediately before the restriction RPC', async () => {
-    const events: string[] = [];
+  it('lets the atomic RPC resolve a report target before restricting its author', async () => {
     const rpcCalls: Array<{ name: string; parameters: unknown }> = [];
-    const lookup = {
-      select: (columns: string) => {
-        events.push(`select:${columns}`);
-        return lookup;
-      },
-      eq: (column: string, value: string) => {
-        events.push(`eq:${column}:${value}`);
-        return lookup;
-      },
-      maybeSingle: async () => {
-        events.push('maybeSingle');
-        return { data: { author_id: AUTHOR_ID }, error: null };
-      },
-    };
     getServerSupabaseMock.mockReturnValue({
-      from: (table: string) => {
-        events.push(`from:${table}`);
-        return lookup;
+      from: () => {
+        throw new Error('restriction must be resolved atomically in the RPC');
       },
       rpc: async (name: string, parameters: unknown) => {
-        events.push(`rpc:${name}`);
         rpcCalls.push({ name, parameters });
         return { error: null };
       },
@@ -108,30 +92,25 @@ describe('moderationRepository', () => {
 
     await moderationRepository.applyAction(ADMIN.id, {
       type: 'restrict',
+      reportId: REPORT_ID,
       targetType: 'post',
       targetId: POST_ID,
       until: '2026-09-11T04:00:00.000Z',
       reason: '반복적인 운영정책 위반',
     });
 
-    expect(events).toEqual([
-      'from:community_posts',
-      'select:author_id',
-      `eq:id:${POST_ID}`,
-      'maybeSingle',
-      'rpc:moderate_community_content',
-    ]);
     expect(rpcCalls).toEqual([
       {
         name: 'moderate_community_content',
         parameters: {
           p_admin_id: ADMIN.id,
           p_action: 'restrict',
-          p_target_type: 'user',
-          p_target_id: null,
-          p_user_id: AUTHOR_ID,
+          p_target_type: 'post',
+          p_target_id: POST_ID,
+          p_user_id: null,
           p_until: '2026-09-11T04:00:00.000Z',
           p_reason: '반복적인 운영정책 위반',
+          p_report_id: REPORT_ID,
         },
       },
     ]);
@@ -195,6 +174,7 @@ describe('moderationRepository', () => {
     await expect(
       moderationRepository.applyAction(ADMIN.id, {
         type: 'hide',
+        reportId: REPORT_ID,
         targetType: 'post',
         targetId: POST_ID,
         reason: '파기된 콘텐츠 숨김 시도',
@@ -219,6 +199,7 @@ describe('moderateContent', () => {
       ADMIN,
       {
         type: 'hide',
+        reportId: REPORT_ID,
         targetType: 'post',
         targetId: POST_ID,
         reason: '  반복 광고로 숨김 처리  ',
@@ -230,9 +211,42 @@ describe('moderateContent', () => {
       adminId: ADMIN.id,
       action: {
         type: 'hide',
+        reportId: REPORT_ID,
         targetType: 'post',
         targetId: POST_ID,
         reason: '반복 광고로 숨김 처리',
+      },
+    });
+  });
+
+  it('normalizes a non-punitive report dismissal', async () => {
+    let received: unknown;
+    const repo = repository({
+      applyAction: async (adminId, action) => {
+        received = { adminId, action };
+      },
+    });
+
+    await moderateContent(
+      ADMIN,
+      {
+        type: 'dismiss',
+        reportId: REPORT_ID.toUpperCase(),
+        targetType: 'post',
+        targetId: POST_ID,
+        reason: '신고 대상이 운영정책을 위반하지 않음',
+      },
+      repo,
+    );
+
+    expect(received).toEqual({
+      adminId: ADMIN.id,
+      action: {
+        type: 'dismiss',
+        reportId: REPORT_ID,
+        targetType: 'post',
+        targetId: POST_ID,
+        reason: '신고 대상이 운영정책을 위반하지 않음',
       },
     });
   });
@@ -243,6 +257,7 @@ describe('moderateContent', () => {
         ADMIN,
         {
           type: 'restrict',
+          reportId: REPORT_ID,
           targetType: 'post',
           targetId: POST_ID,
           until: '2026-09-03T03:59:59.000Z',
@@ -269,6 +284,7 @@ describe('moderateContent', () => {
       ADMIN,
       {
         type: 'restrict',
+        reportId: REPORT_ID,
         targetType: 'post',
         targetId: POST_ID,
         until: '2026-09-11T04:00:00.000Z',
@@ -282,6 +298,7 @@ describe('moderateContent', () => {
       adminId: ADMIN.id,
       action: {
         type: 'restrict',
+        reportId: REPORT_ID,
         targetType: 'post',
         targetId: POST_ID,
         until: '2026-09-11T04:00:00.000Z',
@@ -303,6 +320,7 @@ describe('moderateContent', () => {
         ADMIN,
         {
           type: 'restrict',
+          reportId: REPORT_ID,
           targetType: 'post',
           targetId: POST_ID,
           userId: AUTHOR_ID,
@@ -316,6 +334,39 @@ describe('moderateContent', () => {
       status: 400,
       code: 'invalid_moderation_action',
     });
+  });
+
+  it('requires a report ID for report dismissal and restriction', async () => {
+    const repo = repository({
+      applyAction: async () => {
+        throw new Error('invalid report action must not reach repository');
+      },
+    });
+
+    for (const input of [
+      {
+        type: 'dismiss',
+        targetType: 'post',
+        targetId: POST_ID,
+        reason: '근거가 없어 신고를 종결함',
+      },
+      {
+        type: 'restrict',
+        targetType: 'post',
+        targetId: POST_ID,
+        until: '2026-09-11T04:00:00.000Z',
+        reason: '반복적인 운영정책 위반',
+      },
+    ]) {
+      await expect(
+        moderateContent(
+          ADMIN,
+          input,
+          repo,
+          new Date('2026-09-03T04:00:00.000Z'),
+        ),
+      ).rejects.toMatchObject({ status: 400, code: 'invalid_report_id' });
+    }
   });
 
   it('applies an unrestrict action by sanction ID', async () => {

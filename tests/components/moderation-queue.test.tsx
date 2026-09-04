@@ -96,6 +96,7 @@ describe('ModerationQueue', () => {
     await waitFor(() => expect(actions).toHaveLength(1));
     expect(actions[0]).toMatchObject({
       type: 'delete',
+      reportId: item.id,
       targetType: 'post',
       targetId: item.targetId,
       reason: '반복 광고 영구 삭제',
@@ -155,6 +156,7 @@ describe('ModerationQueue', () => {
     await waitFor(() => expect(actions).toHaveLength(1));
     expect(actions[0]).toMatchObject({
       type: 'restrict',
+      reportId: item.id,
       targetType: 'post',
       targetId: item.targetId,
       reason: '반복적인 운영정책 위반',
@@ -162,6 +164,95 @@ describe('ModerationQueue', () => {
     });
     expect(actions[0]).not.toHaveProperty('userId');
     expect(actions[0]).not.toHaveProperty('targetAuthorId');
+  });
+
+  it('dismisses an unfounded report on visible content without punitive action', async () => {
+    const user = userEvent.setup();
+    const actions: unknown[] = [];
+    render(
+      <ModerationQueue
+        items={[{ ...item, targetStatus: 'visible' }]}
+        loading={false}
+        onAction={async (action) => {
+          actions.push(action);
+        }}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText('관리 사유'),
+      '운영정책 위반 근거가 확인되지 않음',
+    );
+    await user.click(screen.getByRole('button', { name: '신고 기각' }));
+
+    await waitFor(() => expect(actions).toHaveLength(1));
+    expect(actions[0]).toEqual({
+      type: 'dismiss',
+      reportId: item.id,
+      targetType: item.targetType,
+      targetId: item.targetId,
+      reason: '운영정책 위반 근거가 확인되지 않음',
+    });
+  });
+
+  it('accepts an accessible custom restriction date and normalizes it to ISO', async () => {
+    const user = userEvent.setup();
+    const actions: unknown[] = [];
+    render(
+      <ModerationQueue
+        items={[item]}
+        loading={false}
+        onAction={async (action) => {
+          actions.push(action);
+        }}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('관리 사유'), '직접 지정한 제한 기간 적용');
+    await user.click(screen.getByRole('button', { name: '작성 제한' }));
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: '제한 기간' }),
+      'custom',
+    );
+    const customUntil = screen.getByLabelText('제한 종료 시각');
+    expect(customUntil).toHaveAttribute('type', 'datetime-local');
+    await user.type(customUntil, '2099-01-02T03:04');
+    await user.click(screen.getByRole('button', { name: '제한 확정' }));
+
+    await waitFor(() => expect(actions).toHaveLength(1));
+    expect(actions[0]).toMatchObject({
+      type: 'restrict',
+      reportId: item.id,
+      until: new Date('2099-01-02T03:04').toISOString(),
+    });
+  });
+
+  it('keeps the dialog open and explains a missing custom restriction date', async () => {
+    const user = userEvent.setup();
+    const actions: unknown[] = [];
+    render(
+      <ModerationQueue
+        items={[item]}
+        loading={false}
+        onAction={async (action) => {
+          actions.push(action);
+        }}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('관리 사유'), '직접 지정한 제한 기간 적용');
+    await user.click(screen.getByRole('button', { name: '작성 제한' }));
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: '제한 기간' }),
+      'custom',
+    );
+    await user.click(screen.getByRole('button', { name: '제한 확정' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '현재보다 이후인 제한 종료 시각을 입력해 주세요.',
+    );
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(actions).toHaveLength(0);
   });
 
   it('keeps a rejected restriction dialog usable with one in-dialog error and preserved inputs', async () => {

@@ -44,6 +44,9 @@ function contentRecord(
     deletionSource: 'author',
     deletedAt: '2026-09-04T05:00:00.000Z',
     purgeAt: '2027-09-04T05:00:00.000Z',
+    hiddenSource: null,
+    hiddenReason: null,
+    hiddenAt: null,
     createdAt: '2026-09-03T05:00:00.000Z',
     ...overrides,
   };
@@ -170,6 +173,51 @@ describe('admin console content', () => {
     });
   });
 
+  it('exposes privacy-safe hidden metadata and cursors by the latest hide time', async () => {
+    let received: unknown;
+    const hiddenAt = '2026-09-04T06:00:00.000Z';
+    const firstPage = await listAdminContent(
+      { status: 'hidden', limit: 1 },
+      repository({
+        findContent: async (query) => {
+          received = query;
+          return [
+            contentRecord({
+              status: 'hidden',
+              deletionSource: null,
+              deletedAt: null,
+              purgeAt: null,
+              hiddenSource: 'automatic',
+              hiddenReason: '서로 다른 네트워크의 신고 10건',
+              hiddenAt,
+            }),
+            contentRecord({ targetId: SECOND_POST_ID }),
+          ];
+        },
+      }),
+      SECRET,
+    );
+
+    expect(received).toMatchObject({ status: 'hidden' });
+    expect(firstPage.items[0]).toMatchObject({
+      hiddenSource: 'automatic',
+      hiddenReason: '서로 다른 네트워크의 신고 10건',
+      hiddenAt,
+    });
+
+    await listAdminContent(
+      { status: 'hidden', cursor: firstPage.nextCursor },
+      repository({
+        findContent: async (query) => {
+          received = query;
+          return [];
+        },
+      }),
+      SECRET,
+    );
+    expect(received).toMatchObject({ cursor: { sortAt: hiddenAt } });
+  });
+
   it.each([
     [
       '시장, (급등) "주의"',
@@ -273,6 +321,7 @@ describe('admin console summary, sanctions and audit', () => {
               targetAuthorId: AUTHOR_ID,
               targetTitle: null,
               targetBody: null,
+              deletionSource: null,
               reason: '반복적인 운영정책 위반',
               createdAt: '2026-09-04T05:00:00.000Z',
             },
@@ -294,6 +343,105 @@ describe('admin console summary, sanctions and audit', () => {
     expect(page.items[0]).not.toHaveProperty('targetId');
     expect(JSON.stringify(page)).not.toContain(AUTHOR_ID);
     expect(received).toMatchObject({ from: null, to: null });
+  });
+
+  it('accepts dismissal, user targets, deletion source, and combined snapshot search', async () => {
+    let received: unknown;
+    const page = await listAdminAudit(
+      {
+        action: 'dismiss',
+        targetType: 'user',
+        deletionSource: 'author',
+        search: ' 이전 제목 ',
+      },
+      repository({
+        findAudit: async (query) => {
+          received = query;
+          return [];
+        },
+      }),
+      SECRET,
+    );
+
+    expect(page.items).toEqual([]);
+    expect(received).toMatchObject({
+      action: 'dismiss',
+      targetType: 'user',
+      deletionSource: 'author',
+      search: '이전 제목',
+    });
+  });
+
+  it('queries immutable audit snapshots across reason, title, and body', async () => {
+    const equalities: Array<[string, string]> = [];
+    const disjunctions: string[] = [];
+    const selections: string[] = [];
+    const query = {
+      select: (columns: string) => {
+        selections.push(columns);
+        return query;
+      },
+      eq: (column: string, value: string) => {
+        equalities.push([column, value]);
+        return query;
+      },
+      gte: () => query,
+      lt: () => query,
+      or: (filter: string) => {
+        disjunctions.push(filter);
+        return query;
+      },
+      order: () => query,
+      limit: async () => ({
+        data: [
+          {
+            id: AUDIT_ID,
+            admin_id: '10000000-0000-4000-8000-000000000001',
+            action: 'delete',
+            target_type: 'post',
+            post_id: POST_ID,
+            comment_id: null,
+            user_id: null,
+            reason: '관리자 삭제 처리',
+            created_at: '2026-09-04T05:00:00.000Z',
+            target_title_snapshot: '파기 뒤에도 남는 제목',
+            target_body_snapshot: '파기 뒤에도 남는 본문',
+            deletion_source: 'admin',
+            community_posts: null,
+            community_comments: null,
+          },
+        ],
+        error: null,
+      }),
+    };
+    getServerSupabaseMock.mockReturnValue({ from: () => query });
+
+    const records = await adminConsoleRepository.findAudit({
+      action: 'delete',
+      targetType: 'post',
+      deletionSource: 'admin',
+      from: null,
+      to: null,
+      search: '파기 뒤',
+      cursor: null,
+      limit: 21,
+    });
+
+    expect(selections[0]).toContain('target_title_snapshot');
+    expect(selections[0]).not.toContain('community_posts(id,author_id,title,body)');
+    expect(equalities).toEqual([
+      ['action', 'delete'],
+      ['target_type', 'post'],
+      ['deletion_source', 'admin'],
+    ]);
+    expect(disjunctions).toEqual([
+      'reason.ilike."%파기 뒤%",target_title_snapshot.ilike."%파기 뒤%",target_body_snapshot.ilike."%파기 뒤%"',
+    ]);
+    expect(records[0]).toMatchObject({
+      targetTitle: '파기 뒤에도 남는 제목',
+      targetBody: '파기 뒤에도 남는 본문',
+      deletionSource: 'admin',
+    });
   });
 
   it('normalizes audit dates to inclusive and exclusive UTC boundaries', async () => {
@@ -339,6 +487,7 @@ describe('admin console summary, sanctions and audit', () => {
     await adminConsoleRepository.findAudit({
       action: 'all',
       targetType: 'all',
+      deletionSource: 'all',
       from: '2026-09-01T00:00:00.000Z',
       to: '2026-09-05T00:00:00.000Z',
       search: '',

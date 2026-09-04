@@ -251,6 +251,40 @@ describe('useCommunityAdmin', () => {
     expect(summaryLoads).toBe(2);
   });
 
+  it('combines the complete audit filters in one request', async () => {
+    const requested: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = urlOf(input);
+        if (url.includes('/summary')) {
+          return Promise.resolve(
+            Response.json({ reports: 0, hidden: 0, trash: 0, sanctions: 0 }),
+          );
+        }
+        requested.push(url);
+        return Promise.resolve(Response.json({ items: [], nextCursor: null }));
+      }),
+    );
+
+    renderHook(() =>
+      useCommunityAdmin('audit', {
+        ...filters,
+        action: 'dismiss',
+        targetType: 'user',
+        deletionSource: 'author',
+        from: '2026-09-01',
+        to: '2026-09-04',
+        query: '이전 제목',
+      }),
+    );
+
+    await waitFor(() => expect(requested).toHaveLength(1));
+    expect(requested[0]).toBe(
+      '/api/admin/community/audit?action=dismiss&targetType=user&deletionSource=author&from=2026-09-01&to=2026-09-04&query=%EC%9D%B4%EC%A0%84+%EC%A0%9C%EB%AA%A9',
+    );
+  });
+
   it('refreshes the latest tab and filters when they change during an action', async () => {
     const pendingAction = deferred<Response>();
     const listUrls: string[] = [];
