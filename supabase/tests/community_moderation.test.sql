@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(34);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -59,6 +59,70 @@ select ok(
   'service_role can execute moderation RPC'
 );
 
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.delete_community_content_by_author(uuid,text,uuid)',
+    'EXECUTE'
+  ),
+  'anon cannot execute author delete RPC'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.delete_community_content_by_author(uuid,text,uuid)',
+    'EXECUTE'
+  ),
+  'authenticated cannot execute author delete RPC'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.delete_community_content_by_author(uuid,text,uuid)',
+    'EXECUTE'
+  ),
+  'service_role can execute author delete RPC'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.revoke_community_sanction(uuid,uuid,text)',
+    'EXECUTE'
+  ),
+  'anon cannot execute sanction revoke RPC'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.revoke_community_sanction(uuid,uuid,text)',
+    'EXECUTE'
+  ),
+  'authenticated cannot execute sanction revoke RPC'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.revoke_community_sanction(uuid,uuid,text)',
+    'EXECUTE'
+  ),
+  'service_role can execute sanction revoke RPC'
+);
+
+select ok(
+  not has_table_privilege('anon', 'public.community_admin_content', 'SELECT'),
+  'anon cannot select the admin content view'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.community_admin_content', 'SELECT'),
+  'authenticated cannot select the admin content view'
+);
+
 select throws_ok(
   $$
     select public.moderate_community_content(
@@ -102,6 +166,91 @@ select is(
 );
 
 select lives_ok(
+  $$ select public.delete_community_content_by_author(
+    md5('102')::uuid, 'post',
+    '60000000-0000-0000-0000-000000000001'
+  ) $$,
+  'author delete is atomic'
+);
+
+select is(
+  (select deletion_source from public.community_posts
+   where id = '60000000-0000-0000-0000-000000000001'),
+  'author',
+  'author deletion is distinguishable'
+);
+
+select ok(
+  (select purge_at = deleted_at + interval '1 year' from public.community_posts
+   where id = '60000000-0000-0000-0000-000000000001'),
+  'author deletion receives a one-year purge time'
+);
+
+select lives_ok(
+  $$ select public.moderate_community_content(
+    md5('101')::uuid, 'restore', 'post',
+    '60000000-0000-0000-0000-000000000001', null, null,
+    '작성자 삭제 복구 처리'
+  ) $$,
+  'admin can restore author-deleted content'
+);
+
+select is(
+  (select status::text from public.community_posts where id = '60000000-0000-0000-0000-000000000001'),
+  'visible',
+  'author-deleted content is restored to visible'
+);
+
+select ok(
+  (select deletion_source is null and deleted_at is null and purge_at is null
+   from public.community_posts where id = '60000000-0000-0000-0000-000000000001'),
+  'restoring author-deleted content clears deletion metadata'
+);
+
+select lives_ok(
+  $$ select public.moderate_community_content(
+    md5('101')::uuid, 'delete', 'post',
+    '60000000-0000-0000-0000-000000000001', null, null,
+    '관리자 삭제 처리'
+  ) $$,
+  'admin delete is atomic'
+);
+
+select is(
+  (select deletion_source from public.community_posts
+   where id = '60000000-0000-0000-0000-000000000001'),
+  'admin',
+  'admin deletion is distinguishable'
+);
+
+select ok(
+  (select purge_at = deleted_at + interval '1 year' from public.community_posts
+   where id = '60000000-0000-0000-0000-000000000001'),
+  'admin deletion receives a one-year purge time'
+);
+
+select lives_ok(
+  $$ select public.moderate_community_content(
+    md5('101')::uuid, 'restore', 'post',
+    '60000000-0000-0000-0000-000000000001', null, null,
+    '관리자 삭제 복구 처리'
+  ) $$,
+  'admin can restore admin-deleted content'
+);
+
+select is(
+  (select status::text from public.community_posts where id = '60000000-0000-0000-0000-000000000001'),
+  'visible',
+  'admin-deleted content is restored to visible'
+);
+
+select ok(
+  (select deletion_source is null and deleted_at is null and purge_at is null
+   from public.community_posts where id = '60000000-0000-0000-0000-000000000001'),
+  'restoring admin-deleted content clears deletion metadata'
+);
+
+select lives_ok(
   $$
     select public.moderate_community_content(
       md5('101')::uuid, 'restrict', 'user', null,
@@ -113,9 +262,31 @@ select lives_ok(
 );
 
 select is(
-  (select count(*)::integer from public.community_sanctions where user_id = md5('102')::uuid and ends_at > now()),
+  (select count(*)::integer from public.community_sanctions where user_id = md5('102')::uuid and ends_at > now() and revoked_at is null),
   1,
   'restriction creates one active sanction'
+);
+
+select lives_ok(
+  $$ select public.revoke_community_sanction(
+    md5('101')::uuid,
+    (select id from public.community_sanctions where user_id = md5('102')::uuid and revoked_at is null),
+    '제재 해제 사유 기록'
+  ) $$,
+  'admin can revoke an active sanction'
+);
+
+select ok(
+  (select revoked_at is not null from public.community_sanctions
+   where user_id = md5('102')::uuid),
+  'sanction revocation records its timestamp'
+);
+
+select is(
+  (select count(*)::integer from public.community_moderation_actions
+   where user_id = md5('102')::uuid and action = 'unrestrict'),
+  1,
+  'sanction revocation writes one unrestrict audit action'
 );
 
 select throws_ok(

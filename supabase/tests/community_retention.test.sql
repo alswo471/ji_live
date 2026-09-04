@@ -12,13 +12,16 @@ values
 insert into public.community_admins (user_id) values (md5('retention-admin')::uuid);
 
 insert into public.community_posts (
-  id, author_id, author_name, title, body, status, deleted_at, idempotency_key, created_at
+  id, author_id, author_name, title, body, status, deletion_source, deleted_at, purge_at,
+  idempotency_key, created_at
 ) values
   ('71000000-0000-0000-0000-000000000001', md5('retention-author')::uuid,
-   '테스트-작성자', '파기 대상', '30일이 지난 삭제 콘텐츠', 'deleted', now() - interval '31 days',
+   '테스트-작성자', '파기 대상', '30일이 지난 삭제 콘텐츠', 'deleted', 'author',
+   now() - interval '31 days', now() - interval '31 days' + interval '1 year',
    '72000000-0000-0000-0000-000000000001', now() - interval '31 days'),
   ('71000000-0000-0000-0000-000000000002', md5('retention-author')::uuid,
-   '테스트-작성자', '보존 대상', 'legal hold가 설정된 콘텐츠', 'deleted', now() - interval '31 days',
+   '테스트-작성자', '보존 대상', 'legal hold가 설정된 콘텐츠', 'deleted', 'author',
+   now() - interval '31 days', now() - interval '31 days' + interval '1 year',
    '72000000-0000-0000-0000-000000000002', now() - interval '31 days');
 
 insert into public.community_legal_holds (
