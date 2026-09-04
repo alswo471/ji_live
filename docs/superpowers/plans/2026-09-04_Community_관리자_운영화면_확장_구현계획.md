@@ -902,7 +902,7 @@ Expected: working tree clean, six implementation commits visible, branch remains
 - [x] 댓글 신고·pagination/count, 익명 token refresh, Turnstile timeout/retry와 삭제 guard를 구현했다.
 - [x] 429 재시도 metadata, malformed JSON 400, release config 검증과 Cloudflare→Oracle 원점 공유 비밀 경계를 구현했다.
 - [x] README, CHANGELOG, 운영 문서, 프로젝트 소개·히스토리·참고자료와 두 설계를 현재 동작에 맞췄다.
-- [x] 최종 검증: Vitest `67 files / 482 passed / 5 skipped`, typecheck·lint·build 성공, fresh reset에서 DB lint 오류 0건과 pgTAP `4 files / 123 tests`, opt-in integration `6/6`, release gate `27/27` 통과.
+- [x] 최종 검증: Vitest `67 files / 482 passed / 5 skipped`, typecheck·lint·build 성공, fresh reset에서 DB lint 오류 0건과 pgTAP `4 files / 123 tests`, opt-in integration 파일 `6/6`(live local 5건 + calendar 1건), release gate `27/27` 통과.
 
 기존 deferred minor인 유효 base64 cursor tuple의 필드별 세부 test와 pending moderation 입력 비활성화/progress label은 이번 수정 범위에서도 독립적이어서 그대로 보류한다. 실제 Oracle·Cloudflare staging smoke와 Magic Link 전달 확인은 외부 배포 환경·운영 자격증명이 없어 완료로 표시하지 않는다.
 

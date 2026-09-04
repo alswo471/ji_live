@@ -29,7 +29,7 @@ Backup 자체가 복구 가능성을 보장하지 않는다. 복구 테스트 �
 
 ### 위협 모델
 
-공개 Oracle 주소로 직접 요청할 수 있는 공격자는 임의의 `CF-Connecting-IP`를 붙여 network-derived HMAC을 계속 바꿀 수 있다. 따라서 `CF-Connecting-IP`의 형식 검증만으로는 Cloudflare를 거쳤다는 사실을 증명하지 않는다. Community 변경 API는 Cloudflare가 원점 전용으로 덮어쓴 공유 헤더를 먼저 검증하고, Oracle network도 직접 인바운드를 차단하는 이중 경계를 사용한다.
+공개 Oracle 주소로 직접 요청할 수 있는 공격자는 임의의 `CF-Connecting-IP`를 붙여 network-derived HMAC을 계속 바꿀 수 있다. 따라서 `CF-Connecting-IP`의 형식 검증만으로는 Cloudflare를 거쳤다는 사실을 증명하지 않는다. Client-IP 기반 공개 Community 작성·삭제·신고 API는 Cloudflare가 원점 전용으로 덮어쓴 공유 헤더를 먼저 검증하고, Oracle network도 직접 인바운드를 차단하는 이중 경계를 사용한다.
 
 ### Production 설정
 

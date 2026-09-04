@@ -114,7 +114,7 @@ Oracle 원점이 `CF-Connecting-IP`만 신뢰하면 직접 원점 호출자가 �
 2. Cloudflare Request Header Transform Rule 또는 Worker가 모든 원점 요청의 `X-Community-Proxy-Secret`을 이 값으로 **덮어쓰도록** 설정합니다. 방문자가 보낸 같은 이름의 헤더를 통과시키는 설정은 허용하지 않습니다.
 3. Oracle 원점은 Cloudflare Tunnel의 outbound-only 연결을 우선 사용해 public inbound port를 열지 않습니다. Tunnel을 사용할 수 없다면 현재 Cloudflare origin IP 범위만 허용하고 나머지 직접 인바운드를 방화벽에서 차단합니다.
 
-Production 환경은 `COMMUNITY_TRUSTED_PROXY_MODE=cloudflare`로 설정합니다. 모든 Community 변경 API는 공유 헤더가 없거나 일치하지 않으면 `untrusted_proxy`로 거부한 뒤에만 `CF-Connecting-IP`를 HMAC 처리합니다. Secret 유출 시 Cloudflare와 Oracle 값을 함께 교체하고 애플리케이션을 재시작합니다. 자세한 점검·복구 절차는 [Community 백업과 복구](./docs/operations/Community_백업과_복구.md)의 신뢰 프록시 운영 절을 따릅니다.
+Production 환경은 `COMMUNITY_TRUSTED_PROXY_MODE=cloudflare`로 설정합니다. Client-IP 기반 공개 Community 작성·삭제·신고 API는 공유 헤더가 없거나 일치하지 않으면 `untrusted_proxy`로 거부한 뒤에만 `CF-Connecting-IP`를 HMAC 처리합니다. Secret 유출 시 Cloudflare와 Oracle 값을 함께 교체하고 애플리케이션을 재시작합니다. 자세한 점검·복구 절차는 [Community 백업과 복구](./docs/operations/Community_백업과_복구.md)의 신뢰 프록시 운영 절을 따릅니다.
 
 ### 4. 개발 서버 실행
 
