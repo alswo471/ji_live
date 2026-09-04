@@ -76,6 +76,18 @@ function writeRequest(
   });
 }
 
+function expectNoKnownUserIds(body: string, actors: Array<{ userId: string }>) {
+  for (const actor of actors) {
+    expect(body).not.toContain(actor.userId);
+  }
+}
+
+function oneUtcYearAfter(value: Date) {
+  const result = new Date(value);
+  result.setUTCFullYear(result.getUTCFullYear() + 1);
+  return result;
+}
+
 describe.runIf(runIntegration)('local community security integration', () => {
   let env: LocalEnvironment;
   let service: SupabaseClient;
@@ -422,7 +434,7 @@ describe.runIf(runIntegration)('local community security integration', () => {
     );
     expect(reportsResponse.status).toBe(200);
     const reportsText = await reportsResponse.text();
-    expect(reportsText).not.toContain(actors[1].userId);
+    expectNoKnownUserIds(reportsText, actors);
     expect(reportsText).not.toMatch(/reporter_id|author_id|abuse_key|secret/i);
 
     const deleteResponse = await handleDeletePostRequest(
@@ -465,10 +477,9 @@ describe.runIf(runIntegration)('local community security integration', () => {
         purgeAt: expect.any(String),
       }),
     );
-    expect(JSON.stringify(authorTrash)).not.toContain(actors[0].userId);
-    expect(JSON.stringify(authorTrash)).not.toMatch(
-      /author_id|abuse_key|secret/i,
-    );
+    const authorTrashText = JSON.stringify(authorTrash);
+    expectNoKnownUserIds(authorTrashText, actors);
+    expect(authorTrashText).not.toMatch(/author_id|abuse_key|secret/i);
 
     const restore = (reason: string) =>
       handleModerationActionRequest(
@@ -523,12 +534,14 @@ describe.runIf(runIntegration)('local community security integration', () => {
     const adminTrash = (await adminTrashResponse.json()) as {
       items: Array<{ targetId: string; deletionSource: string }>;
     };
+    expect(adminTrashResponse.status).toBe(200);
     expect(adminTrash.items).toContainEqual(
       expect.objectContaining({
         targetId: created.id,
         deletionSource: 'admin',
       }),
     );
+    expectNoKnownUserIds(JSON.stringify(adminTrash), actors);
     expect((await restore('관리자 삭제 복구 통합 검증')).status).toBe(204);
 
     const restrictResponse = await handleModerationActionRequest(
@@ -564,7 +577,7 @@ describe.runIf(runIntegration)('local community security integration', () => {
       (item) => item.reason === '제재와 해제 감사 통합 검증',
     );
     expect(sanction).toBeDefined();
-    expect(JSON.stringify(sanctions)).not.toContain(actors[0].userId);
+    expectNoKnownUserIds(JSON.stringify(sanctions), actors);
 
     const unrestrictResponse = await handleModerationActionRequest(
       new Request('http://localhost/api/admin/community/actions', {
@@ -592,7 +605,7 @@ describe.runIf(runIntegration)('local community security integration', () => {
     expect(auditResponse.status).toBe(200);
     const auditText = await auditResponse.text();
     expect(auditText).toContain('제재 해제 감사 통합 검증');
-    expect(auditText).not.toContain(actors[0].userId);
+    expectNoKnownUserIds(auditText, actors);
     expect(auditText).not.toMatch(
       /admin_id|author_id|user_id|abuse_key|secret/i,
     );
@@ -614,26 +627,42 @@ describe.runIf(runIntegration)('local community security integration', () => {
     );
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { id: string };
-    expect(
-      (
-        await handleDeletePostRequest(
-          new Request(`http://localhost/api/community/posts/${created.id}`, {
-            method: 'DELETE',
-            headers: { authorization: `Bearer ${actors[2].token}` },
-          }),
-          created.id,
-        )
-      ).status,
-    ).toBe(204);
+    const deleteStartedAt = Date.now();
+    const deleteResponse = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          type: 'delete',
+          targetType: 'post',
+          targetId: created.id,
+          reason: '관리자 삭제 retention 통합 검증',
+        }),
+      }),
+    );
+    const deleteFinishedAt = Date.now();
+    expect(deleteResponse.status).toBe(204);
 
-    const expired = await service
+    const adminDeletionMetadata = await service
       .from('community_posts')
-      .update({
-        deleted_at: '2024-01-01T00:00:00.000Z',
-        purge_at: '2025-01-01T00:00:00.000Z',
-      })
-      .eq('id', created.id);
-    expect(expired.error).toBeNull();
+      .select('deletion_source,deleted_at,purge_at')
+      .eq('id', created.id)
+      .single();
+    expect(adminDeletionMetadata.error).toBeNull();
+    expect(adminDeletionMetadata.data?.deletion_source).toBe('admin');
+    const deletedAt = new Date(adminDeletionMetadata.data?.deleted_at ?? '');
+    const purgeAt = new Date(adminDeletionMetadata.data?.purge_at ?? '');
+    expect(Number.isNaN(deletedAt.getTime())).toBe(false);
+    expect(Number.isNaN(purgeAt.getTime())).toBe(false);
+    expect(deletedAt.getTime()).toBeGreaterThanOrEqual(deleteStartedAt - 1_000);
+    expect(deletedAt.getTime()).toBeLessThanOrEqual(deleteFinishedAt + 1_000);
+    expect(
+      Math.abs(purgeAt.getTime() - oneUtcYearAfter(deletedAt).getTime()),
+    ).toBeLessThanOrEqual(1_000);
+
     const hold = await service.from('community_legal_holds').insert({
       subject_type: 'post',
       subject_id: created.id,
@@ -641,8 +670,9 @@ describe.runIf(runIntegration)('local community security integration', () => {
       created_by: adminUserId,
     });
     expect(hold.error).toBeNull();
+    const retentionAt = new Date(purgeAt.getTime() + 1_000);
     const firstRetention = await service.rpc('run_community_retention', {
-      p_now: '2026-09-04T00:00:00.000Z',
+      p_now: retentionAt.toISOString(),
     });
     expect(firstRetention.error).toBeNull();
     expect(
@@ -657,12 +687,12 @@ describe.runIf(runIntegration)('local community security integration', () => {
 
     const releaseHold = await service
       .from('community_legal_holds')
-      .update({ released_at: '2026-09-04T00:00:00.000Z' })
+      .update({ released_at: retentionAt.toISOString() })
       .eq('subject_type', 'post')
       .eq('subject_id', created.id);
     expect(releaseHold.error).toBeNull();
     const secondRetention = await service.rpc('run_community_retention', {
-      p_now: '2026-09-04T00:00:01.000Z',
+      p_now: new Date(retentionAt.getTime() + 1_000).toISOString(),
     });
     expect(secondRetention.error).toBeNull();
     expect(
