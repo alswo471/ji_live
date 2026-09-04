@@ -3,11 +3,18 @@ import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { handleModerationActionRequest } from '@/app/api/admin/community/actions/route';
+import { handleAdminAuditRequest } from '@/app/api/admin/community/audit/route';
+import { handleAdminContentRequest } from '@/app/api/admin/community/content/route';
+import { handleListModerationReportsRequest } from '@/app/api/admin/community/reports/route';
+import { handleAdminSanctionsRequest } from '@/app/api/admin/community/sanctions/route';
 import {
   handleCreatePostRequest,
   handleListPostsRequest,
 } from '@/app/api/community/posts/route';
-import { handleDeletePostRequest } from '@/app/api/community/posts/[id]/route';
+import {
+  handleDeletePostRequest,
+  handleGetPostRequest,
+} from '@/app/api/community/posts/[id]/route';
 import { handleReportRequest } from '@/app/api/community/reports/route';
 
 const runIntegration = process.env.RUN_LOCAL_SUPABASE_TESTS === 'true';
@@ -73,6 +80,9 @@ describe.runIf(runIntegration)('local community security integration', () => {
   let env: LocalEnvironment;
   let service: SupabaseClient;
   let actors: Awaited<ReturnType<typeof anonymousSession>>[];
+  let adminToken: string;
+  let adminUserId: string;
+  let nonAdminToken: string;
 
   beforeAll(async () => {
     env = localEnvironment();
@@ -86,11 +96,102 @@ describe.runIf(runIntegration)('local community security integration', () => {
     service = createClient(env.API_URL, env.SECRET_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const password = `Test-${randomUUID()}-Aa1!`;
+    const adminEmail = `admin-${randomUUID()}@example.invalid`;
+    const adminUser = await service.auth.admin.createUser({
+      email: adminEmail,
+      password,
+      email_confirm: true,
+    });
+    expect(adminUser.error).toBeNull();
+    if (!adminUser.data.user)
+      throw new Error('local admin user creation failed');
+    adminUserId = adminUser.data.user.id;
+    const membership = await service
+      .from('community_admins')
+      .insert({ user_id: adminUserId });
+    expect(membership.error).toBeNull();
+
+    const nonAdminEmail = `non-admin-${randomUUID()}@example.invalid`;
+    const nonAdminUser = await service.auth.admin.createUser({
+      email: nonAdminEmail,
+      password,
+      email_confirm: true,
+    });
+    expect(nonAdminUser.error).toBeNull();
+    const permanentClient = createClient(env.API_URL, env.PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const [adminLogin, nonAdminLogin] = await Promise.all([
+      permanentClient.auth.signInWithPassword({ email: adminEmail, password }),
+      createClient(env.API_URL, env.PUBLISHABLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      }).auth.signInWithPassword({ email: nonAdminEmail, password }),
+    ]);
+    expect(adminLogin.error).toBeNull();
+    expect(nonAdminLogin.error).toBeNull();
+    if (!adminLogin.data.session || !nonAdminLogin.data.session) {
+      throw new Error('local permanent auth failed');
+    }
+    adminToken = adminLogin.data.session.access_token;
+    nonAdminToken = nonAdminLogin.data.session.access_token;
     actors = await Promise.all(
       Array.from({ length: 11 }, () =>
         anonymousSession(env.API_URL, env.PUBLISHABLE_KEY),
       ),
     );
+  }, 60_000);
+
+  it('rejects anonymous and unregistered users from every admin read API while allowing the configured admin', async () => {
+    const handlers = [
+      {
+        url: 'http://localhost/api/admin/community/reports',
+        handle: handleListModerationReportsRequest,
+      },
+      {
+        url: 'http://localhost/api/admin/community/content?status=deleted',
+        handle: handleAdminContentRequest,
+      },
+      {
+        url: 'http://localhost/api/admin/community/sanctions?state=active',
+        handle: handleAdminSanctionsRequest,
+      },
+      {
+        url: 'http://localhost/api/admin/community/audit',
+        handle: handleAdminAuditRequest,
+      },
+    ];
+
+    for (const { url, handle } of handlers) {
+      expect((await handle(new Request(url))).status).toBe(401);
+      expect(
+        (
+          await handle(
+            new Request(url, {
+              headers: { authorization: `Bearer ${actors[0].token}` },
+            }),
+          )
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await handle(
+            new Request(url, {
+              headers: { authorization: `Bearer ${nonAdminToken}` },
+            }),
+          )
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await handle(
+            new Request(url, {
+              headers: { authorization: `Bearer ${adminToken}` },
+            }),
+          )
+        ).status,
+      ).toBe(200);
+    }
   }, 60_000);
 
   it('enforces the full anonymous write, report, moderation and public-read boundary', async () => {
@@ -280,5 +381,298 @@ describe.runIf(runIntegration)('local community security integration', () => {
       }),
     );
     expect(nonAdminResponse.status).toBe(403);
+  }, 60_000);
+
+  it('keeps author and admin deletion recoverable, hides raw identities, and audits restriction changes', async () => {
+    const createResponse = await handleCreatePostRequest(
+      writeRequest(
+        'http://localhost/api/community/posts',
+        actors[0].token,
+        '192.0.2.10',
+        {
+          title: '관리자 복구 통합 검증 게시글',
+          body: '작성자 삭제와 관리자 복구를 실제 local API로 검증합니다.',
+          linkUrl: null,
+          idempotencyKey: randomUUID(),
+        },
+      ),
+    );
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { id: string };
+
+    const reportResponse = await handleReportRequest(
+      writeRequest(
+        'http://localhost/api/community/reports',
+        actors[1].token,
+        '192.0.2.11',
+        {
+          targetType: 'post',
+          targetId: created.id,
+          reason: 'spam',
+          detail: '신고자 비공개 통합 검증',
+        },
+      ),
+    );
+    expect(reportResponse.status).toBe(201);
+
+    const reportsResponse = await handleListModerationReportsRequest(
+      new Request('http://localhost/api/admin/community/reports', {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+    );
+    expect(reportsResponse.status).toBe(200);
+    const reportsText = await reportsResponse.text();
+    expect(reportsText).not.toContain(actors[1].userId);
+    expect(reportsText).not.toMatch(/reporter_id|author_id|abuse_key|secret/i);
+
+    const deleteResponse = await handleDeletePostRequest(
+      new Request(`http://localhost/api/community/posts/${created.id}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${actors[0].token}` },
+      }),
+      created.id,
+    );
+    expect(deleteResponse.status).toBe(204);
+    expect(
+      (
+        await handleGetPostRequest(
+          new Request(`http://localhost/api/community/posts/${created.id}`),
+          created.id,
+        )
+      ).status,
+    ).toBe(404);
+
+    const authorTrashResponse = await handleAdminContentRequest(
+      new Request(
+        'http://localhost/api/admin/community/content?status=deleted',
+        {
+          headers: { authorization: `Bearer ${adminToken}` },
+        },
+      ),
+    );
+    expect(authorTrashResponse.status).toBe(200);
+    const authorTrash = (await authorTrashResponse.json()) as {
+      items: Array<{
+        targetId: string;
+        deletionSource: string;
+        purgeAt: string | null;
+      }>;
+    };
+    expect(authorTrash.items).toContainEqual(
+      expect.objectContaining({
+        targetId: created.id,
+        deletionSource: 'author',
+        purgeAt: expect.any(String),
+      }),
+    );
+    expect(JSON.stringify(authorTrash)).not.toContain(actors[0].userId);
+    expect(JSON.stringify(authorTrash)).not.toMatch(
+      /author_id|abuse_key|secret/i,
+    );
+
+    const restore = (reason: string) =>
+      handleModerationActionRequest(
+        new Request('http://localhost/api/admin/community/actions', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${adminToken}`,
+          },
+          body: JSON.stringify({
+            type: 'restore',
+            targetType: 'post',
+            targetId: created.id,
+            reason,
+          }),
+        }),
+      );
+    expect((await restore('작성자 삭제 복구 통합 검증')).status).toBe(204);
+    expect(
+      (
+        await handleGetPostRequest(
+          new Request(`http://localhost/api/community/posts/${created.id}`),
+          created.id,
+        )
+      ).status,
+    ).toBe(200);
+
+    const adminDelete = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          type: 'delete',
+          targetType: 'post',
+          targetId: created.id,
+          reason: '관리자 삭제 주체 통합 검증',
+        }),
+      }),
+    );
+    expect(adminDelete.status).toBe(204);
+    const adminTrashResponse = await handleAdminContentRequest(
+      new Request(
+        'http://localhost/api/admin/community/content?status=deleted',
+        {
+          headers: { authorization: `Bearer ${adminToken}` },
+        },
+      ),
+    );
+    const adminTrash = (await adminTrashResponse.json()) as {
+      items: Array<{ targetId: string; deletionSource: string }>;
+    };
+    expect(adminTrash.items).toContainEqual(
+      expect.objectContaining({
+        targetId: created.id,
+        deletionSource: 'admin',
+      }),
+    );
+    expect((await restore('관리자 삭제 복구 통합 검증')).status).toBe(204);
+
+    const restrictResponse = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          type: 'restrict',
+          targetType: 'post',
+          targetId: created.id,
+          until: new Date(Date.now() + 86_400_000).toISOString(),
+          reason: '제재와 해제 감사 통합 검증',
+        }),
+      }),
+    );
+    expect(restrictResponse.status).toBe(204);
+    const sanctionsResponse = await handleAdminSanctionsRequest(
+      new Request(
+        'http://localhost/api/admin/community/sanctions?state=active',
+        {
+          headers: { authorization: `Bearer ${adminToken}` },
+        },
+      ),
+    );
+    expect(sanctionsResponse.status).toBe(200);
+    const sanctions = (await sanctionsResponse.json()) as {
+      items: Array<{ sanctionId: string; reason: string }>;
+    };
+    const sanction = sanctions.items.find(
+      (item) => item.reason === '제재와 해제 감사 통합 검증',
+    );
+    expect(sanction).toBeDefined();
+    expect(JSON.stringify(sanctions)).not.toContain(actors[0].userId);
+
+    const unrestrictResponse = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          type: 'unrestrict',
+          sanctionId: sanction?.sanctionId,
+          reason: '제재 해제 감사 통합 검증',
+        }),
+      }),
+    );
+    expect(unrestrictResponse.status).toBe(204);
+    const auditResponse = await handleAdminAuditRequest(
+      new Request(
+        'http://localhost/api/admin/community/audit?action=unrestrict',
+        {
+          headers: { authorization: `Bearer ${adminToken}` },
+        },
+      ),
+    );
+    expect(auditResponse.status).toBe(200);
+    const auditText = await auditResponse.text();
+    expect(auditText).toContain('제재 해제 감사 통합 검증');
+    expect(auditText).not.toContain(actors[0].userId);
+    expect(auditText).not.toMatch(
+      /admin_id|author_id|user_id|abuse_key|secret/i,
+    );
+  }, 60_000);
+
+  it('preserves expired deleted content under legal hold and purges it after the hold ends', async () => {
+    const createResponse = await handleCreatePostRequest(
+      writeRequest(
+        'http://localhost/api/community/posts',
+        actors[2].token,
+        '192.0.2.12',
+        {
+          title: 'Legal hold retention 통합 검증',
+          body: '1년 파기와 legal hold 예외를 실제 retention RPC로 검증합니다.',
+          linkUrl: null,
+          idempotencyKey: randomUUID(),
+        },
+      ),
+    );
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { id: string };
+    expect(
+      (
+        await handleDeletePostRequest(
+          new Request(`http://localhost/api/community/posts/${created.id}`, {
+            method: 'DELETE',
+            headers: { authorization: `Bearer ${actors[2].token}` },
+          }),
+          created.id,
+        )
+      ).status,
+    ).toBe(204);
+
+    const expired = await service
+      .from('community_posts')
+      .update({
+        deleted_at: '2024-01-01T00:00:00.000Z',
+        purge_at: '2025-01-01T00:00:00.000Z',
+      })
+      .eq('id', created.id);
+    expect(expired.error).toBeNull();
+    const hold = await service.from('community_legal_holds').insert({
+      subject_type: 'post',
+      subject_id: created.id,
+      reason: '통합 테스트 진행 중인 분쟁 보존',
+      created_by: adminUserId,
+    });
+    expect(hold.error).toBeNull();
+    const firstRetention = await service.rpc('run_community_retention', {
+      p_now: '2026-09-04T00:00:00.000Z',
+    });
+    expect(firstRetention.error).toBeNull();
+    expect(
+      (
+        await service
+          .from('community_posts')
+          .select('id')
+          .eq('id', created.id)
+          .maybeSingle()
+      ).data?.id,
+    ).toBe(created.id);
+
+    const releaseHold = await service
+      .from('community_legal_holds')
+      .update({ released_at: '2026-09-04T00:00:00.000Z' })
+      .eq('subject_type', 'post')
+      .eq('subject_id', created.id);
+    expect(releaseHold.error).toBeNull();
+    const secondRetention = await service.rpc('run_community_retention', {
+      p_now: '2026-09-04T00:00:01.000Z',
+    });
+    expect(secondRetention.error).toBeNull();
+    expect(
+      (
+        await service
+          .from('community_posts')
+          .select('id')
+          .eq('id', created.id)
+          .maybeSingle()
+      ).data,
+    ).toBeNull();
   }, 60_000);
 });

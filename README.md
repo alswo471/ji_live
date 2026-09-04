@@ -22,7 +22,7 @@
 - 데스크톱과 모바일을 고려한 반응형 화면
 - 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
 - 마켓·커뮤니티 공통 navigation과 반응형 익명 feed·작성·댓글·신고 UI
-- 운영자 email Magic Link와 등록된 admin membership으로 보호되는 신고 검토·숨김·복원·삭제·기간 제한 console
+- `/admin` 직접 접근, 운영자 email Magic Link와 등록된 admin membership으로 보호되는 신고 대기·숨김·삭제 대기·제재·운영 로그 console
 
 ## 기술 스택
 
@@ -93,12 +93,14 @@ Community 기능은 기본적으로 비활성화되어 있으며 실제 secret�
 
 Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활성화됩니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 현재는 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
 
-관리 화면은 `/admin/community`에 있으며 public navigation에는 노출하지 않습니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, Magic Link 요청은 Turnstile CAPTCHA를 통과해야 하며 새 사용자를 자동 생성하지 않습니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치는 신고 해결과 감사 로그를 같은 database transaction으로 처리하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
+관리 화면은 public navigation에 노출하지 않으며 `/admin` 직접 접근 시 `/admin/community`로 이동합니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, Magic Link 요청은 Turnstile CAPTCHA를 통과해야 하며 새 사용자를 자동 생성하지 않습니다. 관리자는 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab에서 상태별 API를 사용합니다. 관리자 응답은 신고자와 raw 사용자 UUID, abuse key, secret을 반환하지 않습니다.
+
+작성자와 관리자 삭제는 즉시 공개 API에서 제외하고 삭제 주체를 구분해 1년 동안 복구 가능한 삭제 대기로 보관합니다. 작성자 삭제 복구에는 관리 사유, 사용자 의사와 충돌할 수 있다는 경고, 이중 확인을 요구합니다. 1년은 법정 고정기간이 아니라 오조치 복구와 분쟁 대응을 위해 정한 내부 운영 정책입니다. 정식 삭제 요청은 개별 검토하며 진행 중인 분쟁·법령상 보존 사유는 별도 legal hold로 자동 파기에서 제외합니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치는 신고 해결과 감사 로그를 같은 database transaction으로 처리하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
 
 ```bash
 pnpm dlx supabase start
 pnpm dlx supabase db reset
-pnpm dlx supabase db lint --local
+pnpm dlx supabase db lint
 pnpm dlx supabase test db
 ```
 
@@ -133,13 +135,13 @@ Local Supabase를 포함한 Community 보안 통합 검사는 database를 reset�
 ```bash
 pnpm dlx supabase start
 pnpm dlx supabase db reset
-RUN_LOCAL_SUPABASE_TESTS=true pnpm vitest run tests/integration/community-security.test.ts
+RUN_LOCAL_SUPABASE_TESTS=true pnpm exec vitest run tests/integration/community-security.test.ts
 pnpm dlx supabase test db
-pnpm dlx supabase db lint --local
+pnpm dlx supabase db lint
 pnpm dlx supabase stop
 ```
 
-Community 공개 전에는 실제 환경변수, 서울 region, 등록된 관리자, 자동 파기 scheduler와 처리위탁·국외 처리 사실을 확인합니다. 값이 없거나 확인되지 않으면 검사가 실패하는 것이 정상입니다.
+Community 공개 전에는 실제 환경변수, 정확한 공개 정책값 `COMMUNITY_RETENTION_DAYS=365`, 개인정보처리방침에 표시할 처리·보유 고지, 자동 파기 scheduler 확인, 서울 region과 등록된 관리자를 확인합니다. 오류에는 현재 환경변수 값이나 secret을 출력하지 않습니다. 값이 없거나 정책과 다르면 검사가 실패하는 것이 정상입니다.
 
 ```bash
 pnpm check:community-release

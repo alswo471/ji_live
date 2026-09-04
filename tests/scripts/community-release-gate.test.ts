@@ -22,6 +22,7 @@ Object.assign(VALID_ENV, {
   COMMUNITY_PROCESSING_PURPOSE: 'verified-purpose',
   COMMUNITY_OVERSEAS_TRANSFER_METHOD: 'verified-method',
   COMMUNITY_PROCESSING_RETENTION: 'verified-retention',
+  COMMUNITY_RETENTION_DAYS: '365',
   COMMUNITY_RETENTION_SECRET: 'retention-secret-at-least-32-characters',
   COMMUNITY_RETENTION_SCHEDULE_CONFIRMED: 'true',
 });
@@ -54,6 +55,15 @@ describe('community release gate', () => {
     ).toThrow('COMMUNITY_PROCESSOR_LEGAL_NAME');
   });
 
+  it('requires the public processing-retention notice', () => {
+    expect(() =>
+      assertCommunityReleaseConfig({
+        ...VALID_ENV,
+        COMMUNITY_PROCESSING_RETENTION: '',
+      }),
+    ).toThrow('COMMUNITY_PROCESSING_RETENTION');
+  });
+
   it('requires the retention scheduler confirmation', () => {
     expect(() =>
       assertCommunityReleaseConfig({
@@ -61,6 +71,25 @@ describe('community release gate', () => {
         COMMUNITY_RETENTION_SCHEDULE_CONFIRMED: 'false',
       }),
     ).toThrow('COMMUNITY_RETENTION_SCHEDULE_CONFIRMED');
+  });
+
+  it('requires the exact one-year community retention policy without exposing values', () => {
+    const invalidRetention = '30-sensitive-policy-value';
+    expect(() =>
+      assertCommunityReleaseConfig({
+        ...VALID_ENV,
+        COMMUNITY_RETENTION_DAYS: invalidRetention,
+      }),
+    ).toThrow('COMMUNITY_RETENTION_DAYS');
+
+    try {
+      assertCommunityReleaseConfig({
+        ...VALID_ENV,
+        COMMUNITY_RETENTION_DAYS: invalidRetention,
+      });
+    } catch (error) {
+      expect(String(error)).not.toContain(invalidRetention);
+    }
   });
 
   it('accepts only the Seoul project region', async () => {

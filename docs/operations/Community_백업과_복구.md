@@ -23,11 +23,13 @@ Script는 `supabase db dump --linked`를 사용하며 파일 권한을 `600`으�
 3. 암호화본의 크기와 checksum을 확인한 뒤 평문은 운영체제의 안전한 삭제 절차로 제거한다.
 4. 최소 월 1회 별도 임시 Supabase project 또는 격리된 local database에 복구해 migration과 주요 table count를 확인한다.
 
-Backup 자체가 복구 가능성을 보장하지 않는다. 복구 테스트 결과, 담당자, 생성 시각과 실패 원인은 개인정보를 포함하지 않는 운영 기록으로 남긴다. 보존기간과 legal hold 정책이 바뀌면 backup 교체·파기 주기도 함께 검토한다.
+Backup 자체가 복구 가능성을 보장하지 않는다. 복구 테스트 결과, 담당자, 생성 시각과 실패 원인은 개인정보를 포함하지 않는 운영 기록으로 남긴다. 작성자·관리자 삭제 콘텐츠와 종료된 관리 기록의 1년 제한 보관은 법정 고정기간이 아니라 내부 운영 정책이다. 정식 삭제 요청은 개별 검토하고 진행 중인 분쟁·법령상 보존 사유만 별도 legal hold로 관리한다. 이 정책이 바뀌면 backup 교체·파기 주기도 함께 검토한다.
 
 ## 복구 원칙
 
 - 운영 database에 바로 덮어쓰지 않고 격리 환경에서 dump 무결성과 schema version을 먼저 확인한다.
 - 복구 중 service write를 중단하고 시작·종료 시각과 영향 범위를 기록한다.
 - 관리자 secret, Auth 설정, Turnstile과 scheduler는 database dump와 별개로 다시 검증한다.
+- 복구된 삭제 대기 row의 `deletion_source`, `deleted_at`, `purge_at`과 legal hold 연결을 표본 확인하고, 백업에 남았다는 이유만으로 파기 시점이 지난 데이터를 공개 상태로 되돌리지 않는다.
+- `/admin`의 삭제 대기에서 작성자·관리자 삭제가 구분되는지, 작성자 삭제 복구가 경고·관리 사유·이중 확인을 거치는지, 복구 후 공개 상세가 다시 조회되는지 격리 환경에서 확인한다.
 - 실제 장애 복구 전에 최신 Supabase 공식 restore 절차와 현재 plan 제약을 다시 확인한다.

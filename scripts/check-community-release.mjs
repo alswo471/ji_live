@@ -9,6 +9,7 @@ export const REQUIRED_RELEASE_ENV = [
   'TURNSTILE_SECRET_KEY',
   'COMMUNITY_HMAC_SECRET',
   'COMMUNITY_RETENTION_SECRET',
+  'COMMUNITY_RETENTION_DAYS',
   'SUPABASE_PROJECT_REF',
   'SUPABASE_ACCESS_TOKEN',
 ];
@@ -31,6 +32,9 @@ export function assertCommunityReleaseConfig(env) {
     throw new Error(
       'Community release requires NEXT_PUBLIC_COMMUNITY_ENABLED=true',
     );
+  }
+  if (env.COMMUNITY_RETENTION_DAYS !== '365') {
+    throw new Error('COMMUNITY_RETENTION_DAYS must be 365');
   }
   if (env.COMMUNITY_RETENTION_SCHEDULE_CONFIRMED !== 'true') {
     throw new Error('COMMUNITY_RETENTION_SCHEDULE_CONFIRMED must be true');

@@ -24,15 +24,17 @@
 - 신고 queue에서 콘텐츠 숨김·복원·삭제와 작성자 기간 제한을 수행하는 관리 API 추가
 - 콘텐츠 조치·신고 해결·감사 로그를 하나의 database transaction으로 처리하는 moderation RPC 추가
 - 개인정보처리방침·이용약관·커뮤니티 운영정책·권리침해 문의·소개 페이지와 공통 footer 추가
-- 24시간·30일·90일 자동 파기, legal hold와 scheduler 전용 retention API 추가
-- 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·scheduler를 확인하는 release gate 추가
+- 24시간 abuse key, 90일 비활성 익명 계정, 1년이 지난 삭제 콘텐츠·종료 처리 기록을 자동 파기하고 legal hold를 제외하는 scheduler 전용 retention API 추가
+- 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·scheduler와 정확한 `COMMUNITY_RETENTION_DAYS=365`를 확인하는 release gate 추가
 - workspace 밖의 지정 경로에 권한을 제한한 Supabase logical dump를 만드는 backup command 추가
-- 실제 local Supabase Auth·RLS·RPC와 Cloudflare test key를 사용하는 Community 보안 통합 검사 추가
+- 실제 local Supabase Auth·RLS·RPC와 Cloudflare test key로 관리자 read 권한, 작성자·관리자 삭제·복구, UUID 비공개, 제재·해제 audit와 legal hold 파기를 확인하는 Community 보안 통합 검사 추가
+- `/admin` 직접 접근과 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab을 제공하는 상태별 관리자 console 추가
 
 ### 수정
 
 - 관리자 로그인 직후 동일 session의 신고 목록 요청을 중복 실행하지 않고 오래된 실패 응답이 최신 성공 화면을 덮어쓰지 않도록 수정
 - 신고 관리 조치 실패를 열린 확인 대화상자 안에서 안내하고 입력값과 키보드 초점을 유지하도록 수정
+- 작성자·관리자 삭제 주체를 구분해 모두 1년 동안 복구 가능하게 하고 작성자 삭제 복구에는 경고·관리 사유·이중 확인을 적용
 
 ### 문서
 
