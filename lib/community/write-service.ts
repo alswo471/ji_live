@@ -63,8 +63,8 @@ export interface CommunityWriteRepository {
   }): Promise<CommunityCommentRecord>;
   findPostOwnership(id: string): Promise<CommunityOwnership | null>;
   findCommentOwnership(id: string): Promise<CommunityOwnership | null>;
-  softDeletePost(id: string): Promise<void>;
-  softDeleteComment(id: string): Promise<void>;
+  softDeletePost(actorId: string, id: string): Promise<void>;
+  softDeleteComment(actorId: string, id: string): Promise<void>;
   submitReport(input: {
     actorId: string;
     abuseKey: string;
@@ -325,19 +325,27 @@ export const communityWriteRepository: CommunityWriteRepository = {
     };
   },
 
-  async softDeletePost(id) {
-    const { error } = await getServerSupabase()
-      .from('community_posts')
-      .update({ status: 'deleted', deleted_at: new Date().toISOString() })
-      .eq('id', id);
+  async softDeletePost(actorId, id) {
+    const { error } = await getServerSupabase().rpc(
+      'delete_community_content_by_author',
+      {
+        p_actor_id: actorId,
+        p_target_type: 'post',
+        p_target_id: id,
+      },
+    );
     if (error) providerError(error);
   },
 
-  async softDeleteComment(id) {
-    const { error } = await getServerSupabase()
-      .from('community_comments')
-      .update({ status: 'deleted', deleted_at: new Date().toISOString() })
-      .eq('id', id);
+  async softDeleteComment(actorId, id) {
+    const { error } = await getServerSupabase().rpc(
+      'delete_community_content_by_author',
+      {
+        p_actor_id: actorId,
+        p_target_type: 'comment',
+        p_target_id: id,
+      },
+    );
     if (error) providerError(error);
   },
 
@@ -493,7 +501,7 @@ async function deleteOwned(
   actor: CommunityActor,
   id: string,
   find: (id: string) => Promise<CommunityOwnership | null>,
-  remove: (id: string) => Promise<void>,
+  remove: (actorId: string, id: string) => Promise<void>,
 ) {
   const content = await find(id);
   if (!content || content.status === 'deleted') {
@@ -510,7 +518,7 @@ async function deleteOwned(
       '작성자만 삭제할 수 있습니다.',
     );
   }
-  await remove(id);
+  await remove(actor.id, id);
 }
 
 export async function deletePost(
@@ -522,7 +530,7 @@ export async function deletePost(
     actor,
     id,
     (targetId) => repository.findPostOwnership(targetId),
-    (targetId) => repository.softDeletePost(targetId),
+    (actorId, targetId) => repository.softDeletePost(actorId, targetId),
   );
 }
 
@@ -535,7 +543,7 @@ export async function deleteComment(
     actor,
     id,
     (targetId) => repository.findCommentOwnership(targetId),
-    (targetId) => repository.softDeleteComment(targetId),
+    (actorId, targetId) => repository.softDeleteComment(actorId, targetId),
   );
 }
 

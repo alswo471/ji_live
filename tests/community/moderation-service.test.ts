@@ -10,6 +10,8 @@ import {
 const ADMIN = { id: '10000000-0000-4000-8000-000000000001' };
 const POST_ID = '20000000-0000-4000-8000-000000000001';
 const AUTHOR_ID = '30000000-0000-4000-8000-000000000001';
+const SANCTION_ID = '50000000-0000-4000-8000-000000000001';
+const SECRET = 'test-secret-at-least-32-characters';
 
 function report(
   overrides: Partial<ModerationReportRecord> = {},
@@ -44,17 +46,20 @@ describe('listModerationQueue', () => {
     const page = await listModerationQueue(
       null,
       repository({ findOpenReports: async () => [report()] }),
+      SECRET,
     );
 
     expect(page.items).toHaveLength(1);
     expect(page.items[0]).toMatchObject({
       targetType: 'post',
       targetId: POST_ID,
-      targetAuthorId: AUTHOR_ID,
+      actorLabel: expect.stringMatching(/^익명 사용자 #[A-F0-9]{4}$/),
       reason: 'spam',
     });
+    expect(page.items[0]).not.toHaveProperty('targetAuthorId');
     expect(page.items[0]).not.toHaveProperty('reporterId');
     expect(page.items[0]).not.toHaveProperty('reporterAbuseKey');
+    expect(JSON.stringify(page)).not.toContain(AUTHOR_ID);
   });
 });
 
@@ -95,7 +100,8 @@ describe('moderateContent', () => {
         ADMIN,
         {
           type: 'restrict',
-          userId: AUTHOR_ID,
+          targetType: 'post',
+          targetId: POST_ID,
           until: '2026-09-03T03:59:59.000Z',
           reason: '반복적인 운영정책 위반',
         },
@@ -105,6 +111,95 @@ describe('moderateContent', () => {
     ).rejects.toMatchObject({
       status: 400,
       code: 'invalid_restriction_until',
+    });
+  });
+
+  it('requests a restriction by content target without a browser user UUID', async () => {
+    let received: unknown;
+    const repo = repository({
+      applyAction: async (adminId, action) => {
+        received = { adminId, action };
+      },
+    });
+
+    await moderateContent(
+      ADMIN,
+      {
+        type: 'restrict',
+        targetType: 'post',
+        targetId: POST_ID,
+        until: '2026-09-11T04:00:00.000Z',
+        reason: ' 반복적인 운영정책 위반 ',
+      },
+      repo,
+      new Date('2026-09-03T04:00:00.000Z'),
+    );
+
+    expect(received).toEqual({
+      adminId: ADMIN.id,
+      action: {
+        type: 'restrict',
+        targetType: 'post',
+        targetId: POST_ID,
+        until: '2026-09-11T04:00:00.000Z',
+        reason: '반복적인 운영정책 위반',
+      },
+    });
+    expect(JSON.stringify(received)).not.toContain(AUTHOR_ID);
+  });
+
+  it('rejects a browser-supplied user UUID before repository access', async () => {
+    const repo = repository({
+      applyAction: async () => {
+        throw new Error('a raw browser user UUID must not reach repository');
+      },
+    });
+
+    await expect(
+      moderateContent(
+        ADMIN,
+        {
+          type: 'restrict',
+          targetType: 'post',
+          targetId: POST_ID,
+          userId: AUTHOR_ID,
+          until: '2026-09-11T04:00:00.000Z',
+          reason: '반복적인 운영정책 위반',
+        },
+        repo,
+        new Date('2026-09-03T04:00:00.000Z'),
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      code: 'invalid_moderation_action',
+    });
+  });
+
+  it('applies an unrestrict action by sanction ID', async () => {
+    let received: unknown;
+    const repo = repository({
+      applyAction: async (adminId, action) => {
+        received = { adminId, action };
+      },
+    });
+
+    await moderateContent(
+      ADMIN,
+      {
+        type: 'unrestrict',
+        sanctionId: SANCTION_ID,
+        reason: '제재 사유를 다시 검토함',
+      },
+      repo,
+    );
+
+    expect(received).toEqual({
+      adminId: ADMIN.id,
+      action: {
+        type: 'unrestrict',
+        sanctionId: SANCTION_ID,
+        reason: '제재 사유를 다시 검토함',
+      },
     });
   });
 

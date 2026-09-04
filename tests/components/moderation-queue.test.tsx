@@ -7,7 +7,7 @@ const item: ModerationQueueItem = {
   id: '40000000-0000-4000-8000-000000000001',
   targetType: 'post',
   targetId: '20000000-0000-4000-8000-000000000001',
-  targetAuthorId: '30000000-0000-4000-8000-000000000001',
+  actorLabel: '익명 사용자 #A82F',
   targetTitle: '시장 질문',
   targetBody: '검토가 필요한 게시글입니다.',
   targetStatus: 'hidden',
@@ -61,5 +61,34 @@ describe('ModerationQueue', () => {
       targetId: item.targetId,
       reason: '반복 광고 영구 삭제',
     });
+  });
+
+  it('requests a restriction by content target without a user UUID', async () => {
+    const actions: unknown[] = [];
+    render(
+      <ModerationQueue
+        items={[item]}
+        loading={false}
+        onAction={async (action) => {
+          actions.push(action);
+        }}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('관리 사유'), {
+      target: { value: '반복적인 운영정책 위반' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '작성 제한' }));
+    fireEvent.click(screen.getByRole('button', { name: '제한 확정' }));
+
+    await waitFor(() => expect(actions).toHaveLength(1));
+    expect(actions[0]).toMatchObject({
+      type: 'restrict',
+      targetType: 'post',
+      targetId: item.targetId,
+      reason: '반복적인 운영정책 위반',
+      until: expect.any(String),
+    });
+    expect(actions[0]).not.toHaveProperty('userId');
   });
 });

@@ -212,39 +212,39 @@ describe('deletePost', () => {
   });
 
   it('soft-deletes an owner post', async () => {
-    let deleted = false;
+    let received: unknown;
     const repo = repository({
       findPostOwnership: async () => ({
         id: POST_ID,
         authorId: ACTOR.id,
         status: 'visible',
       }),
-      softDeletePost: async () => {
-        deleted = true;
+      softDeletePost: async (actorId, targetId) => {
+        received = { actorId, targetId };
       },
     });
 
     await deletePost(ACTOR, POST_ID, repo);
-    expect(deleted).toBe(true);
+    expect(received).toEqual({ actorId: ACTOR.id, targetId: POST_ID });
   });
 });
 
 describe('deleteComment', () => {
   it('soft-deletes an owner comment', async () => {
-    let deleted = false;
+    let received: unknown;
     const repo = repository({
       findCommentOwnership: async () => ({
         id: COMMENT_ID,
         authorId: ACTOR.id,
         status: 'visible',
       }),
-      softDeleteComment: async () => {
-        deleted = true;
+      softDeleteComment: async (actorId, targetId) => {
+        received = { actorId, targetId };
       },
     });
 
     await deleteComment(ACTOR, COMMENT_ID, repo);
-    expect(deleted).toBe(true);
+    expect(received).toEqual({ actorId: ACTOR.id, targetId: COMMENT_ID });
   });
 });
 

@@ -1,4 +1,5 @@
 import type { CommunityAdmin } from './admin-auth';
+import { createAdminActorLabel } from './admin-actor-label';
 import {
   type CommunityContentStatus,
   type CommunityPageCursor,
@@ -14,7 +15,14 @@ export type ModerationAction =
       targetId: string;
       reason: string;
     }
-  | { type: 'restrict'; userId: string; until: string; reason: string };
+  | {
+      type: 'restrict';
+      targetType: ReportTargetType;
+      targetId: string;
+      until: string;
+      reason: string;
+    }
+  | { type: 'unrestrict'; sanctionId: string; reason: string };
 
 export interface ModerationReportRecord {
   id: string;
@@ -37,7 +45,10 @@ export interface ModerationRepository {
   applyAction(adminId: string, action: ModerationAction): Promise<void>;
 }
 
-export type ModerationQueueItem = ModerationReportRecord;
+export type ModerationQueueItem = Omit<
+  ModerationReportRecord,
+  'targetAuthorId'
+> & { actorLabel: string };
 
 export interface ModerationPage {
   items: ModerationQueueItem[];
@@ -166,19 +177,41 @@ export const moderationRepository: ModerationRepository = {
   },
 
   async applyAction(adminId, action) {
-    const contentAction = action.type !== 'restrict';
-    const { error } = await getServerSupabase().rpc(
-      'moderate_community_content',
-      {
+    const client = getServerSupabase();
+    if (action.type === 'unrestrict') {
+      const { error } = await client.rpc('revoke_community_sanction', {
         p_admin_id: adminId,
-        p_action: action.type,
-        p_target_type: contentAction ? action.targetType : 'user',
-        p_target_id: contentAction ? action.targetId : null,
-        p_user_id: contentAction ? null : action.userId,
-        p_until: contentAction ? null : action.until,
+        p_sanction_id: action.sanctionId,
         p_reason: action.reason,
-      },
-    );
+      });
+      if (error) failProvider(error);
+      return;
+    }
+
+    const contentAction = action.type !== 'restrict';
+    let targetAuthorId: string | null = null;
+    if (action.type === 'restrict') {
+      const table =
+        action.targetType === 'post' ? 'community_posts' : 'community_comments';
+      const { data, error } = await client
+        .from(table)
+        .select('author_id')
+        .eq('id', action.targetId)
+        .maybeSingle();
+      if (error) failProvider(error);
+      if (!data) failProvider({ code: 'P0002' });
+      targetAuthorId = string(object(data), 'author_id');
+    }
+
+    const { error } = await client.rpc('moderate_community_content', {
+      p_admin_id: adminId,
+      p_action: action.type,
+      p_target_type: contentAction ? action.targetType : 'user',
+      p_target_id: contentAction ? action.targetId : null,
+      p_user_id: targetAuthorId,
+      p_until: contentAction ? null : action.until,
+      p_reason: action.reason,
+    });
     if (error) failProvider(error);
   },
 };
@@ -217,7 +250,8 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
     type !== 'hide' &&
     type !== 'restore' &&
     type !== 'delete' &&
-    type !== 'restrict'
+    type !== 'restrict' &&
+    type !== 'unrestrict'
   ) {
     throw new CommunityModerationError(
       400,
@@ -226,14 +260,37 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
     );
   }
   const reason = normalizedReason(row.reason);
-  if (type === 'restrict') {
-    const userId = row.userId;
-    const until = row.until;
-    if (typeof userId !== 'string' || !isCommunityUuid(userId)) {
+  if (type === 'unrestrict') {
+    const sanctionId = row.sanctionId;
+    if (typeof sanctionId !== 'string' || !isCommunityUuid(sanctionId)) {
       throw new CommunityModerationError(
         400,
-        'invalid_moderation_user',
-        '제한할 사용자를 확인해 주세요.',
+        'invalid_sanction_id',
+        '해제할 제재를 확인해 주세요.',
+      );
+    }
+    return { type, sanctionId: sanctionId.toLowerCase(), reason };
+  }
+  if (type === 'restrict') {
+    if ('userId' in row) {
+      throw new CommunityModerationError(
+        400,
+        'invalid_moderation_action',
+        '관리 조치 내용을 확인해 주세요.',
+      );
+    }
+    const targetType = row.targetType;
+    const targetId = row.targetId;
+    const until = row.until;
+    if (
+      (targetType !== 'post' && targetType !== 'comment') ||
+      typeof targetId !== 'string' ||
+      !isCommunityUuid(targetId)
+    ) {
+      throw new CommunityModerationError(
+        400,
+        'invalid_moderation_target',
+        '관리할 콘텐츠를 확인해 주세요.',
       );
     }
     if (
@@ -248,7 +305,13 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
         '현재보다 이후인 제한 종료 시각을 입력해 주세요.',
       );
     }
-    return { type, userId: userId.toLowerCase(), until, reason };
+    return {
+      type,
+      targetType,
+      targetId: targetId.toLowerCase(),
+      until,
+      reason,
+    };
   }
   const targetType = row.targetType;
   const targetId = row.targetId;
@@ -274,13 +337,17 @@ function normalizedAction(input: unknown, now: Date): ModerationAction {
 export async function listModerationQueue(
   cursor: string | null,
   repository: ModerationRepository = moderationRepository,
+  secret?: string,
 ): Promise<ModerationPage> {
   const limit = 20;
   const rows = await repository.findOpenReports({
     cursor: validateCommunityCursor(cursor),
     limit: limit + 1,
   });
-  const items = rows.slice(0, limit);
+  const items = rows.slice(0, limit).map(({ targetAuthorId, ...report }) => ({
+    ...report,
+    actorLabel: createAdminActorLabel(targetAuthorId, secret),
+  }));
   return {
     items,
     nextCursor:

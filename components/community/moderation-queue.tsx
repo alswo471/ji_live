@@ -85,7 +85,8 @@ function ModerationCard({
       ).toISOString();
       void execute({
         type: 'restrict',
-        userId: item.targetAuthorId,
+        targetType: item.targetType,
+        targetId: item.targetId,
         until,
         reason: normalizedReason,
       });
