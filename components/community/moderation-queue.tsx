@@ -1,7 +1,17 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Ban, CheckCircle2, Eye, EyeOff, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type {
@@ -35,22 +45,18 @@ function ModerationCard({
   const fieldId = useId();
   const helpId = `${fieldId}-help`;
   const errorId = `${fieldId}-error`;
-  const confirmationTitleId = `${fieldId}-confirmation-title`;
-  const confirmationDescriptionId = `${fieldId}-confirmation-description`;
   const restrictionId = `${fieldId}-restriction`;
   const [reason, setReason] = useState('');
   const [restrictionDays, setRestrictionDays] = useState('1');
-  const [confirmation, setConfirmation] = useState<
-    'delete' | 'restrict' | null
-  >(null);
+  const [confirmationType, setConfirmationType] = useState<
+    'delete' | 'restrict'
+  >('delete');
+  const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const confirmationButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (confirmation) confirmationButtonRef.current?.focus();
-  }, [confirmation]);
+  const confirmationTriggerRef = useRef<HTMLButtonElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   async function execute(action: ModerationAction) {
     setSubmitting(true);
@@ -59,7 +65,7 @@ function ModerationCard({
     try {
       await onAction(action);
       setSuccess('관리 조치를 반영했습니다.');
-      setConfirmation(null);
+      setConfirming(false);
     } catch {
       setError('관리 조치를 반영하지 못했습니다. 다시 시도해 주세요.');
     } finally {
@@ -67,7 +73,10 @@ function ModerationCard({
     }
   }
 
-  function prepare(type: 'hide' | 'restore' | 'delete' | 'restrict') {
+  function prepare(
+    type: 'hide' | 'restore' | 'delete' | 'restrict',
+    trigger?: HTMLButtonElement,
+  ) {
     const normalizedReason = reason.trim();
     if (Array.from(normalizedReason).length < 5) {
       setError('관리 사유를 5자 이상 입력해 주세요.');
@@ -75,7 +84,9 @@ function ModerationCard({
     }
     setError(null);
     if (type === 'delete' || type === 'restrict') {
-      setConfirmation(type);
+      confirmationTriggerRef.current = trigger ?? null;
+      setConfirmationType(type);
+      setConfirming(true);
       return;
     }
     void execute({
@@ -88,14 +99,14 @@ function ModerationCard({
 
   function confirmAction() {
     const normalizedReason = reason.trim();
-    if (confirmation === 'delete') {
+    if (confirmationType === 'delete') {
       void execute({
         type: 'delete',
         targetType: item.targetType,
         targetId: item.targetId,
         reason: normalizedReason,
       });
-    } else if (confirmation === 'restrict') {
+    } else if (confirmationType === 'restrict') {
       const until = new Date(
         Date.now() + Number(restrictionDays) * 24 * 60 * 60 * 1000,
       ).toISOString();
@@ -193,7 +204,7 @@ function ModerationCard({
           variant="destructive"
           className="min-h-11"
           disabled={submitting}
-          onClick={() => prepare('delete')}
+          onClick={(event) => prepare('delete', event.currentTarget)}
         >
           <Trash2 aria-hidden="true" /> 삭제 대기
         </Button>
@@ -202,37 +213,41 @@ function ModerationCard({
           variant="outline"
           className="min-h-11"
           disabled={submitting}
-          onClick={() => prepare('restrict')}
+          onClick={(event) => prepare('restrict', event.currentTarget)}
         >
           <Ban aria-hidden="true" /> 작성 제한
         </Button>
       </div>
 
-      {confirmation && (
-        <div
-          role="alertdialog"
-          aria-modal="false"
-          aria-labelledby={confirmationTitleId}
-          aria-describedby={
-            confirmation === 'delete' ? confirmationDescriptionId : undefined
+      <AlertDialog
+        open={confirming}
+        onOpenChange={(open) => {
+          if (!open && !submitting) setConfirming(false);
+        }}
+      >
+        <AlertDialogContent
+          aria-modal="true"
+          initialFocus={() =>
+            confirmationType === 'restrict'
+              ? document.getElementById(restrictionId)
+              : cancelButtonRef.current
           }
-          className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
+          finalFocus={confirmationTriggerRef}
         >
-          <p id={confirmationTitleId} className="font-bold">
-            {confirmation === 'delete'
-              ? '이 콘텐츠를 삭제 대기로 전환할까요?'
-              : '이 사용자의 작성을 제한할까요?'}
-          </p>
-          {confirmation === 'delete' && (
-            <p
-              id={confirmationDescriptionId}
-              className="mt-2 text-sm leading-6 text-muted-foreground"
-            >
-              삭제 후 1년 동안 복구할 수 있으며 이후 영구 파기됩니다.
-            </p>
-          )}
-          {confirmation === 'restrict' && (
-            <div className="mt-3">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmationType === 'delete'
+                ? '이 콘텐츠를 삭제 대기로 전환할까요?'
+                : '이 사용자의 작성을 제한할까요?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmationType === 'delete'
+                ? '삭제 후 1년 동안 복구할 수 있으며 이후 영구 파기됩니다.'
+                : '제한 기간과 관리 사유를 확인한 뒤 조치를 확정해 주세요.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {confirmationType === 'restrict' ? (
+            <div>
               <label htmlFor={restrictionId} className="text-sm font-semibold">
                 제한 기간
               </label>
@@ -240,37 +255,36 @@ function ModerationCard({
                 id={restrictionId}
                 value={restrictionDays}
                 onChange={(event) => setRestrictionDays(event.target.value)}
-                className="ml-3 min-h-11 rounded-lg border bg-background px-3 text-sm"
+                className="mt-2 min-h-11 w-full rounded-lg border bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <option value="1">24시간</option>
                 <option value="7">7일</option>
                 <option value="30">30일</option>
               </select>
             </div>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              ref={confirmationButtonRef}
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogAction
               type="button"
               variant="destructive"
               className="min-h-11"
               disabled={submitting}
               onClick={confirmAction}
             >
-              {confirmation === 'delete' ? '삭제 대기 확정' : '제한 확정'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
+              {confirmationType === 'delete'
+                ? '삭제 대기 확정'
+                : '제한 확정'}
+            </AlertDialogAction>
+            <AlertDialogCancel
+              ref={cancelButtonRef}
               className="min-h-11"
               disabled={submitting}
-              onClick={() => setConfirmation(null)}
             >
               취소
-            </Button>
-          </div>
-        </div>
-      )}
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {error && (
         <p id={errorId} role="alert" className="mt-3 text-sm text-destructive">

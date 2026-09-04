@@ -97,12 +97,20 @@ describe('CommunityAdminPage', () => {
 
     render(<CommunityAdminPage />);
 
-    expect(
-      await screen.findByRole('tab', { name: '신고 대기' }),
-    ).toHaveAttribute('aria-selected', 'true');
+    const currentTab = await screen.findByRole('tab', { name: '신고 대기' });
+    expect(currentTab).toHaveAttribute('aria-selected', 'true');
+    const panelId = currentTab.getAttribute('aria-controls');
+    expect(panelId).toBe('admin-panel-reports');
+    expect(document.getElementById(panelId as string)).toHaveAttribute(
+      'role',
+      'tabpanel',
+    );
     expect(screen.getByRole('tab', { name: '삭제 대기' })).toHaveAttribute(
       'href',
       '/admin/community?tab=trash',
+    );
+    expect(screen.getByRole('tab', { name: '삭제 대기' })).not.toHaveAttribute(
+      'aria-controls',
     );
     expect(screen.getAllByRole('tab')).toHaveLength(5);
     expect(screen.getByRole('main')).toHaveClass(

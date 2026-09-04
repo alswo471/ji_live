@@ -26,6 +26,13 @@ describe('AdminConsoleNav', () => {
       'text-primary-foreground',
       'focus-visible:ring-3',
     );
+    expect(screen.getByRole('tab', { name: '숨김 콘텐츠' })).toHaveAttribute(
+      'aria-controls',
+      'admin-panel-hidden',
+    );
+    expect(screen.getByRole('tab', { name: '신고 대기' })).not.toHaveAttribute(
+      'aria-controls',
+    );
   });
 
   it('moves keyboard focus through the complete tab set', async () => {

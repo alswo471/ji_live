@@ -58,7 +58,7 @@ export function AdminConsoleNav({ tab }: { tab: AdminTab }) {
               role="tab"
               tabIndex={current ? 0 : -1}
               aria-selected={current}
-              aria-controls={`admin-panel-${item.value}`}
+              aria-controls={current ? `admin-panel-${item.value}` : undefined}
               href={`/admin/community?tab=${item.value}`}
               onKeyDown={(event) => moveTabFocus(event, index)}
               className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-center text-sm font-bold outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 ${

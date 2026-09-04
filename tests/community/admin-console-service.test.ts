@@ -286,8 +286,9 @@ describe('admin console summary, sanctions and audit', () => {
       id: AUDIT_ID,
       action: 'restrict',
       targetType: 'user',
-      actorLabel: expect.stringMatching(/^익명 사용자 #[A-F0-9]{4}$/),
+      targetUserLabel: expect.stringMatching(/^익명 사용자 #[A-F0-9]{4}$/),
     });
+    expect(page.items[0]).not.toHaveProperty('actorLabel');
     expect(page.items[0]).not.toHaveProperty('adminId');
     expect(page.items[0]).not.toHaveProperty('targetAuthorId');
     expect(page.items[0]).not.toHaveProperty('targetId');

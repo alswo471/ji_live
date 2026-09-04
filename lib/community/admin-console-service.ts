@@ -55,7 +55,7 @@ export interface AdminAuditItem {
   action: AdminAuditAction;
   targetType: AdminAuditTargetType;
   targetId?: string;
-  actorLabel: string | null;
+  targetUserLabel: string | null;
   targetTitle: string | null;
   targetBody: string | null;
   reason: string;
@@ -695,7 +695,7 @@ export async function listAdminAudit(
     action: item.action,
     targetType: item.targetType,
     ...(item.targetType === 'user' ? {} : { targetId: item.targetId }),
-    actorLabel: item.targetAuthorId
+    targetUserLabel: item.targetAuthorId
       ? actorLabel(item.targetAuthorId, secret)
       : null,
     targetTitle: item.targetTitle,

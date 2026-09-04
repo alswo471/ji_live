@@ -63,24 +63,29 @@ describe('ModerationQueue', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '삭제 대기' }));
+    const deleteTrigger = screen.getByRole('button', { name: '삭제 대기' });
+    await user.click(deleteTrigger);
     expect(screen.getByRole('alert')).toHaveTextContent('관리 사유를 5자 이상');
 
     fireEvent.change(screen.getByLabelText('관리 사유'), {
       target: { value: '반복 광고 영구 삭제' },
     });
-    await user.click(screen.getByRole('button', { name: '삭제 대기' }));
-    const dialog = screen.getByRole('alertdialog');
+    await user.click(deleteTrigger);
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(
+      document.querySelector('[data-slot="alert-dialog-overlay"]'),
+    ).toBeInTheDocument();
     expect(dialog).toHaveTextContent(
       '삭제 후 1년 동안 복구할 수 있으며 이후 영구 파기됩니다.',
     );
-    await waitFor(() =>
-      expect(dialog).toContainElement(document.activeElement as HTMLElement),
-    );
+    const cancel = screen.getByRole('button', { name: '취소' });
+    await waitFor(() => expect(cancel).toHaveFocus());
     expect(actions).toHaveLength(0);
 
     const confirm = screen.getByRole('button', { name: '삭제 대기 확정' });
-    confirm.focus();
+    await user.tab({ shift: true });
+    expect(confirm).toHaveFocus();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(actions).toHaveLength(1));
     expect(actions[0]).toMatchObject({
@@ -91,7 +96,34 @@ describe('ModerationQueue', () => {
     });
   });
 
+  it('returns focus to the delete trigger when keyboard dismissal closes the dialog', async () => {
+    const user = userEvent.setup();
+    render(
+      <ModerationQueue
+        items={[item]}
+        loading={false}
+        onAction={async () => undefined}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('관리 사유'), '삭제 사유 재확인');
+    const deleteTrigger = screen.getByRole('button', { name: '삭제 대기' });
+    await user.click(deleteTrigger);
+    await screen.findByRole('alertdialog');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '취소' })).toHaveFocus(),
+    );
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
+    expect(deleteTrigger).toHaveFocus();
+  });
+
   it('requests a restriction by content target without a user UUID', async () => {
+    const user = userEvent.setup();
     const actions: unknown[] = [];
     render(
       <ModerationQueue
@@ -106,8 +138,13 @@ describe('ModerationQueue', () => {
     fireEvent.change(screen.getByLabelText('관리 사유'), {
       target: { value: '반복적인 운영정책 위반' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '작성 제한' }));
-    fireEvent.click(screen.getByRole('button', { name: '제한 확정' }));
+    await user.click(screen.getByRole('button', { name: '작성 제한' }));
+    const duration = await screen.findByRole('combobox', { name: '제한 기간' });
+    await waitFor(() => expect(duration).toHaveFocus());
+    await user.selectOptions(duration, '7');
+    await user.tab();
+    expect(screen.getByRole('button', { name: '제한 확정' })).toHaveFocus();
+    await user.keyboard('{Enter}');
 
     await waitFor(() => expect(actions).toHaveLength(1));
     expect(actions[0]).toMatchObject({

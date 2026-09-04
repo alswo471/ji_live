@@ -8,7 +8,7 @@ const item: AdminAuditItem = {
   action: 'restore',
   targetType: 'post',
   targetId: '90000000-0000-4000-8000-000000000001',
-  actorLabel: '익명 사용자 #F52B',
+  targetUserLabel: '익명 사용자 #F52B',
   targetTitle: '복구한 게시글',
   targetBody: '운영 검토 후 복구된 내용입니다.',
   reason: '오조치 확인 후 복구',
@@ -22,6 +22,9 @@ describe('AdminAuditList', () => {
     expect(screen.getByText('복구')).toBeInTheDocument();
     expect(screen.getByText('게시글')).toBeInTheDocument();
     expect(screen.getByText('복구한 게시글')).toBeInTheDocument();
+    expect(screen.getByText('대상 작성자')).toBeInTheDocument();
+    expect(screen.getByText('익명 사용자 #F52B')).toBeInTheDocument();
+    expect(screen.queryByText('처리자')).not.toBeInTheDocument();
     expect(screen.getByText('오조치 확인 후 복구')).toBeInTheDocument();
     expect(screen.getByText(/2026/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();

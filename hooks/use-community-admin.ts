@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { getBrowserSupabase } from '@/lib/community/supabase';
 import type {
   AdminAuditItem,
@@ -35,6 +41,10 @@ interface RenderedListContext {
   key: string;
   token: string;
   tab: AdminTab;
+}
+
+interface ListRequestContext extends RenderedListContext {
+  filters: AdminConsoleFilters;
 }
 
 const SESSION_ERROR =
@@ -134,13 +144,13 @@ export function useCommunityAdmin(tab: AdminTab, filters: AdminConsoleFilters) {
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [items, setItems] = useState<CommunityAdminItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingListKey, setLoadingListKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attemptedListKey, setAttemptedListKey] = useState<string | null>(null);
   const [renderedListContext, setRenderedListContext] =
     useState<RenderedListContext | null>(null);
   const tokenRef = useRef<string | null>(null);
-  const listRequestRef = useRef(0);
+  const listRequestSequencesRef = useRef(new Map<string, number>());
   const summaryRequestRef = useRef(0);
   const autoListKeyRef = useRef<string | null>(null);
   const summaryTokenRef = useRef<string | null>(null);
@@ -148,11 +158,14 @@ export function useCommunityAdmin(tab: AdminTab, filters: AdminConsoleFilters) {
   const selectedListKey = accessToken
     ? `${accessToken}\u0000${tab}\u0000${selectedFilterKey}`
     : null;
-  const currentListKeyRef = useRef<string | null>(selectedListKey);
+  const currentListContextRef = useRef<ListRequestContext | null>(null);
 
-  useEffect(() => {
-    currentListKeyRef.current = selectedListKey;
-  }, [selectedListKey]);
+  useLayoutEffect(() => {
+    currentListContextRef.current =
+      accessToken && selectedListKey
+        ? { key: selectedListKey, token: accessToken, tab, filters }
+        : null;
+  }, [accessToken, filters, selectedListKey, tab]);
 
   useEffect(() => {
     let active = true;
@@ -175,14 +188,14 @@ export function useCommunityAdmin(tab: AdminTab, filters: AdminConsoleFilters) {
       setAccessToken(token);
       setError(null);
       if (!token) {
-        listRequestRef.current += 1;
+        listRequestSequencesRef.current.clear();
         summaryRequestRef.current += 1;
         autoListKeyRef.current = null;
         summaryTokenRef.current = null;
         setSummary(null);
         setItems([]);
         setNextCursor(null);
-        setLoading(false);
+        setLoadingListKey(null);
         setAttemptedListKey(null);
         setRenderedListContext(null);
       }
@@ -230,56 +243,68 @@ export function useCommunityAdmin(tab: AdminTab, filters: AdminConsoleFilters) {
     }
   }, []);
 
-  const loadList = useCallback(
-    async (cursor: string | null = null) => {
-      const token = accessToken;
-      const requestKey = selectedListKey;
-      if (!token || !requestKey) return;
-      const requestId = ++listRequestRef.current;
+  const requestList = useCallback(
+    async (context: ListRequestContext, cursor: string | null = null) => {
+      const { key: requestKey, token, tab: requestTab } = context;
+      const requestId =
+        (listRequestSequencesRef.current.get(requestKey) ?? 0) + 1;
+      listRequestSequencesRef.current.set(requestKey, requestId);
       const append = cursor !== null;
-      setLoading(true);
-      setError(null);
-      setAttemptedListKey(requestKey);
+      if (currentListContextRef.current?.key === requestKey) {
+        setLoadingListKey(requestKey);
+        setError(null);
+        setAttemptedListKey(requestKey);
+      }
       try {
-        const response = await fetch(listUrl(tab, filters, cursor), {
-          headers: { authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          listUrl(requestTab, context.filters, cursor),
+          {
+            headers: { authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          },
+        );
         if (!response.ok) throw new Error('list load failed');
         const value: unknown = await response.json();
         if (!isPage(value)) throw new Error('invalid list page');
         if (
-          requestId !== listRequestRef.current ||
-          currentListKeyRef.current !== requestKey ||
+          requestId !== listRequestSequencesRef.current.get(requestKey) ||
+          currentListContextRef.current?.key !== requestKey ||
           tokenRef.current !== token
         ) {
           return;
         }
-        setRenderedListContext({ key: requestKey, token, tab });
+        setRenderedListContext({ key: requestKey, token, tab: requestTab });
         setItems((current) =>
           append ? [...current, ...value.items] : value.items,
         );
         setNextCursor(value.nextCursor);
       } catch {
         if (
-          requestId !== listRequestRef.current ||
-          currentListKeyRef.current !== requestKey ||
+          requestId !== listRequestSequencesRef.current.get(requestKey) ||
+          currentListContextRef.current?.key !== requestKey ||
           tokenRef.current !== token
         ) {
           return;
         }
         setError(LIST_ERROR);
       } finally {
-        if (
-          requestId === listRequestRef.current &&
-          currentListKeyRef.current === requestKey &&
-          tokenRef.current === token
-        ) {
-          setLoading(false);
+        if (requestId === listRequestSequencesRef.current.get(requestKey)) {
+          setLoadingListKey((current) =>
+            current === requestKey ? null : current,
+          );
         }
       }
     },
-    [accessToken, filters, selectedListKey, tab],
+    [],
+  );
+
+  const loadList = useCallback(
+    async (cursor: string | null = null) => {
+      const context = currentListContextRef.current;
+      if (!context) return;
+      await requestList(context, cursor);
+    },
+    [requestList],
   );
 
   useEffect(() => {
@@ -296,16 +321,23 @@ export function useCommunityAdmin(tab: AdminTab, filters: AdminConsoleFilters) {
   }, [accessToken, loadSummary]);
 
   const reload = useCallback(async () => {
-    await loadList();
-  }, [loadList]);
+    const context = currentListContextRef.current;
+    if (!context) return;
+    await Promise.all([requestList(context), loadSummary(context.token)]);
+  }, [loadSummary, requestList]);
 
   const visibleNextCursor =
     renderedListContext?.key === selectedListKey ? nextCursor : null;
+  const visibleLoading =
+    loadingListKey === selectedListKey ||
+    Boolean(
+      accessToken && selectedListKey && attemptedListKey !== selectedListKey,
+    );
 
   const loadMore = useCallback(async () => {
-    if (!visibleNextCursor || loading) return;
+    if (!visibleNextCursor || visibleLoading) return;
     await loadList(visibleNextCursor);
-  }, [loadList, loading, visibleNextCursor]);
+  }, [loadList, visibleLoading, visibleNextCursor]);
 
   const applyAction = useCallback(
     async (action: ModerationAction) => {
@@ -339,9 +371,11 @@ export function useCommunityAdmin(tab: AdminTab, filters: AdminConsoleFilters) {
         throw new Error(message);
       }
       setError(null);
-      await Promise.all([loadList(), loadSummary(token)]);
+      const context = currentListContextRef.current;
+      if (!context) return;
+      await Promise.all([requestList(context), loadSummary(context.token)]);
     },
-    [accessToken, loadList, loadSummary],
+    [accessToken, loadSummary, requestList],
   );
 
   const visibleItems =
@@ -349,11 +383,6 @@ export function useCommunityAdmin(tab: AdminTab, filters: AdminConsoleFilters) {
     renderedListContext.tab === tab
       ? items
       : [];
-  const visibleLoading =
-    loading ||
-    Boolean(
-      accessToken && selectedListKey && attemptedListKey !== selectedListKey,
-    );
 
   return {
     accessToken,

@@ -97,11 +97,15 @@ export function AdminAuditList({
                   </p>
                 ) : null}
                 <dl className="grid min-w-0 gap-2 border-t border-border pt-3 text-muted-foreground">
-                  {item.actorLabel ? (
+                  {item.targetUserLabel ? (
                     <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-2">
-                      <dt>처리자</dt>
+                      <dt>
+                        {item.targetType === 'user'
+                          ? '대상 사용자'
+                          : '대상 작성자'}
+                      </dt>
                       <dd className="break-words text-card-foreground">
-                        {item.actorLabel}
+                        {item.targetUserLabel}
                       </dd>
                     </div>
                   ) : null}

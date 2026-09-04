@@ -251,6 +251,144 @@ describe('useCommunityAdmin', () => {
     expect(summaryLoads).toBe(2);
   });
 
+  it('refreshes the latest tab and filters when they change during an action', async () => {
+    const pendingAction = deferred<Response>();
+    const listUrls: string[] = [];
+    let hiddenLoads = 0;
+    let trashLoads = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = urlOf(input);
+      if (url.includes('/actions')) return pendingAction.promise;
+      if (url.includes('/summary')) {
+        return Promise.resolve(
+          Response.json({ reports: 0, hidden: 1, trash: 1, sanctions: 0 }),
+        );
+      }
+      listUrls.push(url);
+      if (url.includes('status=hidden')) {
+        hiddenLoads += 1;
+        return Promise.resolve(
+          Response.json({
+            items: [
+              {
+                ...trashItem,
+                status: 'hidden',
+                deletionSource: null,
+                deletedAt: null,
+                purgeAt: null,
+              },
+            ],
+            nextCursor: null,
+          }),
+        );
+      }
+      trashLoads += 1;
+      return Promise.resolve(
+        Response.json({ items: [trashItem], nextCursor: null }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result, rerender } = renderHook(
+      ({ tab, values }: { tab: AdminTab; values: AdminConsoleFilters }) =>
+        useCommunityAdmin(tab, values),
+      {
+        initialProps: {
+          tab: 'hidden' as AdminTab,
+          values: filters,
+        },
+      },
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    let actionPromise!: Promise<void>;
+    act(() => {
+      actionPromise = result.current.applyAction({
+        type: 'restore',
+        targetType: 'post',
+        targetId: trashItem.targetId,
+        reason: '숨김 오조치 복구',
+      });
+    });
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/community/actions',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+
+    rerender({
+      tab: 'trash',
+      values: {
+        ...filters,
+        deletionSource: 'author',
+        query: '복구 검토',
+      },
+    });
+    await waitFor(() =>
+      expect(result.current.items[0]).toMatchObject({ status: 'deleted' }),
+    );
+
+    pendingAction.resolve(new Response(null, { status: 204 }));
+    await act(async () => {
+      await actionPromise;
+    });
+
+    await waitFor(() => expect(trashLoads).toBe(2));
+    expect(hiddenLoads).toBe(1);
+    expect(listUrls.at(-1)).toContain(
+      'status=deleted&deletionSource=author&query=%EB%B3%B5%EA%B5%AC+%EA%B2%80%ED%86%A0',
+    );
+    expect(result.current.items[0]).toMatchObject({ status: 'deleted' });
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('reloads the summary and current list together after a summary failure', async () => {
+    let summaryLoads = 0;
+    let listLoads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = urlOf(input);
+        if (url.includes('/summary')) {
+          summaryLoads += 1;
+          return summaryLoads === 1
+            ? Promise.resolve(new Response(null, { status: 503 }))
+            : Promise.resolve(
+                Response.json({
+                  reports: 2,
+                  hidden: 1,
+                  trash: 0,
+                  sanctions: 0,
+                }),
+              );
+        }
+        listLoads += 1;
+        return Promise.resolve(
+          Response.json({ items: [reportItem], nextCursor: null }),
+        );
+      }),
+    );
+
+    const { result } = renderHook(() => useCommunityAdmin('reports', filters));
+    await waitFor(() => expect(result.current.error).toContain('운영 요약'));
+    expect(result.current.items).toEqual([reportItem]);
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.summary).toEqual({
+      reports: 2,
+      hidden: 1,
+      trash: 0,
+      sanctions: 0,
+    });
+    expect(summaryLoads).toBe(2);
+    expect(listLoads).toBe(2);
+    expect(result.current.error).toBeNull();
+  });
+
   it('keeps the previous list and surfaces a safe conflict when an action fails', async () => {
     vi.stubGlobal(
       'fetch',
