@@ -8,21 +8,22 @@ export async function communityWrite(
   session: CommunitySessionState,
   challenge: TurnstileChallengeHandle,
 ) {
+  const currentToken = await session.getAccessToken();
   const accessToken =
-    session.accessToken ??
-    (await session.ensureSession(await challenge.execute()));
+    currentToken ?? (await session.ensureSession(await challenge.execute()));
   const headers: Record<string, string> = {
     authorization: `Bearer ${accessToken}`,
+    'x-turnstile-token': await challenge.execute(),
   };
   if (method === 'POST') {
     headers['content-type'] = 'application/json';
-    headers['x-turnstile-token'] = await challenge.execute();
   }
   const response = await fetch(url, {
     method,
     headers,
     body: method === 'POST' ? JSON.stringify(body) : undefined,
   });
+  if (response.status === 401) await session.invalidateSession();
   if (!response.ok) throw new Error('community write failed');
   return response.status === 204 ? null : (response.json() as Promise<unknown>);
 }

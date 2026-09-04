@@ -31,14 +31,20 @@ export default function CommunityDetailPage({
   const { id } = use(params);
   const [post, setPost] = useState<CommunityPostDetail | null>(null);
   const [comments, setComments] = useState<CommunityComment[]>([]);
+  const [commentCursor, setCommentCursor] = useState<string | null>(null);
+  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const session = useCommunitySession();
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
+  const commentRequestRef = useRef(0);
 
   const reload = useCallback(
     async (targetId = id) => {
       if (!targetId) return;
+      const requestId = ++commentRequestRef.current;
       setState('loading');
+      setCommentError(null);
       try {
         const headers = session.accessToken
           ? { authorization: `Bearer ${session.accessToken}` }
@@ -54,10 +60,15 @@ export default function CommunityDetailPage({
           }),
         ]);
         if (!postResponse.ok || !commentResponse.ok) throw new Error();
-        setPost((await postResponse.json()) as CommunityPostDetail);
-        setComments(((await commentResponse.json()) as CommentPage).items);
+        const nextPost = (await postResponse.json()) as CommunityPostDetail;
+        const commentPage = (await commentResponse.json()) as CommentPage;
+        if (requestId !== commentRequestRef.current) return;
+        setPost(nextPost);
+        setComments(commentPage.items);
+        setCommentCursor(commentPage.nextCursor);
         setState('ready');
       } catch {
+        if (requestId !== commentRequestRef.current) return;
         setState('error');
       }
     },
@@ -71,6 +82,35 @@ export default function CommunityDetailPage({
     if (!challengeRef.current) throw new Error();
     await communityWrite(url, 'POST', body, session, challengeRef.current);
     await reload();
+  }
+
+  async function loadMoreComments() {
+    if (!commentCursor || commentsLoadingMore) return;
+    const cursor = commentCursor;
+    const requestId = ++commentRequestRef.current;
+    setCommentsLoadingMore(true);
+    setCommentError(null);
+    try {
+      const headers = session.accessToken
+        ? { authorization: `Bearer ${session.accessToken}` }
+        : undefined;
+      const response = await fetch(
+        `/api/community/posts/${id}/comments?${new URLSearchParams({ cursor })}`,
+        { headers, cache: 'no-store' },
+      );
+      if (!response.ok) throw new Error();
+      const page = (await response.json()) as CommentPage;
+      if (requestId !== commentRequestRef.current) return;
+      setComments((current) => [...current, ...page.items]);
+      setCommentCursor(page.nextCursor);
+    } catch {
+      if (requestId !== commentRequestRef.current) return;
+      setCommentError('댓글을 더 불러오지 못했습니다. 다시 시도해 주세요.');
+    } finally {
+      if (requestId === commentRequestRef.current) {
+        setCommentsLoadingMore(false);
+      }
+    }
   }
 
   return (
@@ -148,7 +188,7 @@ export default function CommunityDetailPage({
                 </div>
               </article>
               <section className="mt-6 rounded-2xl border bg-card p-5 sm:p-7">
-                <h2 className="text-lg font-black">댓글 {comments.length}</h2>
+                <h2 className="text-lg font-black">댓글 {post.commentCount}</h2>
                 <div className="mt-5">
                   <CommentForm
                     onSubmit={(input) =>
@@ -157,6 +197,9 @@ export default function CommunityDetailPage({
                   />
                   <CommentList
                     comments={comments}
+                    onReport={(input) =>
+                      write('/api/community/reports', input)
+                    }
                     onDelete={(commentId) => {
                       void (async () => {
                         if (!challengeRef.current) return;
@@ -171,6 +214,25 @@ export default function CommunityDetailPage({
                       })();
                     }}
                   />
+                  {commentError ? (
+                    <p
+                      role="alert"
+                      className="mt-3 text-sm font-medium text-destructive"
+                    >
+                      {commentError}
+                    </p>
+                  ) : null}
+                  {commentCursor ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4 min-h-11 w-full"
+                      disabled={commentsLoadingMore}
+                      onClick={() => void loadMoreComments()}
+                    >
+                      {commentsLoadingMore ? '댓글 불러오는 중…' : '댓글 더 보기'}
+                    </Button>
+                  ) : null}
                 </div>
               </section>
               <div className="mt-3 rounded-2xl border bg-card p-4">

@@ -14,10 +14,14 @@ export interface CommunitySessionState {
   status: CommunitySessionStatus;
   accessToken: string | null;
   error: string | null;
+  getAccessToken: () => Promise<string | null>;
   ensureSession: (captchaToken: string) => Promise<string>;
+  invalidateSession: () => Promise<void>;
 }
 
 const SESSION_ERROR = '익명 세션을 준비하지 못했습니다.';
+const SESSION_EXPIRED_ERROR =
+  '익명 세션이 만료되었습니다. 다시 시도하면 새 세션을 준비합니다.';
 
 export function useCommunitySession(): CommunitySessionState {
   const [status, setStatus] = useState<CommunitySessionStatus>('loading');
@@ -26,21 +30,44 @@ export function useCommunitySession(): CommunitySessionState {
   const tokenRef = useRef<string | null>(null);
   const pendingRef = useRef<Promise<string> | null>(null);
 
+  const acceptToken = useCallback((token: string | null) => {
+    tokenRef.current = token;
+    setAccessToken(token);
+    setError(null);
+    setStatus(token ? 'ready' : 'anonymous');
+  }, []);
+
   useEffect(() => {
     let active = true;
-    void Promise.resolve()
-      .then(() => getBrowserSupabase().auth.getSession())
-      .then(({ data, error: sessionError }) => {
+    let authEventSeen = false;
+    const client = getBrowserSupabase();
+    const { data: subscriptionData } = client.auth.onAuthStateChange(
+      (event, authSession) => {
         if (!active) return;
+        authEventSeen = true;
+        const token = authSession?.access_token ?? null;
+        tokenRef.current = token;
+        setAccessToken(token);
+        if (token) {
+          setError(null);
+          setStatus('ready');
+        } else {
+          setError(event === 'SIGNED_OUT' ? SESSION_EXPIRED_ERROR : null);
+          setStatus('anonymous');
+        }
+      },
+    );
+    void Promise.resolve()
+      .then(() => client.auth.getSession())
+      .then(({ data, error: sessionError }) => {
+        if (!active || authEventSeen) return;
         const token = data.session?.access_token ?? null;
         if (sessionError) {
           setError(SESSION_ERROR);
           setStatus('error');
           return;
         }
-        tokenRef.current = token;
-        setAccessToken(token);
-        setStatus(token ? 'ready' : 'anonymous');
+        acceptToken(token);
       })
       .catch(() => {
         if (!active) return;
@@ -49,23 +76,40 @@ export function useCommunitySession(): CommunitySessionState {
       });
     return () => {
       active = false;
+      subscriptionData.subscription.unsubscribe();
     };
-  }, []);
+  }, [acceptToken]);
+
+  const getAccessToken = useCallback(async () => {
+    try {
+      const { data, error: sessionError } =
+        await getBrowserSupabase().auth.getSession();
+      if (sessionError) throw sessionError;
+      const token = data.session?.access_token ?? null;
+      acceptToken(token);
+      return token;
+    } catch {
+      tokenRef.current = null;
+      setAccessToken(null);
+      setError(SESSION_ERROR);
+      setStatus('error');
+      throw new Error(SESSION_ERROR);
+    }
+  }, [acceptToken]);
 
   const ensureSession = useCallback(async (captchaToken: string) => {
-    if (tokenRef.current) return tokenRef.current;
     if (pendingRef.current) return pendingRef.current;
 
-    setStatus('creating');
-    setError(null);
-    const pending = getBrowserSupabase()
-      .auth.signInAnonymously({ options: { captchaToken } })
-      .then(({ data, error: signInError }) => {
+    const pending = getAccessToken()
+      .then(async (currentToken) => {
+        if (currentToken) return currentToken;
+        setStatus('creating');
+        setError(null);
+        const { data, error: signInError } = await getBrowserSupabase()
+          .auth.signInAnonymously({ options: { captchaToken } });
         const token = data.session?.access_token ?? null;
         if (signInError || !token) throw new Error(SESSION_ERROR);
-        tokenRef.current = token;
-        setAccessToken(token);
-        setStatus('ready');
+        acceptToken(token);
         return token;
       })
       .catch(() => {
@@ -78,7 +122,27 @@ export function useCommunitySession(): CommunitySessionState {
       });
     pendingRef.current = pending;
     return pending;
+  }, [acceptToken, getAccessToken]);
+
+  const invalidateSession = useCallback(async () => {
+    tokenRef.current = null;
+    pendingRef.current = null;
+    setAccessToken(null);
+    setStatus('anonymous');
+    setError(SESSION_EXPIRED_ERROR);
+    try {
+      await getBrowserSupabase().auth.signOut({ scope: 'local' });
+    } catch {
+      // Local state is already cleared; provider details must stay private.
+    }
   }, []);
 
-  return { status, accessToken, error, ensureSession };
+  return {
+    status,
+    accessToken,
+    error,
+    getAccessToken,
+    ensureSession,
+    invalidateSession,
+  };
 }

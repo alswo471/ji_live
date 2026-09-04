@@ -1,12 +1,15 @@
-import type { CommunityComment } from '@/lib/community/types';
+import type { CommunityComment, ReportInput } from '@/lib/community/types';
 import { Button } from '@/components/ui/button';
+import { ReportDialog } from './report-dialog';
 
 export function CommentList({
   comments,
   onDelete,
+  onReport,
 }: {
   comments: CommunityComment[];
   onDelete: (id: string) => void;
+  onReport: (input: ReportInput) => Promise<void>;
 }) {
   if (!comments.length)
     return (
@@ -18,17 +21,24 @@ export function CommentList({
     <div className="divide-y">
       {comments.map((comment) => (
         <article key={comment.id} className="py-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold">{comment.authorName}</p>
-            {comment.canDelete && (
-              <Button
-                variant="ghost"
-                className="min-h-11"
-                onClick={() => onDelete(comment.id)}
-              >
-                삭제
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              {comment.canDelete && (
+                <Button
+                  variant="ghost"
+                  className="min-h-11"
+                  onClick={() => onDelete(comment.id)}
+                >
+                  삭제
+                </Button>
+              )}
+              <ReportDialog
+                targetType="comment"
+                targetId={comment.id}
+                onSubmit={onReport}
+              />
+            </div>
           </div>
           <p className="whitespace-pre-wrap text-sm leading-6">
             {comment.body}
