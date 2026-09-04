@@ -1,4 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  handleAdminAuditRequest,
+  type CommunityAdminAuditDependencies,
+} from '@/app/api/admin/community/audit/route';
+import {
+  handleAdminContentRequest,
+  type CommunityAdminContentDependencies,
+} from '@/app/api/admin/community/content/route';
+import {
+  handleAdminSanctionsRequest,
+  type CommunityAdminSanctionsDependencies,
+} from '@/app/api/admin/community/sanctions/route';
+import {
+  handleAdminSummaryRequest,
+  type CommunityAdminSummaryDependencies,
+} from '@/app/api/admin/community/summary/route';
 import {
   handleListModerationReportsRequest,
   type CommunityAdminReportsDependencies,
@@ -8,6 +24,7 @@ import {
   type CommunityAdminActionsDependencies,
 } from '@/app/api/admin/community/actions/route';
 import { CommunityAdminAuthError } from '@/lib/community/admin-auth';
+import { CommunityAdminConsoleError } from '@/lib/community/admin-console-service';
 import { CommunityModerationError } from '@/lib/community/moderation-service';
 import { CommunityReadInputError } from '@/lib/community/read-service';
 
@@ -31,6 +48,50 @@ function actionsDependencies(
     enabled: () => true,
     requireAdmin: async () => ADMIN,
     moderate: async () => undefined,
+    ...overrides,
+  };
+}
+
+function summaryDependencies(
+  overrides: Partial<CommunityAdminSummaryDependencies> = {},
+): CommunityAdminSummaryDependencies {
+  return {
+    enabled: () => true,
+    requireAdmin: async () => ADMIN,
+    loadSummary: async () => ({ reports: 0, hidden: 0, trash: 0, sanctions: 0 }),
+    ...overrides,
+  };
+}
+
+function contentDependencies(
+  overrides: Partial<CommunityAdminContentDependencies> = {},
+): CommunityAdminContentDependencies {
+  return {
+    enabled: () => true,
+    requireAdmin: async () => ADMIN,
+    listContent: async () => ({ items: [], nextCursor: null }),
+    ...overrides,
+  };
+}
+
+function sanctionsDependencies(
+  overrides: Partial<CommunityAdminSanctionsDependencies> = {},
+): CommunityAdminSanctionsDependencies {
+  return {
+    enabled: () => true,
+    requireAdmin: async () => ADMIN,
+    listSanctions: async () => ({ items: [], nextCursor: null }),
+    ...overrides,
+  };
+}
+
+function auditDependencies(
+  overrides: Partial<CommunityAdminAuditDependencies> = {},
+): CommunityAdminAuditDependencies {
+  return {
+    enabled: () => true,
+    requireAdmin: async () => ADMIN,
+    listAudit: async () => ({ items: [], nextCursor: null }),
     ...overrides,
   };
 }
@@ -158,5 +219,262 @@ describe('community admin routes', () => {
 
     expect(response.status).toBe(204);
     expect(adminId).toBe(ADMIN.id);
+  });
+
+  it('rejects anonymous content access without calling the loader', async () => {
+    const listContent = vi.fn();
+    const response = await handleAdminContentRequest(
+      new Request('http://localhost/api/admin/community/content?status=deleted'),
+      contentDependencies({
+        requireAdmin: async () => {
+          throw new CommunityAdminAuthError(
+            401,
+            'admin_auth_required',
+            '관리자 권한이 필요합니다.',
+          );
+        },
+        listContent,
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(listContent).not.toHaveBeenCalled();
+  });
+
+  it('rejects anonymous summary access without calling the loader', async () => {
+    const loadSummary = vi.fn();
+    const response = await handleAdminSummaryRequest(
+      new Request('http://localhost/api/admin/community/summary'),
+      summaryDependencies({
+        requireAdmin: async () => {
+          throw new CommunityAdminAuthError(
+            401,
+            'admin_auth_required',
+            '관리자 권한이 필요합니다.',
+          );
+        },
+        loadSummary,
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(loadSummary).not.toHaveBeenCalled();
+  });
+
+  it('rejects anonymous sanctions access without calling the loader', async () => {
+    const listSanctions = vi.fn();
+    const response = await handleAdminSanctionsRequest(
+      new Request('http://localhost/api/admin/community/sanctions?state=active'),
+      sanctionsDependencies({
+        requireAdmin: async () => {
+          throw new CommunityAdminAuthError(
+            401,
+            'admin_auth_required',
+            '관리자 권한이 필요합니다.',
+          );
+        },
+        listSanctions,
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(listSanctions).not.toHaveBeenCalled();
+  });
+
+  it('rejects anonymous audit access without calling the loader', async () => {
+    const listAudit = vi.fn();
+    const response = await handleAdminAuditRequest(
+      new Request('http://localhost/api/admin/community/audit'),
+      auditDependencies({
+        requireAdmin: async () => {
+          throw new CommunityAdminAuthError(
+            401,
+            'admin_auth_required',
+            '관리자 권한이 필요합니다.',
+          );
+        },
+        listAudit,
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(listAudit).not.toHaveBeenCalled();
+  });
+
+  it('does not authenticate disabled admin content access', async () => {
+    const requireAdmin = vi.fn();
+    const response = await handleAdminContentRequest(
+      new Request('http://localhost/api/admin/community/content?status=hidden'),
+      contentDependencies({ enabled: () => false, requireAdmin }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(requireAdmin).not.toHaveBeenCalled();
+  });
+
+  it('forwards only supported content query fields', async () => {
+    let input: unknown;
+    const response = await handleAdminContentRequest(
+      new Request(
+        'http://localhost/api/admin/community/content?status=deleted&targetType=comment&deletionSource=admin&query=%20spam%20&cursor=next&adminId=leak&limit=50',
+      ),
+      contentDependencies({
+        listContent: async (value) => {
+          input = value;
+          return { items: [], nextCursor: null };
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(input).toEqual({
+      status: 'deleted',
+      targetType: 'comment',
+      deletionSource: 'admin',
+      search: ' spam ',
+      cursor: 'next',
+    });
+  });
+
+  it('forwards only supported sanctions query fields', async () => {
+    let input: unknown;
+    const response = await handleAdminSanctionsRequest(
+      new Request(
+        'http://localhost/api/admin/community/sanctions?state=ended&cursor=next&query=drop&limit=50',
+      ),
+      sanctionsDependencies({
+        listSanctions: async (value) => {
+          input = value;
+          return { items: [], nextCursor: null };
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(input).toEqual({ state: 'ended', cursor: 'next' });
+  });
+
+  it('forwards only supported audit query fields', async () => {
+    let input: unknown;
+    const response = await handleAdminAuditRequest(
+      new Request(
+        'http://localhost/api/admin/community/audit?action=unrestrict&targetType=user&query=%20review%20&cursor=next&adminId=leak',
+      ),
+      auditDependencies({
+        listAudit: async (value) => {
+          input = value;
+          return { items: [], nextCursor: null };
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(input).toEqual({
+      action: 'unrestrict',
+      targetType: 'user',
+      search: ' review ',
+      cursor: 'next',
+    });
+  });
+
+  it('maps console validation errors and hides provider details', async () => {
+    const privateDetail = 'provider database details';
+    const validation = await handleAdminSanctionsRequest(
+      new Request('http://localhost/api/admin/community/sanctions?state=active'),
+      sanctionsDependencies({
+        listSanctions: async () => {
+          throw new CommunityAdminConsoleError(
+            400,
+            'invalid_sanction_state',
+            '제재 상태를 확인해 주세요.',
+          );
+        },
+      }),
+    );
+    const unavailable = await handleAdminAuditRequest(
+      new Request('http://localhost/api/admin/community/audit'),
+      auditDependencies({
+        listAudit: async () => {
+          throw new Error(privateDetail);
+        },
+      }),
+    );
+
+    expect(validation.status).toBe(400);
+    await expect(validation.json()).resolves.toEqual({
+      code: 'invalid_sanction_state',
+      error: '제재 상태를 확인해 주세요.',
+    });
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.get('Cache-Control')).toBe('no-store');
+    await expect(unavailable.text()).resolves.not.toContain(privateDetail);
+  });
+
+  it('maps stale moderation state to a safe conflict', async () => {
+    const response = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'hide' }),
+      }),
+      actionsDependencies({
+        moderate: async () => {
+          throw new CommunityModerationError(
+            409,
+            'moderation_state_conflict',
+            '현재 상태에서는 이 관리 조치를 적용할 수 없습니다.',
+          );
+        },
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({
+      code: 'moderation_state_conflict',
+      error: '현재 상태에서는 이 관리 조치를 적용할 수 없습니다.',
+    });
+  });
+
+  it('maps malformed moderation input to a safe 400', async () => {
+    const response = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{',
+      }),
+      actionsDependencies(),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      code: 'invalid_moderation_action',
+      error: '관리 조치 내용을 확인해 주세요.',
+    });
+  });
+
+  it('hides moderation provider and admin registration details', async () => {
+    const providerDetail = 'community admin access denied';
+    const response = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'hide' }),
+      }),
+      actionsDependencies({
+        moderate: async () => {
+          throw new Error(providerDetail);
+        },
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.text()).resolves.not.toContain(providerDetail);
   });
 });

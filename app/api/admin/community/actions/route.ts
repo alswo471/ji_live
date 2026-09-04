@@ -30,6 +30,25 @@ const dependencies: CommunityAdminActionsDependencies = {
   moderate: moderateContent,
 };
 
+function mapActionError(error: unknown) {
+  if (error instanceof CommunityAdminAuthError) {
+    return json({ code: error.code, error: error.message }, error.status);
+  }
+  if (
+    error instanceof CommunityModerationError &&
+    (error.status === 400 || error.status === 404 || error.status === 409)
+  ) {
+    return json({ code: error.code, error: error.message }, error.status);
+  }
+  return json(
+    {
+      code: 'moderation_unavailable',
+      error: '관리 요청을 처리하지 못했습니다.',
+    },
+    503,
+  );
+}
+
 export async function handleModerationActionRequest(
   request: Request,
   deps: CommunityAdminActionsDependencies = dependencies,
@@ -38,25 +57,25 @@ export async function handleModerationActionRequest(
     return json({ error: '페이지를 찾을 수 없습니다.' }, 404);
   try {
     const admin = await deps.requireAdmin(request);
-    await deps.moderate(admin, await request.json());
+    let input: unknown;
+    try {
+      input = await request.json();
+    } catch {
+      return json(
+        {
+          code: 'invalid_moderation_action',
+          error: '관리 조치 내용을 확인해 주세요.',
+        },
+        400,
+      );
+    }
+    await deps.moderate(admin, input);
     return new Response(null, {
       status: 204,
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    if (
-      error instanceof CommunityAdminAuthError ||
-      error instanceof CommunityModerationError
-    ) {
-      return json({ code: error.code, error: error.message }, error.status);
-    }
-    return json(
-      {
-        code: 'moderation_unavailable',
-        error: '관리 요청을 처리하지 못했습니다.',
-      },
-      503,
-    );
+    return mapActionError(error);
   }
 }
 
