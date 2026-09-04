@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { ModerationQueue } from '@/components/community/moderation-queue';
@@ -156,5 +162,49 @@ describe('ModerationQueue', () => {
     });
     expect(actions[0]).not.toHaveProperty('userId');
     expect(actions[0]).not.toHaveProperty('targetAuthorId');
+  });
+
+  it('keeps a rejected restriction dialog usable with one in-dialog error and preserved inputs', async () => {
+    const user = userEvent.setup();
+    render(
+      <ModerationQueue
+        items={[item]}
+        loading={false}
+        onAction={async () => {
+          throw new Error('provider detail');
+        }}
+      />,
+    );
+
+    const reason = screen.getByLabelText('관리 사유');
+    await user.type(reason, '반복적인 운영정책 위반');
+    await user.click(screen.getByRole('button', { name: '작성 제한' }));
+    const dialog = await screen.findByRole('alertdialog');
+    const duration = within(dialog).getByRole('combobox', {
+      name: '제한 기간',
+    });
+    await user.selectOptions(duration, '7');
+    await user.tab();
+    const confirm = within(dialog).getByRole('button', { name: '제한 확정' });
+    expect(confirm).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent(
+      '관리 조치를 반영하지 못했습니다. 다시 시도해 주세요.',
+    );
+    expect(screen.getByRole('alertdialog')).toBe(dialog);
+    expect(reason).toHaveValue('반복적인 운영정책 위반');
+    expect(duration).toHaveValue('7');
+    expect(confirm).toHaveAttribute('aria-describedby', alert.id);
+    expect(
+      screen.getAllByText(
+        '관리 조치를 반영하지 못했습니다. 다시 시도해 주세요.',
+      ),
+    ).toHaveLength(1);
+    await waitFor(() => expect(confirm).toHaveFocus());
+    await user.tab();
+    expect(within(dialog).getByRole('button', { name: '취소' })).toHaveFocus();
   });
 });

@@ -45,6 +45,7 @@ function ModerationCard({
   const fieldId = useId();
   const helpId = `${fieldId}-help`;
   const errorId = `${fieldId}-error`;
+  const dialogErrorId = `${fieldId}-dialog-error`;
   const restrictionId = `${fieldId}-restriction`;
   const [reason, setReason] = useState('');
   const [restrictionDays, setRestrictionDays] = useState('1');
@@ -54,20 +55,30 @@ function ModerationCard({
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const confirmationTriggerRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
-  async function execute(action: ModerationAction) {
+  async function execute(
+    action: ModerationAction,
+    errorSurface: 'card' | 'dialog',
+  ) {
     setSubmitting(true);
     setError(null);
+    setDialogError(null);
     setSuccess(null);
     try {
       await onAction(action);
       setSuccess('관리 조치를 반영했습니다.');
       setConfirming(false);
     } catch {
-      setError('관리 조치를 반영하지 못했습니다. 다시 시도해 주세요.');
+      const message = '관리 조치를 반영하지 못했습니다. 다시 시도해 주세요.';
+      if (errorSurface === 'dialog') {
+        setDialogError(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -85,38 +96,48 @@ function ModerationCard({
     setError(null);
     if (type === 'delete' || type === 'restrict') {
       confirmationTriggerRef.current = trigger ?? null;
+      setDialogError(null);
       setConfirmationType(type);
       setConfirming(true);
       return;
     }
-    void execute({
-      type,
-      targetType: item.targetType,
-      targetId: item.targetId,
-      reason: normalizedReason,
-    });
+    void execute(
+      {
+        type,
+        targetType: item.targetType,
+        targetId: item.targetId,
+        reason: normalizedReason,
+      },
+      'card',
+    );
   }
 
   function confirmAction() {
     const normalizedReason = reason.trim();
     if (confirmationType === 'delete') {
-      void execute({
-        type: 'delete',
-        targetType: item.targetType,
-        targetId: item.targetId,
-        reason: normalizedReason,
-      });
+      void execute(
+        {
+          type: 'delete',
+          targetType: item.targetType,
+          targetId: item.targetId,
+          reason: normalizedReason,
+        },
+        'dialog',
+      );
     } else if (confirmationType === 'restrict') {
       const until = new Date(
         Date.now() + Number(restrictionDays) * 24 * 60 * 60 * 1000,
       ).toISOString();
-      void execute({
-        type: 'restrict',
-        targetType: item.targetType,
-        targetId: item.targetId,
-        until,
-        reason: normalizedReason,
-      });
+      void execute(
+        {
+          type: 'restrict',
+          targetType: item.targetType,
+          targetId: item.targetId,
+          until,
+          reason: normalizedReason,
+        },
+        'dialog',
+      );
     }
   }
 
@@ -222,7 +243,10 @@ function ModerationCard({
       <AlertDialog
         open={confirming}
         onOpenChange={(open) => {
-          if (!open && !submitting) setConfirming(false);
+          if (!open && !submitting) {
+            setConfirming(false);
+            setDialogError(null);
+          }
         }}
       >
         <AlertDialogContent
@@ -263,17 +287,25 @@ function ModerationCard({
               </select>
             </div>
           ) : null}
+          {dialogError ? (
+            <p
+              id={dialogErrorId}
+              role="alert"
+              className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+            >
+              {dialogError}
+            </p>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogAction
               type="button"
               variant="destructive"
               className="min-h-11"
               disabled={submitting}
+              aria-describedby={dialogError ? dialogErrorId : undefined}
               onClick={confirmAction}
             >
-              {confirmationType === 'delete'
-                ? '삭제 대기 확정'
-                : '제한 확정'}
+              {confirmationType === 'delete' ? '삭제 대기 확정' : '제한 확정'}
             </AlertDialogAction>
             <AlertDialogCancel
               ref={cancelButtonRef}
