@@ -142,11 +142,12 @@ begin
       for update;
     end if;
 
-    if target_status is null
-      or (p_action in ('hide', 'delete') and target_status = 'deleted')
+    if target_status is null then
+      raise exception using errcode = 'P0002', message = 'community moderation target not found';
+    elsif (p_action in ('hide', 'delete') and target_status = 'deleted')
       or (p_action = 'restore' and target_status not in ('hidden', 'deleted'))
     then
-      raise exception using errcode = 'P0002', message = 'community moderation target not found';
+      raise exception using errcode = 'P0001', message = 'community moderation state conflict';
     end if;
 
     if p_target_type = 'post' then

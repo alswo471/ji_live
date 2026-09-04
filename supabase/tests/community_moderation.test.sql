@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(38);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -248,6 +248,28 @@ select ok(
   (select deletion_source is null and deleted_at is null and purge_at is null
    from public.community_posts where id = '60000000-0000-0000-0000-000000000001'),
   'restoring admin-deleted content clears deletion metadata'
+);
+
+select throws_ok(
+  $$ select public.moderate_community_content(
+    md5('101')::uuid, 'restore', 'post',
+    '60000000-0000-0000-0000-000000000001', null, null,
+    '이미 공개된 콘텐츠 복구 시도'
+  ) $$,
+  'P0001',
+  'community moderation state conflict',
+  'restoring visible content reports a state conflict'
+);
+
+select throws_ok(
+  $$ select public.moderate_community_content(
+    md5('101')::uuid, 'hide', 'post',
+    '60000000-0000-0000-0000-000000000099', null, null,
+    '파기된 콘텐츠 숨김 시도'
+  ) $$,
+  'P0002',
+  'community moderation target not found',
+  'a missing content target remains not found'
 );
 
 select lives_ok(

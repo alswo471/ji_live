@@ -166,6 +166,44 @@ describe('moderationRepository', () => {
       },
     ]);
   });
+
+  it('maps a persistence state conflict to a safe 409 without provider detail', async () => {
+    const providerDetail = 'community moderation state conflict';
+    getServerSupabaseMock.mockReturnValue({
+      rpc: async () => ({ error: { code: 'P0001', message: providerDetail } }),
+    });
+
+    await expect(
+      moderationRepository.applyAction(ADMIN.id, {
+        type: 'restore',
+        targetType: 'post',
+        targetId: POST_ID,
+        reason: '이미 공개된 콘텐츠 복구 시도',
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'moderation_state_conflict',
+      message: '현재 상태에서는 이 관리 조치를 적용할 수 없습니다.',
+    });
+  });
+
+  it('preserves a missing persistence target as a safe 404', async () => {
+    getServerSupabaseMock.mockReturnValue({
+      rpc: async () => ({ error: { code: 'P0002' } }),
+    });
+
+    await expect(
+      moderationRepository.applyAction(ADMIN.id, {
+        type: 'hide',
+        targetType: 'post',
+        targetId: POST_ID,
+        reason: '파기된 콘텐츠 숨김 시도',
+      }),
+    ).rejects.toMatchObject({
+      status: 404,
+      code: 'moderation_target_not_found',
+    });
+  });
 });
 
 describe('moderateContent', () => {

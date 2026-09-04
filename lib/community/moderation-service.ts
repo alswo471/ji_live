@@ -67,6 +67,13 @@ export class CommunityModerationError extends Error {
 }
 
 function failProvider(error?: { code?: string } | null): never {
+  if (error?.code === 'P0001') {
+    throw new CommunityModerationError(
+      409,
+      'moderation_state_conflict',
+      '현재 상태에서는 이 관리 조치를 적용할 수 없습니다.',
+    );
+  }
   if (error?.code === 'P0002' || error?.code === '23503') {
     throw new CommunityModerationError(
       404,
