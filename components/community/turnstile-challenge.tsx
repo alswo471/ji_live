@@ -99,8 +99,6 @@ export const TurnstileChallenge = forwardRef<TurnstileChallengeHandle>(
     useEffect(() => {
       let active = true;
       activeRef.current = true;
-      setStatus('loading');
-      setMessage(null);
       tokenRef.current = null;
 
       void loadTurnstile()

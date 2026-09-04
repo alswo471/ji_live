@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDailyAbuseKey } from '@/lib/community/abuse-key';
+import {
+  createDailyAbuseKey,
+  getTrustedClientIp,
+} from '@/lib/community/abuse-key';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -65,5 +68,68 @@ describe('createDailyAbuseKey', () => {
     await expect(createDailyAbuseKey('not-an-ip')).rejects.toMatchObject({
       code: 'invalid_client_ip',
     });
+  });
+});
+
+describe('getTrustedClientIp', () => {
+  it('rejects spoofed direct-origin Cloudflare headers without the origin secret', () => {
+    const env = {
+      NODE_ENV: 'production',
+      COMMUNITY_TRUSTED_PROXY_MODE: 'cloudflare',
+      COMMUNITY_TRUSTED_PROXY_SECRET:
+        'trusted-proxy-secret-at-least-32-characters',
+    };
+    const direct = new Request('https://origin.example/community', {
+      headers: { 'cf-connecting-ip': '203.0.113.10' },
+    });
+    const spoofed = new Request('https://origin.example/community', {
+      headers: {
+        'cf-connecting-ip': '198.51.100.20',
+        'x-community-proxy-secret': 'wrong-secret',
+      },
+    });
+
+    expect(() => getTrustedClientIp(direct, env)).toThrow(
+      expect.objectContaining({ code: 'untrusted_proxy' }),
+    );
+    expect(() => getTrustedClientIp(spoofed, env)).toThrow(
+      expect.objectContaining({ code: 'untrusted_proxy' }),
+    );
+  });
+
+  it('accepts only the proxy-overwritten origin secret in production', () => {
+    const secret = 'trusted-proxy-secret-at-least-32-characters';
+    const request = new Request('https://origin.example/community', {
+      headers: {
+        'cf-connecting-ip': '203.0.113.010',
+        'x-community-proxy-secret': secret,
+      },
+    });
+
+    expect(
+      getTrustedClientIp(request, {
+        NODE_ENV: 'production',
+        COMMUNITY_TRUSTED_PROXY_MODE: 'cloudflare',
+        COMMUNITY_TRUSTED_PROXY_SECRET: secret,
+      }),
+    ).toBe('203.0.113.10');
+  });
+
+  it('allows explicit local mode outside production but fails it closed in production', () => {
+    const request = new Request('http://localhost/community', {
+      headers: { 'cf-connecting-ip': '127.0.0.1' },
+    });
+    expect(
+      getTrustedClientIp(request, {
+        NODE_ENV: 'test',
+        COMMUNITY_TRUSTED_PROXY_MODE: 'local',
+      }),
+    ).toBe('127.0.0.1');
+    expect(() =>
+      getTrustedClientIp(request, {
+        NODE_ENV: 'production',
+        COMMUNITY_TRUSTED_PROXY_MODE: 'local',
+      }),
+    ).toThrow(expect.objectContaining({ code: 'untrusted_proxy' }));
   });
 });

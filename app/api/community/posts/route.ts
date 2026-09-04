@@ -1,6 +1,7 @@
 import {
   createDailyAbuseKey,
   CommunitySecurityError,
+  getTrustedClientIp,
 } from '@/lib/community/abuse-key';
 import {
   authenticateCommunityUser,
@@ -24,10 +25,14 @@ export const dynamic = 'force-dynamic';
 type PostPageLoader = typeof listPosts;
 type CommunityEnabledReader = typeof isCommunityEnabled;
 
-function noStoreJson(body: unknown, status = 200) {
+function noStoreJson(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
   return Response.json(body, {
     status,
-    headers: { 'Cache-Control': 'no-store' },
+    headers: { 'Cache-Control': 'no-store', ...headers },
   });
 }
 
@@ -74,6 +79,7 @@ export async function GET(request: Request) {
 export interface CommunityWriteRouteDependencies {
   enabled: typeof isCommunityEnabled;
   authenticate: typeof authenticateCommunityUser;
+  resolveClientIp: typeof getTrustedClientIp;
   verifyHuman: typeof verifyTurnstile;
   createAbuseKey: typeof createDailyAbuseKey;
   createPost: typeof createPost;
@@ -82,6 +88,7 @@ export interface CommunityWriteRouteDependencies {
 const writeDependencies: CommunityWriteRouteDependencies = {
   enabled: isCommunityEnabled,
   authenticate: authenticateCommunityUser,
+  resolveClientIp: getTrustedClientIp,
   verifyHuman: verifyTurnstile,
   createAbuseKey: createDailyAbuseKey,
   createPost,
@@ -97,7 +104,7 @@ export async function handleCreatePostRequest(
 
   try {
     const actor = await dependencies.authenticate(request);
-    const clientIp = request.headers.get('cf-connecting-ip') ?? '';
+    const clientIp = dependencies.resolveClientIp(request);
     const human = await dependencies.verifyHuman(
       request.headers.get('x-turnstile-token') ?? '',
       clientIp,
@@ -119,10 +126,20 @@ export async function handleCreatePostRequest(
       201,
     );
   } catch (error) {
-    if (
-      error instanceof CommunityAuthError ||
-      error instanceof CommunityWriteError
-    ) {
+    if (error instanceof CommunityWriteError) {
+      return noStoreJson(
+        {
+          code: error.code,
+          error: error.message,
+          ...(error.retryAt ? { retryAt: error.retryAt } : {}),
+        },
+        error.status,
+        error.status === 429 && error.retryAfterSeconds
+          ? { 'Retry-After': String(error.retryAfterSeconds) }
+          : {},
+      );
+    }
+    if (error instanceof CommunityAuthError) {
       return noStoreJson(
         { code: error.code, error: error.message },
         error.status,
@@ -133,6 +150,12 @@ export async function handleCreatePostRequest(
     }
     if (error instanceof CommunitySecurityError) {
       return noStoreJson({ code: error.code, error: error.message }, 403);
+    }
+    if (error instanceof SyntaxError) {
+      return noStoreJson(
+        { code: 'invalid_json', error: '요청 내용을 확인해 주세요.' },
+        400,
+      );
     }
     return noStoreJson(
       {

@@ -15,7 +15,8 @@ const VALID_ENV = Object.fromEntries(
 
 Object.assign(VALID_ENV, {
   NEXT_PUBLIC_COMMUNITY_ENABLED: 'true',
-  NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+  NEXT_PUBLIC_SUPABASE_URL: 'https://release-project-ref.supabase.co',
+  SUPABASE_PROJECT_REF: 'release-project-ref',
   NEXT_PUBLIC_RIGHTS_CONTACT_URL: 'https://open.kakao.com/o/example',
   COMMUNITY_PROCESSOR_COUNTRY: 'verified-country',
   COMMUNITY_PROCESSOR_LEGAL_NAME: 'verified-legal-name',
@@ -24,6 +25,10 @@ Object.assign(VALID_ENV, {
   COMMUNITY_PROCESSING_RETENTION: 'verified-retention',
   COMMUNITY_RETENTION_DAYS: '365',
   COMMUNITY_RETENTION_SECRET: 'retention-secret-at-least-32-characters',
+  COMMUNITY_HMAC_SECRET: 'community-hmac-secret-at-least-32-characters',
+  COMMUNITY_TRUSTED_PROXY_MODE: 'cloudflare',
+  COMMUNITY_TRUSTED_PROXY_SECRET:
+    'trusted-proxy-secret-at-least-32-characters',
   COMMUNITY_RETENTION_SCHEDULE_CONFIRMED: 'true',
 });
 
@@ -89,6 +94,54 @@ describe('community release gate', () => {
       });
     } catch (error) {
       expect(String(error)).not.toContain(invalidRetention);
+    }
+  });
+
+  it.each([
+    ['NEXT_PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000AA'],
+    ['NEXT_PUBLIC_TURNSTILE_SITE_KEY', '1x00000000000000000000BB'],
+    ['TURNSTILE_SECRET_KEY', '1x0000000000000000000000000000000AA'],
+  ])('rejects Cloudflare always-pass key in %s', (name, key) => {
+    expect(() =>
+      assertCommunityReleaseConfig({ ...VALID_ENV, [name]: key }),
+    ).toThrow('Turnstile test keys');
+  });
+
+  it('requires strong HMAC and trusted-origin secrets without exposing values', () => {
+    for (const [name, value] of [
+      ['COMMUNITY_HMAC_SECRET', 'short-hmac-value'],
+      ['COMMUNITY_TRUSTED_PROXY_SECRET', 'short-proxy-value'],
+    ]) {
+      try {
+        assertCommunityReleaseConfig({ ...VALID_ENV, [name]: value });
+        throw new Error('expected release rejection');
+      } catch (error) {
+        expect(String(error)).toContain(name);
+        expect(String(error)).not.toContain(value);
+      }
+    }
+  });
+
+  it('requires the Cloudflare trusted-proxy boundary for production release', () => {
+    expect(() =>
+      assertCommunityReleaseConfig({
+        ...VALID_ENV,
+        COMMUNITY_TRUSTED_PROXY_MODE: 'local',
+      }),
+    ).toThrow('COMMUNITY_TRUSTED_PROXY_MODE');
+  });
+
+  it('requires the Supabase URL host to match the protected project ref', () => {
+    const mismatchedUrl = 'https://another-project.supabase.co';
+    try {
+      assertCommunityReleaseConfig({
+        ...VALID_ENV,
+        NEXT_PUBLIC_SUPABASE_URL: mismatchedUrl,
+      });
+      throw new Error('expected release rejection');
+    } catch (error) {
+      expect(String(error)).toContain('SUPABASE_PROJECT_REF');
+      expect(String(error)).not.toContain(mismatchedUrl);
     }
   });
 

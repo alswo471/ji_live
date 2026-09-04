@@ -1,6 +1,7 @@
 import {
   createDailyAbuseKey,
   CommunitySecurityError,
+  getTrustedClientIp,
 } from '@/lib/community/abuse-key';
 import {
   authenticateCommunityUser,
@@ -19,16 +20,21 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-function noStoreJson(body: unknown, status = 200) {
+function noStoreJson(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
   return Response.json(body, {
     status,
-    headers: { 'Cache-Control': 'no-store' },
+    headers: { 'Cache-Control': 'no-store', ...headers },
   });
 }
 
 export interface CommunityReportRouteDependencies {
   enabled: typeof isCommunityEnabled;
   authenticate: typeof authenticateCommunityUser;
+  resolveClientIp: typeof getTrustedClientIp;
   verifyHuman: typeof verifyTurnstile;
   createAbuseKey: typeof createDailyAbuseKey;
   reportContent: typeof reportContent;
@@ -37,6 +43,7 @@ export interface CommunityReportRouteDependencies {
 const dependencies: CommunityReportRouteDependencies = {
   enabled: isCommunityEnabled,
   authenticate: authenticateCommunityUser,
+  resolveClientIp: getTrustedClientIp,
   verifyHuman: verifyTurnstile,
   createAbuseKey: createDailyAbuseKey,
   reportContent,
@@ -51,7 +58,7 @@ export async function handleReportRequest(
 
   try {
     const actor = await deps.authenticate(request);
-    const clientIp = request.headers.get('cf-connecting-ip') ?? '';
+    const clientIp = deps.resolveClientIp(request);
     if (
       !(await deps.verifyHuman(
         request.headers.get('x-turnstile-token') ?? '',
@@ -73,10 +80,20 @@ export async function handleReportRequest(
       201,
     );
   } catch (error) {
-    if (
-      error instanceof CommunityAuthError ||
-      error instanceof CommunityWriteError
-    ) {
+    if (error instanceof CommunityWriteError) {
+      return noStoreJson(
+        {
+          code: error.code,
+          error: error.message,
+          ...(error.retryAt ? { retryAt: error.retryAt } : {}),
+        },
+        error.status,
+        error.status === 429 && error.retryAfterSeconds
+          ? { 'Retry-After': String(error.retryAfterSeconds) }
+          : {},
+      );
+    }
+    if (error instanceof CommunityAuthError) {
       return noStoreJson(
         { code: error.code, error: error.message },
         error.status,
@@ -87,6 +104,12 @@ export async function handleReportRequest(
     }
     if (error instanceof CommunitySecurityError) {
       return noStoreJson({ code: error.code, error: error.message }, 403);
+    }
+    if (error instanceof SyntaxError) {
+      return noStoreJson(
+        { code: 'invalid_json', error: '요청 내용을 확인해 주세요.' },
+        400,
+      );
     }
     return noStoreJson(
       {

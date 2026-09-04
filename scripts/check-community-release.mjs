@@ -8,6 +8,8 @@ export const REQUIRED_RELEASE_ENV = [
   'SUPABASE_SECRET_KEY',
   'TURNSTILE_SECRET_KEY',
   'COMMUNITY_HMAC_SECRET',
+  'COMMUNITY_TRUSTED_PROXY_MODE',
+  'COMMUNITY_TRUSTED_PROXY_SECRET',
   'COMMUNITY_RETENTION_SECRET',
   'COMMUNITY_RETENTION_DAYS',
   'SUPABASE_PROJECT_REF',
@@ -52,6 +54,34 @@ export function assertCommunityReleaseConfig(env) {
   }
   if (supabase.protocol !== 'https:') {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL must use HTTPS');
+  }
+  if (
+    supabase.hostname !==
+    `${env.SUPABASE_PROJECT_REF.trim().toLowerCase()}.supabase.co`
+  ) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL must match SUPABASE_PROJECT_REF');
+  }
+  const turnstileAlwaysPassKeys = new Set([
+    '1x00000000000000000000AA',
+    '1x00000000000000000000BB',
+    '1x0000000000000000000000000000000AA',
+  ]);
+  if (
+    turnstileAlwaysPassKeys.has(env.NEXT_PUBLIC_TURNSTILE_SITE_KEY.trim()) ||
+    turnstileAlwaysPassKeys.has(env.TURNSTILE_SECRET_KEY.trim())
+  ) {
+    throw new Error('Turnstile test keys are forbidden in release');
+  }
+  if (env.COMMUNITY_HMAC_SECRET.trim().length < 32) {
+    throw new Error('COMMUNITY_HMAC_SECRET must be at least 32 characters');
+  }
+  if (env.COMMUNITY_TRUSTED_PROXY_MODE !== 'cloudflare') {
+    throw new Error('COMMUNITY_TRUSTED_PROXY_MODE must be cloudflare');
+  }
+  if (env.COMMUNITY_TRUSTED_PROXY_SECRET.trim().length < 32) {
+    throw new Error(
+      'COMMUNITY_TRUSTED_PROXY_SECRET must be at least 32 characters',
+    );
   }
   if (env.COMMUNITY_RETENTION_SECRET.length < 32) {
     throw new Error(

@@ -81,7 +81,11 @@ function repository(
     isRestricted: async () => false,
     findPostByIdempotency: async () => null,
     findCommentByIdempotency: async () => null,
-    consumeRateLimit: async () => true,
+    consumeRateLimit: async () => ({
+      allowed: true,
+      retryAfterSeconds: 0,
+      retryAt: null,
+    }),
     getOrCreateProfileName: async (_actorId, proposedName) => proposedName,
     insertPost: async () => postRecord(),
     insertComment: async ({ actorId, authorName, postId, input }) => ({
@@ -104,6 +108,33 @@ function repository(
 }
 
 describe('community write rate limits', () => {
+  it('parses the atomic rate decision and retry window from the database', async () => {
+    getServerSupabaseMock.mockReturnValue({
+      rpc: async () => ({
+        data: {
+          allowed: false,
+          retryAfterSeconds: 12,
+          retryAt: '2026-09-04T05:01:00.000Z',
+        },
+        error: null,
+      }),
+    });
+
+    await expect(
+      communityWriteRepository.consumeRateLimit({
+        actorId: ACTOR.id,
+        abuseKey: ABUSE_KEY,
+        action: 'delete',
+        limit: 10,
+        windowSeconds: 600,
+      }),
+    ).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 12,
+      retryAt: '2026-09-04T05:01:00.000Z',
+    });
+  });
+
   it.each([
     ['post', 3, 600],
     ['comment', 10, 600],
@@ -112,12 +143,16 @@ describe('community write rate limits', () => {
     '%s consumes the configured atomic rate limit',
     async (action, limit, windowSeconds) => {
       const repo = repository({
-        consumeRateLimit: async (request) =>
-          request.action === action &&
-          request.actorId === ACTOR.id &&
-          request.abuseKey === ABUSE_KEY &&
-          request.limit === limit &&
-          request.windowSeconds === windowSeconds,
+        consumeRateLimit: async (request) => ({
+          allowed:
+            request.action === action &&
+            request.actorId === ACTOR.id &&
+            request.abuseKey === ABUSE_KEY &&
+            request.limit === limit &&
+            request.windowSeconds === windowSeconds,
+          retryAfterSeconds: 0,
+          retryAt: null,
+        }),
       });
       const nameFactory = async () => '차분한-고양이-0001';
 
@@ -209,6 +244,46 @@ describe('createPost', () => {
 });
 
 describe('deletePost', () => {
+  it('consumes the guarded delete quota before ownership lookup', async () => {
+    const events: string[] = [];
+    const repo = repository({
+      consumeRateLimit: async (request) => {
+        events.push(`rate:${request.action}:${request.limit}:${request.windowSeconds}`);
+        return { allowed: true, retryAfterSeconds: 0, retryAt: null };
+      },
+      findPostOwnership: async () => {
+        events.push('ownership');
+        return { id: POST_ID, authorId: ACTOR.id, status: 'visible' };
+      },
+      softDeletePost: async () => {
+        events.push('delete');
+      },
+    });
+
+    await deletePost(ACTOR, POST_ID, { abuseKey: ABUSE_KEY }, repo);
+    expect(events).toEqual(['rate:delete:10:600', 'ownership', 'delete']);
+  });
+
+  it('returns truthful retry metadata when the quota is exhausted', async () => {
+    const retryAt = '2026-09-04T05:01:00.000Z';
+    const repo = repository({
+      consumeRateLimit: async () => ({
+        allowed: false,
+        retryAfterSeconds: 47,
+        retryAt,
+      }),
+    });
+
+    await expect(
+      deletePost(ACTOR, POST_ID, { abuseKey: ABUSE_KEY }, repo),
+    ).rejects.toMatchObject({
+      status: 429,
+      code: 'community_rate_limited',
+      retryAfterSeconds: 47,
+      retryAt,
+    });
+  });
+
   it('rejects deletion by a non-owner', async () => {
     const repo = repository({
       findPostOwnership: async () => ({
@@ -218,7 +293,9 @@ describe('deletePost', () => {
       }),
     });
 
-    await expect(deletePost(ACTOR, POST_ID, repo)).rejects.toMatchObject({
+    await expect(
+      deletePost(ACTOR, POST_ID, { abuseKey: ABUSE_KEY }, repo),
+    ).rejects.toMatchObject({
       status: 403,
       code: 'community_not_owner',
     });
@@ -237,7 +314,7 @@ describe('deletePost', () => {
       },
     });
 
-    await deletePost(ACTOR, POST_ID, repo);
+    await deletePost(ACTOR, POST_ID, { abuseKey: ABUSE_KEY }, repo);
     expect(received).toEqual({ actorId: ACTOR.id, targetId: POST_ID });
   });
 });
@@ -287,7 +364,7 @@ describe('deleteComment', () => {
       },
     });
 
-    await deleteComment(ACTOR, COMMENT_ID, repo);
+    await deleteComment(ACTOR, COMMENT_ID, { abuseKey: ABUSE_KEY }, repo);
     expect(received).toEqual({ actorId: ACTOR.id, targetId: COMMENT_ID });
   });
 });

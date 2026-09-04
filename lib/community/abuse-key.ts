@@ -58,6 +58,49 @@ function normalizeClientIp(value: string) {
   return normalized;
 }
 
+function constantTimeEqual(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const leftBytes = encoder.encode(left);
+  const rightBytes = encoder.encode(right);
+  const length = Math.max(leftBytes.length, rightBytes.length);
+  let difference = leftBytes.length ^ rightBytes.length;
+  for (let index = 0; index < length; index += 1) {
+    difference |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+  }
+  return difference === 0;
+}
+
+export function getTrustedClientIp(
+  request: Request,
+  env: Record<string, string | undefined> = process.env,
+) {
+  const mode = env.COMMUNITY_TRUSTED_PROXY_MODE;
+  if (mode === 'local') {
+    if (env.NODE_ENV === 'production') {
+      throw new CommunitySecurityError(
+        'untrusted_proxy',
+        '요청 출처를 신뢰할 수 없습니다.',
+      );
+    }
+  } else if (mode === 'cloudflare') {
+    const expected = env.COMMUNITY_TRUSTED_PROXY_SECRET ?? '';
+    const provided = request.headers.get('x-community-proxy-secret') ?? '';
+    if (expected.length < 32 || !constantTimeEqual(provided, expected)) {
+      throw new CommunitySecurityError(
+        'untrusted_proxy',
+        '요청 출처를 신뢰할 수 없습니다.',
+      );
+    }
+  } else {
+    throw new CommunitySecurityError(
+      'untrusted_proxy',
+      '요청 출처를 신뢰할 수 없습니다.',
+    );
+  }
+
+  return normalizeClientIp(request.headers.get('cf-connecting-ip') ?? '');
+}
+
 function bytesToHex(bytes: Uint8Array) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
     '',

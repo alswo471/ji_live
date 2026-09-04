@@ -127,6 +127,7 @@ describe.runIf(runIntegration)('local community security integration', () => {
     process.env.TURNSTILE_SECRET_KEY = TURNSTILE_TEST_SECRET;
     process.env.COMMUNITY_HMAC_SECRET =
       'integration-hmac-secret-at-least-32-characters';
+    process.env.COMMUNITY_TRUSTED_PROXY_MODE = 'local';
     service = createClient(env.API_URL, env.SECRET_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -278,7 +279,11 @@ describe.runIf(runIntegration)('local community security integration', () => {
     const foreignDelete = await handleDeletePostRequest(
       new Request(`http://localhost/api/community/posts/${created.id}`, {
         method: 'DELETE',
-        headers: { authorization: `Bearer ${actors[1].token}` },
+        headers: {
+          authorization: `Bearer ${actors[1].token}`,
+          'cf-connecting-ip': '203.0.113.2',
+          'x-turnstile-token': TURNSTILE_TEST_TOKEN,
+        },
       }),
       created.id,
     );
@@ -462,7 +467,11 @@ describe.runIf(runIntegration)('local community security integration', () => {
     const deleteResponse = await handleDeletePostRequest(
       new Request(`http://localhost/api/community/posts/${created.id}`, {
         method: 'DELETE',
-        headers: { authorization: `Bearer ${actors[0].token}` },
+        headers: {
+          authorization: `Bearer ${actors[0].token}`,
+          'cf-connecting-ip': '192.0.2.10',
+          'x-turnstile-token': TURNSTILE_TEST_TOKEN,
+        },
       }),
       created.id,
     );
@@ -566,6 +575,33 @@ describe.runIf(runIntegration)('local community security integration', () => {
     expectNoKnownUserIds(JSON.stringify(adminTrash), actors);
     expect((await restore('관리자 삭제 복구 통합 검증')).status).toBe(204);
 
+    const restrictionReportResponse = await handleReportRequest(
+      writeRequest(
+        'http://localhost/api/community/reports',
+        actors[3].token,
+        '192.0.2.13',
+        {
+          targetType: 'post',
+          targetId: created.id,
+          reason: 'harassment',
+          detail: '제재 원자성 통합 검증',
+        },
+      ),
+    );
+    expect(restrictionReportResponse.status).toBe(201);
+    const restrictionQueueResponse = await handleListModerationReportsRequest(
+      new Request('http://localhost/api/admin/community/reports', {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+    );
+    const restrictionQueue = (await restrictionQueueResponse.json()) as {
+      items: Array<{ id: string; targetId: string }>;
+    };
+    const restrictionReport = restrictionQueue.items.find(
+      (item) => item.targetId === created.id,
+    );
+    expect(restrictionReport).toBeDefined();
+
     const restrictResponse = await handleModerationActionRequest(
       new Request('http://localhost/api/admin/community/actions', {
         method: 'POST',
@@ -575,6 +611,7 @@ describe.runIf(runIntegration)('local community security integration', () => {
         },
         body: JSON.stringify({
           type: 'restrict',
+          reportId: restrictionReport?.id,
           targetType: 'post',
           targetId: created.id,
           until: new Date(Date.now() + 86_400_000).toISOString(),
@@ -631,6 +668,89 @@ describe.runIf(runIntegration)('local community security integration', () => {
     expect(auditText).not.toMatch(
       /admin_id|author_id|user_id|abuse_key|secret/i,
     );
+  }, 60_000);
+
+  it('dismisses a visible report without changing content and audits the closure', async () => {
+    const createResponse = await handleCreatePostRequest(
+      writeRequest(
+        'http://localhost/api/community/posts',
+        actors[4].token,
+        '192.0.2.14',
+        {
+          title: '신고 기각 통합 검증 게시글',
+          body: '비징계 신고 종결 뒤에도 공개 상태를 유지합니다.',
+          linkUrl: null,
+          idempotencyKey: randomUUID(),
+        },
+      ),
+    );
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { id: string };
+    expect(
+      (
+        await handleReportRequest(
+          writeRequest(
+            'http://localhost/api/community/reports',
+            actors[5].token,
+            '192.0.2.15',
+            {
+              targetType: 'post',
+              targetId: created.id,
+              reason: 'other',
+              detail: '기각 경로 통합 검증',
+            },
+          ),
+        )
+      ).status,
+    ).toBe(201);
+
+    const queueResponse = await handleListModerationReportsRequest(
+      new Request('http://localhost/api/admin/community/reports', {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+    );
+    const queue = (await queueResponse.json()) as {
+      items: Array<{ id: string; targetId: string }>;
+    };
+    const report = queue.items.find((item) => item.targetId === created.id);
+    expect(report).toBeDefined();
+
+    const dismissResponse = await handleModerationActionRequest(
+      new Request('http://localhost/api/admin/community/actions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          type: 'dismiss',
+          reportId: report?.id,
+          targetType: 'post',
+          targetId: created.id,
+          reason: '운영정책 위반 근거가 확인되지 않음',
+        }),
+      }),
+    );
+    expect(dismissResponse.status).toBe(204);
+    expect(
+      (
+        await handleGetPostRequest(
+          new Request(`http://localhost/api/community/posts/${created.id}`),
+          created.id,
+        )
+      ).status,
+    ).toBe(200);
+
+    const auditResponse = await handleAdminAuditRequest(
+      new Request(
+        'http://localhost/api/admin/community/audit?action=dismiss&targetType=post',
+        { headers: { authorization: `Bearer ${adminToken}` } },
+      ),
+    );
+    expect(auditResponse.status).toBe(200);
+    const auditText = await auditResponse.text();
+    expect(auditText).toContain('운영정책 위반 근거가 확인되지 않음');
+    expectNoKnownUserIds(auditText, actors);
   }, 60_000);
 
   it('preserves expired deleted content under legal hold and purges it after the hold ends', async () => {

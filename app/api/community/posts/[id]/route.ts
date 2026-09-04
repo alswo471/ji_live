@@ -2,6 +2,11 @@ import {
   authenticateCommunityUser,
   CommunityAuthError,
 } from '@/lib/community/auth';
+import {
+  createDailyAbuseKey,
+  CommunitySecurityError,
+  getTrustedClientIp,
+} from '@/lib/community/abuse-key';
 import { isCommunityEnabled } from '@/lib/community/config';
 import {
   getPost,
@@ -9,6 +14,7 @@ import {
   isCommunityUuid,
 } from '@/lib/community/read-service';
 import { deletePost, CommunityWriteError } from '@/lib/community/write-service';
+import { verifyTurnstile } from '@/lib/community/turnstile';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,10 +22,14 @@ type PostLoader = typeof getPost;
 type OptionalActorResolver = (request: Request) => Promise<string | null>;
 type CommunityEnabledReader = typeof isCommunityEnabled;
 
-function noStoreJson(body: unknown, status = 200) {
+function noStoreJson(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
   return Response.json(body, {
     status,
-    headers: { 'Cache-Control': 'no-store' },
+    headers: { 'Cache-Control': 'no-store', ...headers },
   });
 }
 
@@ -72,12 +82,18 @@ export async function GET(
 export interface CommunityDeletePostRouteDependencies {
   enabled: typeof isCommunityEnabled;
   authenticate: typeof authenticateCommunityUser;
+  resolveClientIp: typeof getTrustedClientIp;
+  verifyHuman: typeof verifyTurnstile;
+  createAbuseKey: typeof createDailyAbuseKey;
   deletePost: typeof deletePost;
 }
 
 const deleteDependencies: CommunityDeletePostRouteDependencies = {
   enabled: isCommunityEnabled,
   authenticate: authenticateCommunityUser,
+  resolveClientIp: getTrustedClientIp,
+  verifyHuman: verifyTurnstile,
+  createAbuseKey: createDailyAbuseKey,
   deletePost,
 };
 
@@ -98,20 +114,49 @@ export async function handleDeletePostRequest(
 
   try {
     const actor = await dependencies.authenticate(request);
-    await dependencies.deletePost(actor, rawId.toLowerCase());
+    const clientIp = dependencies.resolveClientIp(request);
+    if (
+      !(await dependencies.verifyHuman(
+        request.headers.get('x-turnstile-token') ?? '',
+        clientIp,
+      ))
+    ) {
+      return noStoreJson(
+        {
+          code: 'human_verification_failed',
+          error: '사용자 확인에 실패했습니다.',
+        },
+        403,
+      );
+    }
+    const abuseKey = await dependencies.createAbuseKey(clientIp);
+    await dependencies.deletePost(actor, rawId.toLowerCase(), { abuseKey });
     return new Response(null, {
       status: 204,
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    if (
-      error instanceof CommunityAuthError ||
-      error instanceof CommunityWriteError
-    ) {
+    if (error instanceof CommunityWriteError) {
+      return noStoreJson(
+        {
+          code: error.code,
+          error: error.message,
+          ...(error.retryAt ? { retryAt: error.retryAt } : {}),
+        },
+        error.status,
+        error.status === 429 && error.retryAfterSeconds
+          ? { 'Retry-After': String(error.retryAfterSeconds) }
+          : {},
+      );
+    }
+    if (error instanceof CommunityAuthError) {
       return noStoreJson(
         { code: error.code, error: error.message },
         error.status,
       );
+    }
+    if (error instanceof CommunitySecurityError) {
+      return noStoreJson({ code: error.code, error: error.message }, 403);
     }
     return noStoreJson(
       {

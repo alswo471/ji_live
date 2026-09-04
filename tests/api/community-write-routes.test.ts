@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   handleCreatePostRequest,
   type CommunityWriteRouteDependencies,
@@ -20,6 +20,8 @@ import {
   type CommunityReportRouteDependencies,
 } from '@/app/api/community/reports/route';
 import { CommunityAuthError } from '@/lib/community/auth';
+import { getTrustedClientIp } from '@/lib/community/abuse-key';
+import { CommunityWriteError } from '@/lib/community/write-service';
 import type { CommunityActor } from '@/lib/community/types';
 
 const ACTOR: CommunityActor = {
@@ -37,6 +39,8 @@ function dependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
+    resolveClientIp: (request) =>
+      request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     createPost: async (actor, input) => ({
@@ -172,6 +176,8 @@ function commentDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
+    resolveClientIp: (request) =>
+      request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     createComment: async (actor, postId, input) => ({
@@ -192,6 +198,10 @@ function deletePostDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
+    resolveClientIp: (request) =>
+      request.headers.get('cf-connecting-ip') ?? '',
+    verifyHuman: async () => true,
+    createAbuseKey: async () => 'a'.repeat(64),
     deletePost: async () => undefined,
     ...overrides,
   };
@@ -203,6 +213,10 @@ function deleteCommentDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
+    resolveClientIp: (request) =>
+      request.headers.get('cf-connecting-ip') ?? '',
+    verifyHuman: async () => true,
+    createAbuseKey: async () => 'a'.repeat(64),
     deleteComment: async () => undefined,
     ...overrides,
   };
@@ -214,6 +228,8 @@ function reportDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
+    resolveClientIp: (request) =>
+      request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     reportContent: async () => ({ accepted: true, temporarilyHidden: false }),
@@ -222,6 +238,70 @@ function reportDependencies(
 }
 
 describe('remaining community write routes', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('rejects a spoofed direct-origin IP before deriving an abuse key', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('COMMUNITY_TRUSTED_PROXY_MODE', 'cloudflare');
+    vi.stubEnv(
+      'COMMUNITY_TRUSTED_PROXY_SECRET',
+      'trusted-proxy-secret-at-least-32-characters',
+    );
+    const createAbuseKey = vi.fn().mockResolvedValue('a'.repeat(64));
+    const createPost = vi.fn();
+
+    const response = await handleCreatePostRequest(
+      postRequest(VALID_BODY),
+      dependencies({ resolveClientIp: getTrustedClientIp, createAbuseKey, createPost }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'untrusted_proxy',
+    });
+    expect(createAbuseKey).not.toHaveBeenCalled();
+    expect(createPost).not.toHaveBeenCalled();
+  });
+
+  it.each(['post', 'comment', 'report'] as const)(
+    'returns a safe 400 for malformed %s JSON',
+    async (target) => {
+      const request = new Request(
+        target === 'post'
+          ? 'http://localhost/api/community/posts'
+          : target === 'comment'
+            ? `http://localhost/api/community/posts/${POST_ID}/comments`
+            : 'http://localhost/api/community/reports',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: 'Bearer token',
+            'x-turnstile-token': 'turnstile-token',
+            'cf-connecting-ip': '203.0.113.10',
+          },
+          body: '{',
+        },
+      );
+      const response =
+        target === 'post'
+          ? await handleCreatePostRequest(request, dependencies())
+          : target === 'comment'
+            ? await handleCreateCommentRequest(
+                request,
+                POST_ID,
+                commentDependencies(),
+              )
+            : await handleReportRequest(request, reportDependencies());
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        code: 'invalid_json',
+        error: '요청 내용을 확인해 주세요.',
+      });
+    },
+  );
+
   it('creates a comment with validated input and a verified actor', async () => {
     const request = new Request(
       `http://localhost/api/community/posts/${POST_ID}/comments`,
@@ -266,7 +346,11 @@ describe('remaining community write routes', () => {
     const response = await handleDeletePostRequest(
       new Request(`http://localhost/api/community/posts/${POST_ID}`, {
         method: 'DELETE',
-        headers: { authorization: 'Bearer token' },
+        headers: {
+          authorization: 'Bearer token',
+          'x-turnstile-token': 'turnstile-token',
+          'cf-connecting-ip': '203.0.113.10',
+        },
       }),
       POST_ID,
       deletePostDependencies({
@@ -283,12 +367,84 @@ describe('remaining community write routes', () => {
     const response = await handleDeleteCommentRequest(
       new Request(`http://localhost/api/community/comments/${COMMENT_ID}`, {
         method: 'DELETE',
-        headers: { authorization: 'Bearer token' },
+        headers: {
+          authorization: 'Bearer token',
+          'x-turnstile-token': 'turnstile-token',
+          'cf-connecting-ip': '203.0.113.10',
+        },
       }),
       COMMENT_ID,
       deleteCommentDependencies(),
     );
     expect(response.status).toBe(204);
+  });
+
+  it.each(['post', 'comment'] as const)(
+    'rejects %s deletion before rate consumption when Turnstile is missing',
+    async (target) => {
+      const createAbuseKey = vi.fn().mockResolvedValue('a'.repeat(64));
+      const remove = vi.fn().mockResolvedValue(undefined);
+      const request = new Request(
+        target === 'post'
+          ? `http://localhost/api/community/posts/${POST_ID}`
+          : `http://localhost/api/community/comments/${COMMENT_ID}`,
+        { method: 'DELETE', headers: { authorization: 'Bearer token' } },
+      );
+      const response =
+        target === 'post'
+          ? await handleDeletePostRequest(
+              request,
+              POST_ID,
+              deletePostDependencies({
+                verifyHuman: async (token) => token !== '',
+                createAbuseKey,
+                deletePost: remove,
+              }),
+            )
+          : await handleDeleteCommentRequest(
+              request,
+              COMMENT_ID,
+              deleteCommentDependencies({
+                verifyHuman: async (token) => token !== '',
+                createAbuseKey,
+                deleteComment: remove,
+              }),
+            );
+
+      expect(response.status).toBe(403);
+      expect(createAbuseKey).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns a truthful retry header and timestamp for rate limiting', async () => {
+    const retryAt = '2026-09-04T05:01:00.000Z';
+    const response = await handleDeletePostRequest(
+      new Request(`http://localhost/api/community/posts/${POST_ID}`, {
+        method: 'DELETE',
+        headers: {
+          authorization: 'Bearer token',
+          'x-turnstile-token': 'turnstile-token',
+          'cf-connecting-ip': '203.0.113.10',
+        },
+      }),
+      POST_ID,
+      deletePostDependencies({
+        deletePost: async () => {
+          throw new CommunityWriteError(
+            429,
+            'community_rate_limited',
+            '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+            47,
+            retryAt,
+          );
+        },
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('47');
+    await expect(response.json()).resolves.toMatchObject({ retryAt });
   });
 
   it('reports content through Turnstile and abuse-key verification', async () => {
@@ -319,7 +475,11 @@ describe('remaining community write routes', () => {
     const response = await handleDeletePostRequest(
       new Request(`http://localhost/api/community/posts/${POST_ID}`, {
         method: 'DELETE',
-        headers: { authorization: 'Bearer token' },
+        headers: {
+          authorization: 'Bearer token',
+          'x-turnstile-token': 'turnstile-token',
+          'cf-connecting-ip': '203.0.113.10',
+        },
       }),
       POST_ID,
       deletePostDependencies({

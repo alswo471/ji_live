@@ -15,7 +15,7 @@ import type {
   ReportReceipt,
 } from './types';
 
-type WriteAction = 'post' | 'comment' | 'report';
+type WriteAction = 'post' | 'comment' | 'report' | 'delete';
 
 export interface CommunityWriteContext {
   abuseKey: string;
@@ -27,6 +27,12 @@ export interface CommunityRateLimitRequest {
   action: WriteAction;
   limit: number;
   windowSeconds: number;
+}
+
+export interface CommunityRateLimitResult {
+  allowed: boolean;
+  retryAfterSeconds: number;
+  retryAt: string | null;
 }
 
 export interface CommunityOwnership {
@@ -45,7 +51,9 @@ export interface CommunityWriteRepository {
     actorId: string,
     key: string,
   ): Promise<CommunityCommentRecord | null>;
-  consumeRateLimit(request: CommunityRateLimitRequest): Promise<boolean>;
+  consumeRateLimit(
+    request: CommunityRateLimitRequest,
+  ): Promise<CommunityRateLimitResult>;
   getOrCreateProfileName(
     actorId: string,
     proposedName: string,
@@ -77,6 +85,8 @@ export class CommunityWriteError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly retryAfterSeconds?: number,
+    public readonly retryAt?: string | null,
   ) {
     super(message);
     this.name = 'CommunityWriteError';
@@ -227,8 +237,24 @@ export const communityWriteRepository: CommunityWriteRepository = {
         p_window_seconds: request.windowSeconds,
       },
     );
-    if (error || typeof data !== 'boolean') providerError(error);
-    return data;
+    if (error) providerError(error);
+    const result = record(data);
+    const allowed = result.allowed;
+    const retryAfterSeconds = result.retryAfterSeconds;
+    const retryAt = result.retryAt;
+    if (
+      typeof allowed !== 'boolean' ||
+      typeof retryAfterSeconds !== 'number' ||
+      !Number.isInteger(retryAfterSeconds) ||
+      retryAfterSeconds < 0 ||
+      (retryAt !== null &&
+        (typeof retryAt !== 'string' || Number.isNaN(Date.parse(retryAt)))) ||
+      (allowed && (retryAfterSeconds !== 0 || retryAt !== null)) ||
+      (!allowed && (retryAfterSeconds < 1 || typeof retryAt !== 'string'))
+    ) {
+      providerError();
+    }
+    return { allowed, retryAfterSeconds, retryAt };
   },
 
   async getOrCreateProfileName(actorId, proposedName) {
@@ -414,18 +440,20 @@ async function consume(
   windowSeconds: number,
   repository: CommunityWriteRepository,
 ) {
-  const allowed = await repository.consumeRateLimit({
+  const result = await repository.consumeRateLimit({
     actorId: actor.id,
     abuseKey: context.abuseKey,
     action,
     limit,
     windowSeconds,
   });
-  if (!allowed) {
+  if (!result.allowed) {
     throw new CommunityWriteError(
       429,
       'community_rate_limited',
       '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+      result.retryAfterSeconds,
+      result.retryAt,
     );
   }
 }
@@ -524,8 +552,10 @@ async function deleteOwned(
 export async function deletePost(
   actor: CommunityActor,
   id: string,
+  context: CommunityWriteContext,
   repository: CommunityWriteRepository = communityWriteRepository,
 ) {
+  await consume(actor, context, 'delete', 10, 600, repository);
   await deleteOwned(
     actor,
     id,
@@ -537,8 +567,10 @@ export async function deletePost(
 export async function deleteComment(
   actor: CommunityActor,
   id: string,
+  context: CommunityWriteContext,
   repository: CommunityWriteRepository = communityWriteRepository,
 ) {
+  await consume(actor, context, 'delete', 10, 600, repository);
   await deleteOwned(
     actor,
     id,
