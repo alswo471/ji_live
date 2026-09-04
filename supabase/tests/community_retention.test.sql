@@ -255,8 +255,8 @@ select is(
     select count(*)::integer
     from jsonb_object_keys(public.run_community_retention(now()))
   ),
-  7,
-  'retention returns all deletion counts including sanctions'
+  8,
+  'retention returns all deletion counts including scrubbed report abuse keys and sanctions'
 );
 
 select * from finish();

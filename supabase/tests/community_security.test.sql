@@ -66,25 +66,25 @@ select ok(
 );
 
 select is(
-  public.consume_community_rate_limit(
+  (public.consume_community_rate_limit(
     md5('1')::uuid,
     repeat('a', 64),
     'post',
     1,
     600
-  ),
+  )->>'allowed')::boolean,
   true,
   'the first rate-limited action is allowed'
 );
 
 select is(
-  public.consume_community_rate_limit(
+  (public.consume_community_rate_limit(
     md5('1')::uuid,
     repeat('a', 64),
     'post',
     1,
     600
-  ),
+  )->>'allowed')::boolean,
   false,
   'the next action over the same limit is rejected'
 );

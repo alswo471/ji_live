@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export type CommunityRetentionCounts = {
   rateEvents: number;
+  reportAbuseKeys: number;
   posts: number;
   comments: number;
   reports: number;
@@ -37,6 +38,7 @@ function parseCounts(value: unknown): CommunityRetentionCounts {
   const row = value as Record<string, unknown>;
   const keys = [
     'rateEvents',
+    'reportAbuseKeys',
     'posts',
     'comments',
     'reports',

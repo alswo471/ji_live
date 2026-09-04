@@ -12,6 +12,7 @@ function dependencies(
     secret: () => 'retention-secret-at-least-32-characters',
     runRetention: async () => ({
       rateEvents: 2,
+      reportAbuseKeys: 7,
       posts: 1,
       comments: 3,
       reports: 4,
@@ -70,6 +71,7 @@ describe('community retention route', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       rateEvents: 2,
+      reportAbuseKeys: 7,
       posts: 1,
       comments: 3,
       reports: 4,
@@ -79,7 +81,20 @@ describe('community retention route', () => {
     });
   });
 
-  it('rejects a retention result that omits sanction counts', async () => {
+  it.each(['sanctions', 'reportAbuseKeys'] as const)(
+    'rejects a retention result that omits %s counts',
+    async (missingKey) => {
+      const result = {
+        rateEvents: 2,
+        reportAbuseKeys: 7,
+        posts: 1,
+        comments: 3,
+        reports: 4,
+        moderationActions: 5,
+        sanctions: 2,
+        anonymousUsers: 6,
+      };
+      delete result[missingKey];
     const response = await handleCommunityRetentionRequest(
       new Request('http://localhost/api/internal/community-retention', {
         method: 'POST',
@@ -88,18 +103,11 @@ describe('community retention route', () => {
         },
       }),
       dependencies({
-        runRetention: async () =>
-          ({
-            rateEvents: 2,
-            posts: 1,
-            comments: 3,
-            reports: 4,
-            moderationActions: 5,
-            anonymousUsers: 6,
-          }) as never,
+          runRetention: async () => result,
       }),
     );
 
     expect(response.status).toBe(503);
-  });
+    },
+  );
 });
