@@ -130,6 +130,8 @@ export interface AdminSanctionQuery {
 export interface AdminAuditQuery {
   action: AdminAuditAction | 'all';
   targetType: AdminAuditTargetType | 'all';
+  from: string | null;
+  to: string | null;
   search: string;
   cursor: AdminCursor | null;
   limit: number;
@@ -195,6 +197,35 @@ function getSearch(value: unknown) {
     invalid('invalid_admin_search', '검색어는 100자 이하로 입력해 주세요.');
   }
   return search;
+}
+
+function getUtcDate(value: unknown) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    invalid('invalid_audit_period', '운영 로그 조회 기간을 확인해 주세요.');
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
+    invalid('invalid_audit_period', '운영 로그 조회 기간을 확인해 주세요.');
+  }
+  return date;
+}
+
+function getAuditPeriod(fromValue: unknown, toValue: unknown) {
+  const fromDate = getUtcDate(fromValue);
+  const toDate = getUtcDate(toValue);
+  if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+    invalid('invalid_audit_period', '운영 로그 조회 기간을 확인해 주세요.');
+  }
+  return {
+    from: fromDate?.toISOString() ?? null,
+    to: toDate
+      ? new Date(toDate.getTime() + 24 * 60 * 60 * 1000).toISOString()
+      : null,
+  };
 }
 
 function isIsoTimestamp(value: unknown): value is string {
@@ -470,6 +501,8 @@ export const adminConsoleRepository: AdminConsoleRepository = {
     if (input.targetType !== 'all') {
       query = query.eq('target_type', input.targetType);
     }
+    if (input.from) query = query.gte('created_at', input.from);
+    if (input.to) query = query.lt('created_at', input.to);
     if (input.search) {
       query = query.ilike('reason', `%${escapeSearch(input.search)}%`);
     }
@@ -647,10 +680,12 @@ export async function listAdminAudit(
   ) {
     invalid('invalid_target_type', '관리 대상 유형을 확인해 주세요.');
   }
+  const period = getAuditPeriod(row.from, row.to);
   const limit = getLimit(row.limit);
   const rows = await repository.findAudit({
     action: selectedAction,
     targetType: selectedTargetType,
+    ...period,
     search: getSearch(row.search),
     cursor: decodeCursor(row.cursor),
     limit: limit + 1,

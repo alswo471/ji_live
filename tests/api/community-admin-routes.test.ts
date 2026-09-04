@@ -24,7 +24,10 @@ import {
   type CommunityAdminActionsDependencies,
 } from '@/app/api/admin/community/actions/route';
 import { CommunityAdminAuthError } from '@/lib/community/admin-auth';
-import { CommunityAdminConsoleError } from '@/lib/community/admin-console-service';
+import {
+  CommunityAdminConsoleError,
+  listAdminAudit,
+} from '@/lib/community/admin-console-service';
 import { CommunityModerationError } from '@/lib/community/moderation-service';
 import { CommunityReadInputError } from '@/lib/community/read-service';
 
@@ -363,7 +366,7 @@ describe('community admin routes', () => {
     let input: unknown;
     const response = await handleAdminAuditRequest(
       new Request(
-        'http://localhost/api/admin/community/audit?action=unrestrict&targetType=user&query=%20review%20&cursor=next&adminId=leak',
+        'http://localhost/api/admin/community/audit?action=unrestrict&targetType=user&from=2026-09-01&to=2026-09-04&query=%20review%20&cursor=next&adminId=leak',
       ),
       auditDependencies({
         listAudit: async (value) => {
@@ -377,8 +380,39 @@ describe('community admin routes', () => {
     expect(input).toEqual({
       action: 'unrestrict',
       targetType: 'user',
+      from: '2026-09-01',
+      to: '2026-09-04',
       search: ' review ',
       cursor: 'next',
+    });
+  });
+
+  it('returns a safe 400 for an invalid audit date range', async () => {
+    const response = await handleAdminAuditRequest(
+      new Request(
+        'http://localhost/api/admin/community/audit?from=2026-09-05&to=2026-09-04',
+      ),
+      auditDependencies({
+        listAudit: (value) =>
+          listAdminAudit(value, {
+            loadSummary: async () => ({
+              reports: 0,
+              hidden: 0,
+              trash: 0,
+              sanctions: 0,
+            }),
+            findContent: async () => [],
+            findSanctions: async () => [],
+            findAudit: async () => [],
+          }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({
+      code: 'invalid_audit_period',
+      error: '운영 로그 조회 기간을 확인해 주세요.',
     });
   });
 

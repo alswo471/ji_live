@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { ModerationQueue } from '@/components/community/moderation-queue';
 import type { ModerationQueueItem } from '@/lib/community/moderation-service';
@@ -18,20 +19,39 @@ const item: ModerationQueueItem = {
 
 describe('ModerationQueue', () => {
   it('shows the report context without reporter identity', () => {
-    render(
+    const { container } = render(
       <ModerationQueue
-        items={[item]}
+        items={[
+          {
+            ...item,
+            email: 'reporter@example.com',
+            ipAddress: '198.51.100.42',
+            reporterId: '50000000-0000-4000-8000-000000000001',
+            abuseKey: 'private-abuse-key',
+            secret: 'private-secret',
+          } as ModerationQueueItem,
+        ]}
         loading={false}
         onAction={async () => undefined}
       />,
     );
 
     expect(screen.getByText('시장 질문')).toBeInTheDocument();
-    expect(screen.getByText('반복 광고입니다.')).toBeInTheDocument();
+    expect(screen.getByText('검토가 필요한 게시글입니다.')).toHaveClass(
+      'break-words',
+    );
+    expect(screen.getByText('반복 광고입니다.')).toHaveClass('break-words');
     expect(screen.queryByText(/신고자 ID/)).not.toBeInTheDocument();
+    expect(container.innerHTML).not.toContain(item.id);
+    expect(container.innerHTML).not.toContain(item.targetId);
+    expect(container).not.toHaveTextContent('reporter@example.com');
+    expect(container).not.toHaveTextContent('198.51.100.42');
+    expect(container).not.toHaveTextContent('private-abuse-key');
+    expect(container).not.toHaveTextContent('private-secret');
   });
 
-  it('requires a reason and a second confirmation before delete', async () => {
+  it('requires a reason and a keyboard confirmation before delete queueing', async () => {
+    const user = userEvent.setup();
     const actions: unknown[] = [];
     render(
       <ModerationQueue
@@ -43,17 +63,25 @@ describe('ModerationQueue', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
+    await user.click(screen.getByRole('button', { name: '삭제 대기' }));
     expect(screen.getByRole('alert')).toHaveTextContent('관리 사유를 5자 이상');
 
     fireEvent.change(screen.getByLabelText('관리 사유'), {
       target: { value: '반복 광고 영구 삭제' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '삭제' }));
-    expect(screen.getByText('이 콘텐츠를 삭제할까요?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '삭제 대기' }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent(
+      '삭제 후 1년 동안 복구할 수 있으며 이후 영구 파기됩니다.',
+    );
+    await waitFor(() =>
+      expect(dialog).toContainElement(document.activeElement as HTMLElement),
+    );
     expect(actions).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole('button', { name: '삭제 확정' }));
+    const confirm = screen.getByRole('button', { name: '삭제 대기 확정' });
+    confirm.focus();
+    await user.keyboard('{Enter}');
     await waitFor(() => expect(actions).toHaveLength(1));
     expect(actions[0]).toMatchObject({
       type: 'delete',
@@ -90,5 +118,6 @@ describe('ModerationQueue', () => {
       until: expect.any(String),
     });
     expect(actions[0]).not.toHaveProperty('userId');
+    expect(actions[0]).not.toHaveProperty('targetAuthorId');
   });
 });

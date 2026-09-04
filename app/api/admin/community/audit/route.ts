@@ -63,6 +63,8 @@ export async function handleAdminAuditRequest(
       await deps.listAudit({
         action: searchParams.get('action'),
         targetType: searchParams.get('targetType'),
+        from: searchParams.get('from'),
+        to: searchParams.get('to'),
         search: searchParams.get('query'),
         cursor: searchParams.get('cursor'),
       }),

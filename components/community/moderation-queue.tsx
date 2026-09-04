@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Ban, CheckCircle2, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,12 @@ const REASON_LABELS = {
   other: '기타',
 } as const;
 
+const STATUS_LABELS = {
+  visible: '공개',
+  hidden: '숨김',
+  deleted: '삭제 대기',
+} as const;
+
 function ModerationCard({
   item,
   onAction,
@@ -26,6 +32,12 @@ function ModerationCard({
   item: ModerationQueueItem;
   onAction: (action: ModerationAction) => Promise<void>;
 }) {
+  const fieldId = useId();
+  const helpId = `${fieldId}-help`;
+  const errorId = `${fieldId}-error`;
+  const confirmationTitleId = `${fieldId}-confirmation-title`;
+  const confirmationDescriptionId = `${fieldId}-confirmation-description`;
+  const restrictionId = `${fieldId}-restriction`;
   const [reason, setReason] = useState('');
   const [restrictionDays, setRestrictionDays] = useState('1');
   const [confirmation, setConfirmation] = useState<
@@ -34,7 +46,11 @@ function ModerationCard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const fieldId = `moderation-reason-${item.id}`;
+  const confirmationButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (confirmation) confirmationButtonRef.current?.focus();
+  }, [confirmation]);
 
   async function execute(action: ModerationAction) {
     setSubmitting(true);
@@ -94,7 +110,7 @@ function ModerationCard({
   }
 
   return (
-    <article className="rounded-2xl border bg-card p-5 shadow-sm">
+    <article className="min-w-0 rounded-2xl border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
           <span className="rounded-full bg-destructive/10 px-2.5 py-1 text-destructive">
@@ -102,7 +118,7 @@ function ModerationCard({
           </span>
           <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">
             {item.targetType === 'post' ? '게시글' : '댓글'} ·{' '}
-            {item.targetStatus}
+            {STATUS_LABELS[item.targetStatus]}
           </span>
         </div>
         <time
@@ -118,17 +134,17 @@ function ModerationCard({
         </time>
       </div>
       {item.targetTitle && (
-        <h2 className="mt-4 text-lg font-bold tracking-tight">
+        <h2 className="mt-4 break-words text-lg font-bold tracking-tight">
           {item.targetTitle}
         </h2>
       )}
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+      <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
         {item.targetBody}
       </p>
       {item.detail && (
         <div className="mt-4 rounded-xl bg-muted/70 p-3 text-sm">
           <p className="text-xs font-bold text-muted-foreground">신고 내용</p>
-          <p className="mt-1 leading-6">{item.detail}</p>
+          <p className="mt-1 break-words leading-6">{item.detail}</p>
         </div>
       )}
 
@@ -141,13 +157,11 @@ function ModerationCard({
           maxLength={500}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
-          aria-describedby={`${fieldId}-help`}
+          aria-invalid={Boolean(error)}
+          aria-describedby={`${helpId}${error ? ` ${errorId}` : ''}`}
           className="mt-2 min-h-20"
         />
-        <p
-          id={`${fieldId}-help`}
-          className="mt-1 text-xs text-muted-foreground"
-        >
+        <p id={helpId} className="mt-1 text-xs text-muted-foreground">
           5~500자 · 모든 조치는 audit log에 기록됩니다.
         </p>
       </div>
@@ -181,7 +195,7 @@ function ModerationCard({
           disabled={submitting}
           onClick={() => prepare('delete')}
         >
-          <Trash2 aria-hidden="true" /> 삭제
+          <Trash2 aria-hidden="true" /> 삭제 대기
         </Button>
         <Button
           type="button"
@@ -195,22 +209,35 @@ function ModerationCard({
       </div>
 
       {confirmation && (
-        <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-          <p className="font-bold">
+        <div
+          role="alertdialog"
+          aria-modal="false"
+          aria-labelledby={confirmationTitleId}
+          aria-describedby={
+            confirmation === 'delete' ? confirmationDescriptionId : undefined
+          }
+          className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
+        >
+          <p id={confirmationTitleId} className="font-bold">
             {confirmation === 'delete'
-              ? '이 콘텐츠를 삭제할까요?'
+              ? '이 콘텐츠를 삭제 대기로 전환할까요?'
               : '이 사용자의 작성을 제한할까요?'}
           </p>
+          {confirmation === 'delete' && (
+            <p
+              id={confirmationDescriptionId}
+              className="mt-2 text-sm leading-6 text-muted-foreground"
+            >
+              삭제 후 1년 동안 복구할 수 있으며 이후 영구 파기됩니다.
+            </p>
+          )}
           {confirmation === 'restrict' && (
             <div className="mt-3">
-              <label
-                htmlFor={`restriction-${item.id}`}
-                className="text-sm font-semibold"
-              >
+              <label htmlFor={restrictionId} className="text-sm font-semibold">
                 제한 기간
               </label>
               <select
-                id={`restriction-${item.id}`}
+                id={restrictionId}
                 value={restrictionDays}
                 onChange={(event) => setRestrictionDays(event.target.value)}
                 className="ml-3 min-h-11 rounded-lg border bg-background px-3 text-sm"
@@ -223,13 +250,14 @@ function ModerationCard({
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
+              ref={confirmationButtonRef}
               type="button"
               variant="destructive"
               className="min-h-11"
               disabled={submitting}
               onClick={confirmAction}
             >
-              {confirmation === 'delete' ? '삭제 확정' : '제한 확정'}
+              {confirmation === 'delete' ? '삭제 대기 확정' : '제한 확정'}
             </Button>
             <Button
               type="button"
@@ -245,7 +273,7 @@ function ModerationCard({
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-sm text-destructive">
+        <p id={errorId} role="alert" className="mt-3 text-sm text-destructive">
           {error}
         </p>
       )}

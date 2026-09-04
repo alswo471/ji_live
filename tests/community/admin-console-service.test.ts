@@ -88,6 +88,16 @@ describe('admin console input validation', () => {
       listAdminContent(input, repository(), SECRET),
     ).rejects.toMatchObject({ status: 400, code });
   });
+
+  it.each([
+    { from: '2026-02-30' },
+    { to: '09-04-2026' },
+    { from: '2026-09-05', to: '2026-09-04' },
+  ])('rejects an invalid audit date range: %s', async (input) => {
+    await expect(
+      listAdminAudit(input, repository(), SECRET),
+    ).rejects.toMatchObject({ status: 400, code: 'invalid_audit_period' });
+  });
 });
 
 describe('admin console content', () => {
@@ -247,23 +257,27 @@ describe('admin console summary, sanctions and audit', () => {
   });
 
   it('maps audit entries without exposing admin or target user UUIDs', async () => {
+    let received: unknown;
     const page = await listAdminAudit(
       { action: 'restrict', targetType: 'user' },
       repository({
-        findAudit: async () => [
-          {
-            id: AUDIT_ID,
-            adminId: '10000000-0000-4000-8000-000000000001',
-            action: 'restrict',
-            targetType: 'user',
-            targetId: AUTHOR_ID,
-            targetAuthorId: AUTHOR_ID,
-            targetTitle: null,
-            targetBody: null,
-            reason: '반복적인 운영정책 위반',
-            createdAt: '2026-09-04T05:00:00.000Z',
-          },
-        ],
+        findAudit: async (query) => {
+          received = query;
+          return [
+            {
+              id: AUDIT_ID,
+              adminId: '10000000-0000-4000-8000-000000000001',
+              action: 'restrict',
+              targetType: 'user',
+              targetId: AUTHOR_ID,
+              targetAuthorId: AUTHOR_ID,
+              targetTitle: null,
+              targetBody: null,
+              reason: '반복적인 운영정책 위반',
+              createdAt: '2026-09-04T05:00:00.000Z',
+            },
+          ];
+        },
       }),
       SECRET,
     );
@@ -278,5 +292,62 @@ describe('admin console summary, sanctions and audit', () => {
     expect(page.items[0]).not.toHaveProperty('targetAuthorId');
     expect(page.items[0]).not.toHaveProperty('targetId');
     expect(JSON.stringify(page)).not.toContain(AUTHOR_ID);
+    expect(received).toMatchObject({ from: null, to: null });
+  });
+
+  it('normalizes audit dates to inclusive and exclusive UTC boundaries', async () => {
+    let received: unknown;
+
+    await listAdminAudit(
+      { from: '2026-09-01', to: '2026-09-04' },
+      repository({
+        findAudit: async (query) => {
+          received = query;
+          return [];
+        },
+      }),
+      SECRET,
+    );
+
+    expect(received).toMatchObject({
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-05T00:00:00.000Z',
+    });
+  });
+
+  it('applies both UTC boundaries to the audit repository query', async () => {
+    const ranges: Array<[string, string, string]> = [];
+    const query = {
+      select: () => query,
+      eq: () => query,
+      gte: (column: string, value: string) => {
+        ranges.push(['gte', column, value]);
+        return query;
+      },
+      lt: (column: string, value: string) => {
+        ranges.push(['lt', column, value]);
+        return query;
+      },
+      ilike: () => query,
+      or: () => query,
+      order: () => query,
+      limit: async () => ({ data: [], error: null }),
+    };
+    getServerSupabaseMock.mockReturnValue({ from: () => query });
+
+    await adminConsoleRepository.findAudit({
+      action: 'all',
+      targetType: 'all',
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-05T00:00:00.000Z',
+      search: '',
+      cursor: null,
+      limit: 21,
+    });
+
+    expect(ranges).toEqual([
+      ['gte', 'created_at', '2026-09-01T00:00:00.000Z'],
+      ['lt', 'created_at', '2026-09-05T00:00:00.000Z'],
+    ]);
   });
 });
