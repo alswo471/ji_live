@@ -83,10 +83,32 @@ function expectNoKnownUserIds(body: string, actors: Array<{ userId: string }>) {
 }
 
 function oneUtcYearAfter(value: Date) {
-  const result = new Date(value);
-  result.setUTCFullYear(result.getUTCFullYear() + 1);
-  return result;
+  const targetYear = value.getUTCFullYear() + 1;
+  const month = value.getUTCMonth();
+  const lastDay = new Date(Date.UTC(targetYear, month + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(
+      targetYear,
+      month,
+      Math.min(value.getUTCDate(), lastDay),
+      value.getUTCHours(),
+      value.getUTCMinutes(),
+      value.getUTCSeconds(),
+      value.getUTCMilliseconds(),
+    ),
+  );
 }
+
+describe('community retention calendar boundary', () => {
+  it('matches PostgreSQL calendar-year addition', () => {
+    expect(oneUtcYearAfter(new Date('2024-02-29T12:34:56.789Z'))).toEqual(
+      new Date('2025-02-28T12:34:56.789Z'),
+    );
+    expect(oneUtcYearAfter(new Date('2026-09-04T12:34:56.789Z'))).toEqual(
+      new Date('2027-09-04T12:34:56.789Z'),
+    );
+  });
+});
 
 describe.runIf(runIntegration)('local community security integration', () => {
   let env: LocalEnvironment;
