@@ -363,6 +363,10 @@ function escapeSearch(value: string) {
     .replaceAll('_', '\\_');
 }
 
+function quotePostgrestValue(value: string) {
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+}
+
 export const adminConsoleRepository: AdminConsoleRepository = {
   async loadSummary(now) {
     const client = getServerSupabase();
@@ -414,8 +418,8 @@ export const adminConsoleRepository: AdminConsoleRepository = {
       query = query.eq('deletion_source', input.deletionSource);
     }
     if (input.search) {
-      const search = escapeSearch(input.search);
-      query = query.or(`title.ilike.%${search}%,body.ilike.%${search}%`);
+      const pattern = quotePostgrestValue(`%${escapeSearch(input.search)}%`);
+      query = query.or(`title.ilike.${pattern},body.ilike.${pattern}`);
     }
     if (input.cursor) {
       query = query.or(

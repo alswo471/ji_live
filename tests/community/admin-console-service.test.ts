@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CommunityAdminConsoleError,
+  adminConsoleRepository,
   getAdminSummary,
   listAdminAudit,
   listAdminContent,
@@ -10,12 +11,24 @@ import {
   type AdminContentRecord,
 } from '@/lib/community/admin-console-service';
 
+const { getServerSupabaseMock } = vi.hoisted(() => ({
+  getServerSupabaseMock: vi.fn(),
+}));
+
+vi.mock('@/lib/community/supabase', () => ({
+  getServerSupabase: getServerSupabaseMock,
+}));
+
 const AUTHOR_ID = '30000000-0000-4000-8000-000000000001';
 const POST_ID = '40000000-0000-4000-8000-000000000001';
 const SECOND_POST_ID = '40000000-0000-4000-8000-000000000002';
 const SANCTION_ID = '50000000-0000-4000-8000-000000000001';
 const AUDIT_ID = '60000000-0000-4000-8000-000000000001';
 const SECRET = 'test-secret-at-least-32-characters';
+
+afterEach(() => {
+  getServerSupabaseMock.mockReset();
+});
 
 function contentRecord(
   overrides: Partial<AdminContentRecord> = {},
@@ -146,6 +159,46 @@ describe('admin console content', () => {
       limit: 51,
     });
   });
+
+  it.each([
+    [
+      '시장, (급등) "주의"',
+      'title.ilike."%시장, (급등) \\"주의\\"%",body.ilike."%시장, (급등) \\"주의\\"%"',
+    ],
+    [
+      '100%_\\경로',
+      'title.ilike."%100\\\\%\\\\_\\\\\\\\경로%",body.ilike."%100\\\\%\\\\_\\\\\\\\경로%"',
+    ],
+  ])(
+    'keeps PostgREST punctuation inside a single search value: %s',
+    async (search, expectedFilter) => {
+      const filters: string[] = [];
+      const query = {
+        select: () => query,
+        eq: () => query,
+        or: (filter: string) => {
+          filters.push(filter);
+          return query;
+        },
+        order: () => query,
+        limit: async () => ({ data: [], error: null }),
+      };
+      getServerSupabaseMock.mockReturnValue({
+        from: () => query,
+      });
+
+      await adminConsoleRepository.findContent({
+        status: 'deleted',
+        targetType: 'all',
+        deletionSource: 'all',
+        search,
+        cursor: null,
+        limit: 21,
+      });
+
+      expect(filters).toEqual([expectedFilter]);
+    },
+  );
 });
 
 describe('admin console summary, sanctions and audit', () => {

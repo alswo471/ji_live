@@ -1,17 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CommunityModerationError,
   listModerationQueue,
   moderateContent,
+  moderationRepository,
   type ModerationRepository,
   type ModerationReportRecord,
 } from '@/lib/community/moderation-service';
+
+const { getServerSupabaseMock } = vi.hoisted(() => ({
+  getServerSupabaseMock: vi.fn(),
+}));
+
+vi.mock('@/lib/community/supabase', () => ({
+  getServerSupabase: getServerSupabaseMock,
+}));
 
 const ADMIN = { id: '10000000-0000-4000-8000-000000000001' };
 const POST_ID = '20000000-0000-4000-8000-000000000001';
 const AUTHOR_ID = '30000000-0000-4000-8000-000000000001';
 const SANCTION_ID = '50000000-0000-4000-8000-000000000001';
 const SECRET = 'test-secret-at-least-32-characters';
+
+afterEach(() => {
+  getServerSupabaseMock.mockReset();
+});
 
 function report(
   overrides: Partial<ModerationReportRecord> = {},
@@ -60,6 +73,98 @@ describe('listModerationQueue', () => {
     expect(page.items[0]).not.toHaveProperty('reporterId');
     expect(page.items[0]).not.toHaveProperty('reporterAbuseKey');
     expect(JSON.stringify(page)).not.toContain(AUTHOR_ID);
+  });
+});
+
+describe('moderationRepository', () => {
+  it('resolves the target author immediately before the restriction RPC', async () => {
+    const events: string[] = [];
+    const rpcCalls: Array<{ name: string; parameters: unknown }> = [];
+    const lookup = {
+      select: (columns: string) => {
+        events.push(`select:${columns}`);
+        return lookup;
+      },
+      eq: (column: string, value: string) => {
+        events.push(`eq:${column}:${value}`);
+        return lookup;
+      },
+      maybeSingle: async () => {
+        events.push('maybeSingle');
+        return { data: { author_id: AUTHOR_ID }, error: null };
+      },
+    };
+    getServerSupabaseMock.mockReturnValue({
+      from: (table: string) => {
+        events.push(`from:${table}`);
+        return lookup;
+      },
+      rpc: async (name: string, parameters: unknown) => {
+        events.push(`rpc:${name}`);
+        rpcCalls.push({ name, parameters });
+        return { error: null };
+      },
+    });
+
+    await moderationRepository.applyAction(ADMIN.id, {
+      type: 'restrict',
+      targetType: 'post',
+      targetId: POST_ID,
+      until: '2026-09-11T04:00:00.000Z',
+      reason: '반복적인 운영정책 위반',
+    });
+
+    expect(events).toEqual([
+      'from:community_posts',
+      'select:author_id',
+      `eq:id:${POST_ID}`,
+      'maybeSingle',
+      'rpc:moderate_community_content',
+    ]);
+    expect(rpcCalls).toEqual([
+      {
+        name: 'moderate_community_content',
+        parameters: {
+          p_admin_id: ADMIN.id,
+          p_action: 'restrict',
+          p_target_type: 'user',
+          p_target_id: null,
+          p_user_id: AUTHOR_ID,
+          p_until: '2026-09-11T04:00:00.000Z',
+          p_reason: '반복적인 운영정책 위반',
+        },
+      },
+    ]);
+  });
+
+  it('calls the sanction revocation RPC with only its preserved parameters', async () => {
+    const rpcCalls: Array<{ name: string; parameters: unknown }> = [];
+    getServerSupabaseMock.mockReturnValue({
+      from: () => {
+        throw new Error('unrestrict must not query a content author');
+      },
+      rpc: async (name: string, parameters: unknown) => {
+        rpcCalls.push({ name, parameters });
+        return { error: null };
+      },
+    });
+
+    await moderationRepository.applyAction(ADMIN.id, {
+      type: 'unrestrict',
+      sanctionId: SANCTION_ID,
+      reason: '제재 사유를 다시 검토함',
+    });
+
+    expect(rpcCalls).toEqual([
+      {
+        name: 'revoke_community_sanction',
+        parameters: {
+          p_admin_id: ADMIN.id,
+          p_sanction_id: SANCTION_ID,
+          p_reason: '제재 사유를 다시 검토함',
+        },
+      },
+    ]);
   });
 });
 

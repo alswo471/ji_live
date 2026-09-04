@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  communityWriteRepository,
   createComment,
   createPost,
   deleteComment,
@@ -15,6 +16,14 @@ import type {
   PostInput,
   ReportInput,
 } from '@/lib/community/types';
+
+const { getServerSupabaseMock } = vi.hoisted(() => ({
+  getServerSupabaseMock: vi.fn(),
+}));
+
+vi.mock('@/lib/community/supabase', () => ({
+  getServerSupabase: getServerSupabaseMock,
+}));
 
 const ACTOR: CommunityActor = {
   id: '10000000-0000-4000-8000-000000000001',
@@ -43,6 +52,10 @@ const REPORT_INPUT: ReportInput = {
   reason: 'spam',
   detail: '',
 };
+
+afterEach(() => {
+  getServerSupabaseMock.mockReset();
+});
 
 function postRecord(
   overrides: Partial<CommunityPostRecord> = {},
@@ -227,6 +240,37 @@ describe('deletePost', () => {
     await deletePost(ACTOR, POST_ID, repo);
     expect(received).toEqual({ actorId: ACTOR.id, targetId: POST_ID });
   });
+});
+
+describe('communityWriteRepository author deletion', () => {
+  it.each([
+    ['post', POST_ID, 'softDeletePost'],
+    ['comment', COMMENT_ID, 'softDeleteComment'],
+  ] as const)(
+    'calls the author-delete RPC for a %s with the actor and target only',
+    async (targetType, targetId, method) => {
+      const rpcCalls: Array<{ name: string; parameters: unknown }> = [];
+      getServerSupabaseMock.mockReturnValue({
+        rpc: async (name: string, parameters: unknown) => {
+          rpcCalls.push({ name, parameters });
+          return { error: null };
+        },
+      });
+
+      await communityWriteRepository[method](ACTOR.id, targetId);
+
+      expect(rpcCalls).toEqual([
+        {
+          name: 'delete_community_content_by_author',
+          parameters: {
+            p_actor_id: ACTOR.id,
+            p_target_type: targetType,
+            p_target_id: targetId,
+          },
+        },
+      ]);
+    },
+  );
 });
 
 describe('deleteComment', () => {
