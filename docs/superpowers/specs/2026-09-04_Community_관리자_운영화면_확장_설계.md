@@ -1,7 +1,7 @@
 # Community 관리자 운영화면 확장 설계
 
 - 작성일: 2026-09-04
-- 상태: 사용자 설계 승인
+- 상태: 구현·local 검증 완료, 공개 배포 전 운영 확인 필요
 - 대상: `feature/community-mvp` 후속 관리자 운영 기능
 - 선행 문서: [지투라이브 익명 커뮤니티 설계](./2026-09-03-익명-커뮤니티-설계.md)
 
@@ -66,12 +66,12 @@
 
 - 미처리 신고를 최신순으로 조회한다.
 - 게시글·댓글 유형과 신고 사유를 표시한다.
-- 숨김, 삭제 대기와 작성 제한을 수행한다.
+- 숨김, 삭제 대기, 작성 제한과 콘텐츠를 변경하지 않는 신고 기각을 수행한다.
 - 신고자 식별정보는 표시하지 않는다.
 
 ### 숨김
 
-- `hidden` 게시글과 댓글을 최신 조치순으로 조회한다.
+- `hidden` 게시글과 댓글을 `hidden_at` 최신순으로 조회한다.
 - 자동 신고 숨김과 관리자 수동 숨김을 구분한다.
 - 숨김 사유, 조치 시각과 가공된 운영용 사용자 식별자를 표시한다.
 - 관리 사유를 입력한 뒤 공개 상태로 복구할 수 있다.
@@ -93,10 +93,10 @@
 
 ### 운영 로그
 
-- 숨김, 복구, 삭제 대기, 작성 제한과 제한 해제를 시간순으로 조회한다.
+- 숨김, 복구, 삭제 대기, 신고 기각, 작성 제한과 제한 해제를 시간순으로 조회한다.
 - 조치 종류, 대상 유형, 관리 사유와 시각을 표시한다.
 - 관리자 email, access token, 원본 사용자 UUID와 원본 IP는 표시하지 않는다.
-- 제목·내용 검색, 기간, 대상 유형, 삭제 주체와 조치 종류 filter를 제공한다.
+- 조치 시점의 privacy-safe 제목·내용 snapshot 검색, 기간, 게시글·댓글·사용자 대상 유형, 삭제 주체와 조치 종류 filter를 제공한다.
 
 모든 목록은 opaque cursor pagination을 사용한다. Desktop에서는 목록과 상세 검토 영역을 함께 배치하고 mobile에서는 목록 선택 후 상세 영역을 이어서 표시한다.
 
@@ -109,6 +109,8 @@
 | `deletion_source` | `author`, `admin` 또는 삭제되지 않은 `null` |
 | `deleted_at`      | 삭제 대기 시작 시각                         |
 | `purge_at`        | 기본적으로 `deleted_at + 1 year`            |
+
+숨김 상태에는 service-only `hidden_source`, `hidden_reason`, `hidden_at`을 함께 기록한다. `hidden_source`는 신고 자동 숨김과 관리자 수동 숨김을 구분하고, 공개 API에는 세 필드를 반환하지 않는다. 기존 숨김 row는 확인 가능한 최신 관리자 hide action을 우선 사용하며 그 외 row는 이전 자동 숨김으로 명시해 backfill한다.
 
 관리자 삭제 사유와 처리자는 `community_moderation_actions`에 기록한다. 작성자 직접 삭제는 `deletion_source = author`로 구분하고 작성자 UUID를 공개 응답에 추가하지 않는다. 복구 시 `deletion_source`, `deleted_at`과 `purge_at`을 `null`로 되돌리고 복구 audit action을 추가한다.
 
@@ -129,6 +131,9 @@ deleted ──1년 경과──> 영구 파기
 - 영구 파기되었거나 존재하지 않는 대상은 복구할 수 없다.
 - 활성 legal hold가 연결된 대상은 `purge_at`이 지나도 파기하지 않는다.
 - legal hold가 해제된 뒤 보존기한이 이미 지났다면 다음 retention 실행에서 파기한다.
+- 근거 없는 열린 신고는 `dismiss`로 종료하며 대상 콘텐츠 상태는 그대로 유지한다.
+- 신고에서 시작한 hide·delete·dismiss·restrict는 report disposition 및 audit와 같은 transaction에서 처리한다.
+- 이미 적용된 상태의 재처리, 종료 신고의 재처리, 겹치는 활성 제재와 재해제는 advisory lock 안에서 충돌로 거부하고 존재하지 않는 대상은 404로 구분한다.
 
 ## 8. 보존 정책
 
@@ -149,7 +154,7 @@ deleted ──1년 경과──> 영구 파기
 - 다른 법령상 보존 또는 분쟁 대응이 필요한 대상만 분리된 legal hold로 보존한다.
 - 공개 배포 전 실제 운영 목적과 최신 법령을 기준으로 국내 법률 전문가 검토를 권장한다.
 
-현재 구현의 삭제 콘텐츠 30일, 처리 기록 90일 파기 값은 이 설계 구현과 migration이 완료되기 전까지 유지된다. 문구만 먼저 1년으로 바꾸지 않으며 code, test, 개인정보처리방침과 release gate를 같은 변경에서 전환한다.
+현재 구현은 삭제 콘텐츠·처리 신고·관리 조치·종료 제재에 1년 정책을 적용한다. 삭제 부모는 일반 자식과 독립 보존되는 댓글·신고·관리 조치의 가장 늦은 기한 및 legal hold가 모두 끝난 뒤 의존 그래프와 함께 파기한다. 자연 만료 제재는 `ends_at`, 수동 해제 제재는 `revoked_at`을 terminal time으로 사용한다. 신고의 network-derived HMAC은 신고 상태와 무관하게 생성 후 최대 24시간 안에 scrub하고 만료 전 값만 자동 숨김 집계에 사용한다.
 
 ## 9. 관리자 API 경계
 
@@ -163,7 +168,7 @@ deleted ──1년 경과──> 영구 파기
 - 콘텐츠 숨김·삭제 대기·복구
 - 사용자 작성 제한·해제
 
-모든 조회는 필요한 column만 선택해 공개 DTO와 분리된 관리자 DTO로 변환한다. Query의 tab, cursor, 기간, 대상 유형과 검색어는 server에서 길이와 허용값을 검증한다. 관리자 API 응답은 `Cache-Control: no-store`를 유지한다.
+모든 조회는 필요한 column만 선택해 공개 DTO와 분리된 관리자 DTO로 변환한다. Query의 tab, cursor, 기간, 대상 유형, 조치, 삭제 주체와 검색어는 server에서 길이와 허용값을 검증한다. 관리자 API 응답은 `Cache-Control: no-store`를 유지한다.
 
 ## 10. 오류와 동시성
 
@@ -174,6 +179,7 @@ deleted ──1년 경과──> 영구 파기
 - provider 장애: 기존 목록을 지우지 않고 재시도 가능한 오류를 표시한다.
 - 중복 클릭: 조치 중 button을 잠그고 database advisory lock과 transaction으로 중복 action을 방지한다.
 - 목록 경쟁: request sequence를 검사해 오래된 실패나 성공 응답이 최신 화면을 덮어쓰지 않게 한다.
+- 상태 경쟁: stale terminal transition은 안전한 409로 반환하고 목록 갱신을 안내한다.
 
 ## 11. UI와 접근성
 
@@ -199,6 +205,8 @@ deleted ──1년 경과──> 영구 파기
 - 숨김·삭제 복구 후 콘텐츠가 공개 API에 다시 나타난다.
 - 게시글 복구가 개별 삭제 댓글을 되살리지 않는다.
 - 모든 조치가 하나의 transaction으로 상태, 신고 해결과 audit log를 함께 반영한다.
+- 기각한 신고는 공개 콘텐츠를 변경하지 않으며 감사 로그에 판단 사유를 남긴다.
+- 숨김 목록은 자동/관리자 출처·사유·조치 시각을 표시하고 최신 숨김 시각으로 페이지네이션한다.
 
 ### 보존
 
@@ -212,6 +220,7 @@ deleted ──1년 경과──> 영구 파기
 - Desktop·mobile, light·dark mode를 확인한다.
 - Tab query deep link, pagination, filter와 빈 상태를 확인한다.
 - 작성자 삭제 복구의 경고와 이중 확인을 keyboard와 screen reader 기준으로 검사한다.
+- 신고 기각과 1·7·30일 preset/직접 종료 시각 제한을 keyboard와 screen reader 기준으로 검사한다.
 - 단위·component·API·Supabase pgTAP test, lint와 production build를 통과한다.
 
 ## 13. 문서 동기화와 출시 조건
@@ -226,7 +235,7 @@ deleted ──1년 경과──> 영구 파기
 - 개인정보처리방침·이용약관·운영정책 source
 - Community release gate와 backup·복구 문서
 
-1년 보존 migration, 정책 문구, 자동 파기, 관리자 복구와 통합 test가 모두 일치하기 전에는 변경된 정책으로 공개 배포하지 않는다.
+1년 보존 migration, 정책 문구, 자동 파기, 관리자 복구와 통합 test가 모두 일치하기 전에는 변경된 정책으로 공개 배포하지 않는다. Production 공개 write는 Cloudflare가 덮어쓴 32자 이상 원점 전용 공유 헤더를 application이 검증하고 Oracle 직접 ingress를 차단한 뒤에만 활성화한다. Release gate는 `cloudflare` mode, proxy/HMAC secret 길이, 실제 Turnstile key와 Supabase URL·project ref 일치를 요구한다. Local mode는 non-production 개발·test 전용이다.
 
 ## 14. 참고 자료
 
@@ -235,3 +244,6 @@ deleted ──1년 경과──> 영구 파기
 - [개인정보보호위원회 개인정보 처리방침 작성지침](https://www.pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS217&mCode=D010030000.Updated)
 - [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 - [Supabase Auth email login](https://supabase.com/docs/guides/auth/auth-email-passwordless)
+- [Cloudflare HTTP headers](https://developers.cloudflare.com/fundamentals/reference/http-headers/)
+- [Cloudflare Request Header Transform Rules](https://developers.cloudflare.com/rules/transform/request-header-modification/)
+- [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/)

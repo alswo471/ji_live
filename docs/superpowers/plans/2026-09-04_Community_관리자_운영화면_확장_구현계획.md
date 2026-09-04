@@ -1,5 +1,7 @@
 # Community 관리자 운영화면 확장 Implementation Plan
 
+> 2026-09-04 구현과 최종 전체 branch 수정 완료. 아래 checkbox와 예시 명령은 승인 당시 순서를 보존하며, 실제 최종 검증 결과는 문서 끝의 부록에 기록한다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 기존 신고 queue를 신고·숨김·삭제 대기·제재·운영 로그를 관리하고 1년 안에 삭제 콘텐츠를 복구할 수 있는 Community 운영 console로 확장한다.
@@ -891,18 +893,33 @@ Expected: working tree clean, six implementation commits visible, branch remains
 
 ---
 
+## 최종 전체 검토 수정 부록
+
+- [x] 신고 abuse key를 최대 24시간 내 scrub하고 23/25시간 경계를 검증했다.
+- [x] 삭제 부모의 댓글·신고·관리 조치·legal hold 의존 그래프와 자연 만료 제재의 파기 기준을 검증했다.
+- [x] 신고 기각, report-aware atomic moderation, stale transition 409와 중복 활성 제재 거부를 구현했다.
+- [x] 숨김 출처·사유·시각, audit snapshot/삭제 주체/user filter와 제한 직접 종료 시각을 구현했다.
+- [x] 댓글 신고·pagination/count, 익명 token refresh, Turnstile timeout/retry와 삭제 guard를 구현했다.
+- [x] 429 재시도 metadata, malformed JSON 400, release config 검증과 Cloudflare→Oracle 원점 공유 비밀 경계를 구현했다.
+- [x] README, CHANGELOG, 운영 문서, 프로젝트 소개·히스토리·참고자료와 두 설계를 현재 동작에 맞췄다.
+- [x] 최종 검증: Vitest `67 files / 481 passed / 5 skipped`, typecheck·lint·build 성공, fresh reset에서 DB lint 오류 0건과 pgTAP `4 files / 123 tests`, opt-in integration `6/6`, release gate `27/27` 통과.
+
+기존 deferred minor인 유효 base64 cursor tuple의 필드별 세부 test와 pending moderation 입력 비활성화/progress label은 이번 수정 범위에서도 독립적이어서 그대로 보류한다. 실제 Oracle·Cloudflare staging smoke와 Magic Link 전달 확인은 외부 배포 환경·운영 자격증명이 없어 완료로 표시하지 않는다.
+
+---
+
 ## Completion Checklist
 
-- [ ] 공개 navigation에 관리자 link가 없다.
-- [ ] `/admin` 직접 접근과 관리자 Magic Link login이 작동한다.
-- [ ] 다섯 관리자 tab과 summary가 실제 관리자 API를 사용한다.
-- [ ] 공개 API는 숨김·삭제 콘텐츠를 반환하지 않는다.
-- [ ] 작성자·관리자 삭제가 구분되고 모두 1년 안에 복구된다.
-- [ ] 작성자 삭제 복구에 경고·사유·이중 확인이 적용된다.
-- [ ] 관리자 browser response에 raw user UUID·신고자·abuse key·secret이 없다.
-- [ ] 제재 해제와 모든 관리 작업이 audit log에 기록된다.
-- [ ] 1년 retention과 legal hold가 pgTAP으로 검증된다.
-- [ ] 개인정보 문구·release gate·code·migration이 같은 기간을 사용한다.
-- [ ] 전체 Vitest, Oxlint, production build, Supabase lint·pgTAP과 local integration이 통과한다.
+- [x] 공개 navigation에 관리자 link가 없다.
+- [x] `/admin` 직접 접근과 관리자 Magic Link login 흐름이 자동 검사에서 작동한다.
+- [x] 다섯 관리자 tab과 summary가 실제 관리자 API를 사용한다.
+- [x] 공개 API는 숨김·삭제 콘텐츠를 반환하지 않는다.
+- [x] 작성자·관리자 삭제가 구분되고 모두 1년 안에 복구된다.
+- [x] 작성자 삭제 복구에 경고·사유·이중 확인이 적용된다.
+- [x] 관리자 browser response에 raw user UUID·신고자·abuse key·secret이 없다.
+- [x] 제재 해제와 모든 관리 작업이 audit log에 기록된다.
+- [x] 1년 retention과 legal hold가 pgTAP으로 검증된다.
+- [x] 개인정보 문구·release gate·code·migration이 같은 기간을 사용한다.
+- [x] 전체 Vitest, Oxlint, production build, Supabase lint·pgTAP과 local integration이 통과한다.
 - [ ] 실제 staging에서 삭제·복구·공개 노출 E2E를 확인한다.
-- [ ] 문서와 CHANGELOG가 검증된 현재 상태로 갱신된다.
+- [x] 문서와 CHANGELOG가 검증된 현재 상태로 갱신된다.

@@ -267,7 +267,7 @@ create table public.community_posts (
 );
 ```
 
-Use equivalent foreign keys and length constraints for comments. Reports must require exactly one target (`post_id` XOR `comment_id`), include `reporter_id`, `reporter_abuse_key`, `reason`, `detail`, `status`, and partial unique indexes preventing one user from reporting the same target twice. Admin, sanction, moderation and rate-event tables must not expose rows to browser roles.
+Use equivalent foreign keys and length constraints for comments. Reports must require exactly one target (`post_id` XOR `comment_id`), include `reporter_id`, `reporter_abuse_key`, `reason`, `detail`, `status`, and partial unique indexes preventing one user from reporting the same target twice. The initial insert requires the abuse key; the final-review forward migration adds its expiry and makes the column nullable so the value can be scrubbed after at most 24 hours while the report remains. Admin, sanction, moderation and rate-event tables must not expose rows to browser roles.
 
 - [ ] **Step 4: Add deny-by-default grants and RLS**
 

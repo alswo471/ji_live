@@ -21,7 +21,7 @@
 - GitHub Actions 품질 검사 결과 Slack 알림
 - 데스크톱과 모바일을 고려한 반응형 화면
 - 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
-- 마켓·커뮤니티 공통 navigation과 반응형 익명 feed·작성·댓글·신고 UI
+- 마켓·커뮤니티 공통 navigation과 반응형 익명 feed·작성·댓글 페이지네이션·게시글/댓글 신고 UI
 - `/admin` 직접 접근, 운영자 email Magic Link와 등록된 admin membership으로 보호되는 신고 대기·숨김·삭제 대기·제재·운영 로그 console
 
 ## 기술 스택
@@ -33,7 +33,7 @@
 | UI / Chart        | shadcn/ui, Base UI, Lucide React, TradingView Lightweight Charts |
 | Data              | Hyperliquid Public API, Binance Public API, Bithumb Public API   |
 | Community backend | Supabase Postgres/Auth, Row Level Security                       |
-| Abuse protection  | Cloudflare Turnstile, daily HMAC rate key                        |
+| Abuse protection  | Cloudflare Turnstile, trusted proxy, daily HMAC rate key         |
 | Package manager   | pnpm                                                             |
 | Code quality      | Oxlint, Oxfmt                                                    |
 | CI/CD             | GitHub Actions, Slack Incoming Webhook                           |
@@ -91,11 +91,11 @@ pnpm install
 
 Community 기능은 기본적으로 비활성화되어 있으며 실제 secret은 `.env.local`에만 저장합니다. Local database를 개발할 때는 Docker 호환 runtime을 실행한 후 아래 command를 사용합니다.
 
-Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활성화됩니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 현재는 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
+Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활성화됩니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, 신뢰된 proxy가 전달한 주소의 daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 삭제도 별도 Turnstile과 10회/10분 제한을 통과해야 하며 429 응답은 재시도 가능 시간, 잘못된 JSON은 안전한 400 응답을 제공합니다. 현재는 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
 
-관리 화면은 public navigation에 노출하지 않으며 `/admin` 직접 접근 시 `/admin/community`로 이동합니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, Magic Link 요청은 Turnstile CAPTCHA를 통과해야 하며 새 사용자를 자동 생성하지 않습니다. 관리자는 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab에서 상태별 API를 사용합니다. 관리자 응답은 신고자와 raw 사용자 UUID, abuse key, secret을 반환하지 않습니다.
+관리 화면은 public navigation에 노출하지 않으며 `/admin` 직접 접근 시 `/admin/community`로 이동합니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, Magic Link 요청은 Turnstile CAPTCHA를 통과해야 하며 새 사용자를 자동 생성하지 않습니다. 관리자는 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab에서 상태별 API를 사용합니다. 신고 대기에서는 근거 없는 신고를 콘텐츠 변경 없이 기각할 수 있고, 작성 제한은 1·7·30일 또는 직접 지정한 시각까지 설정합니다. 숨김 화면은 자동/관리자 조치의 출처·사유·시각을 보여 주고 운영 로그는 제목·본문·기간·대상·조치·삭제 주체를 함께 검색합니다. 관리자 응답은 신고자와 raw 사용자 UUID, abuse key, secret을 반환하지 않습니다.
 
-작성자와 관리자 삭제는 즉시 공개 API에서 제외하고 삭제 주체를 구분해 1년 동안 복구 가능한 삭제 대기로 보관합니다. 작성자 삭제 복구에는 관리 사유, 사용자 의사와 충돌할 수 있다는 경고, 이중 확인을 요구합니다. 1년은 법정 고정기간이 아니라 오조치 복구와 분쟁 대응을 위해 정한 내부 운영 정책입니다. 정식 삭제 요청은 개별 검토하며 진행 중인 분쟁·법령상 보존 사유는 별도 legal hold로 자동 파기에서 제외합니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치는 신고 해결과 감사 로그를 같은 database transaction으로 처리하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
+작성자와 관리자 삭제는 즉시 공개 API에서 제외하고 삭제 주체를 구분해 1년 동안 복구 가능한 삭제 대기로 보관합니다. 작성자 삭제 복구에는 관리 사유, 사용자 의사와 충돌할 수 있다는 경고, 이중 확인을 요구합니다. 부모 게시글은 댓글·신고·운영 기록 각각의 보존기한과 legal hold가 모두 끝난 뒤 의존 그래프와 함께 파기하고, 자연 만료된 제재도 종료 시점부터 1년 뒤 파기합니다. 신고에 사용한 network-derived HMAC은 신고 상태와 무관하게 생성 후 최대 24시간 안에 지웁니다. 1년은 법정 고정기간이 아니라 오조치 복구와 분쟁 대응을 위해 정한 내부 운영 정책입니다. 정식 삭제 요청은 개별 검토하며 진행 중인 분쟁·법령상 보존 사유는 별도 legal hold로 자동 파기에서 제외합니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치·신고 기각·신고 기반 작성 제한은 신고 처리와 감사 로그를 같은 database transaction으로 반영하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
 
 ```bash
 pnpm dlx supabase start
@@ -104,9 +104,19 @@ pnpm dlx supabase db lint
 pnpm dlx supabase test db
 ```
 
-Local Supabase는 개발 전용이며 외부 네트워크에 공개하지 않습니다.
+Local Supabase는 개발 전용이며 외부 네트워크에 공개하지 않습니다. `.env.example`의 `COMMUNITY_TRUSTED_PROXY_MODE=local`도 개발·테스트 전용이고 production에서는 애플리케이션이 이 모드를 거부합니다.
 
-### 3. 개발 서버 실행
+### 3. 공개 배포의 신뢰 프록시
+
+Oracle 원점이 `CF-Connecting-IP`만 신뢰하면 직접 원점 호출자가 헤더를 위조해 network rate key를 바꿀 수 있습니다. Production은 다음 세 경계를 모두 적용합니다.
+
+1. 다른 자격증명과 재사용하지 않는 32자 이상의 무작위 `COMMUNITY_TRUSTED_PROXY_SECRET`을 생성해 Cloudflare와 Oracle secret 저장소에만 보관합니다. 저장소·browser·로그에는 기록하지 않습니다.
+2. Cloudflare Request Header Transform Rule 또는 Worker가 모든 원점 요청의 `X-Community-Proxy-Secret`을 이 값으로 **덮어쓰도록** 설정합니다. 방문자가 보낸 같은 이름의 헤더를 통과시키는 설정은 허용하지 않습니다.
+3. Oracle 원점은 Cloudflare Tunnel의 outbound-only 연결을 우선 사용해 public inbound port를 열지 않습니다. Tunnel을 사용할 수 없다면 현재 Cloudflare origin IP 범위만 허용하고 나머지 직접 인바운드를 방화벽에서 차단합니다.
+
+Production 환경은 `COMMUNITY_TRUSTED_PROXY_MODE=cloudflare`로 설정합니다. 모든 Community 변경 API는 공유 헤더가 없거나 일치하지 않으면 `untrusted_proxy`로 거부한 뒤에만 `CF-Connecting-IP`를 HMAC 처리합니다. Secret 유출 시 Cloudflare와 Oracle 값을 함께 교체하고 애플리케이션을 재시작합니다. 자세한 점검·복구 절차는 [Community 백업과 복구](./docs/operations/Community_백업과_복구.md)의 신뢰 프록시 운영 절을 따릅니다.
+
+### 4. 개발 서버 실행
 
 현재 PC에서만 확인할 때:
 
@@ -141,7 +151,7 @@ pnpm dlx supabase db lint
 pnpm dlx supabase stop
 ```
 
-Community 공개 전에는 실제 환경변수, 정확한 공개 정책값 `COMMUNITY_RETENTION_DAYS=365`, 개인정보처리방침에 표시할 처리·보유 고지, 자동 파기 scheduler 확인, 서울 region과 등록된 관리자를 확인합니다. 오류에는 현재 환경변수 값이나 secret을 출력하지 않습니다. 값이 없거나 정책과 다르면 검사가 실패하는 것이 정상입니다.
+Community 공개 전에는 실제 환경변수, 정확한 공개 정책값 `COMMUNITY_RETENTION_DAYS=365`, 개인정보처리방침에 표시할 처리·보유 고지, 자동 파기 scheduler 확인, 서울 region과 등록된 관리자를 확인합니다. 또한 production 신뢰 proxy mode와 32자 이상 proxy/HMAC secret, 실제 Turnstile key, Supabase URL과 project ref 일치를 검사합니다. Cloudflare 공식 always-pass test key, 개발용 `local` proxy mode 또는 서로 다른 Supabase project 조합은 공개 검사에서 거부합니다. 오류에는 현재 환경변수 값이나 secret을 출력하지 않습니다. 값이 없거나 정책과 다르면 검사가 실패하는 것이 정상입니다.
 
 ```bash
 pnpm check:community-release

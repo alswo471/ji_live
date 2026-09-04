@@ -29,12 +29,22 @@
 - workspace 밖의 지정 경로에 권한을 제한한 Supabase logical dump를 만드는 backup command 추가
 - 실제 local Supabase Auth·RLS·RPC와 Cloudflare test key로 관리자 read 권한, 작성자·관리자 삭제·복구, UUID 비공개, 제재·해제 audit와 legal hold 파기를 확인하는 Community 보안 통합 검사 추가
 - `/admin` 직접 접근과 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab을 제공하는 상태별 관리자 console 추가
+- 근거 없는 신고를 콘텐츠 변경 없이 종결하고 사유를 감사 기록에 남기는 신고 기각 조치 추가
+- 자동·관리자 숨김의 출처·사유·시각, 제목·본문·삭제 주체·사용자 대상까지 검색하는 운영 로그 filter 추가
+- 댓글별 신고, 서버 댓글 수 표시와 cursor 기반 댓글 더 보기 추가
+- 작성 제한 1·7·30일 preset과 접근 가능한 직접 종료 시각 입력 추가
 
 ### 수정
 
 - 관리자 로그인 직후 동일 session의 신고 목록 요청을 중복 실행하지 않고 오래된 실패 응답이 최신 성공 화면을 덮어쓰지 않도록 수정
 - 신고 관리 조치 실패를 열린 확인 대화상자 안에서 안내하고 입력값과 키보드 초점을 유지하도록 수정
 - 작성자·관리자 삭제 주체를 구분해 모두 1년 동안 복구 가능하게 하고 작성자 삭제 복구에는 경고·관리 사유·이중 확인을 적용
+- 신고의 network-derived HMAC을 최대 24시간 안에 제거하면서 만료 전 서로 다른 network 집계만 자동 숨김에 사용하도록 수정
+- 삭제 게시글의 댓글·신고·관리 조치별 독립 보존기한과 legal hold를 지킨 뒤 의존 그래프를 파기하고 자연 만료 제재도 종료 1년 뒤 파기하도록 수정
+- 숨김·복구·삭제·신고 기각·신고 기반 제재의 stale 전이를 409로 거부하고 중복 활성 제재를 만들지 않도록 수정
+- 익명 session token 갱신을 write 직전에 반영하고 401이면 만료 session을 지운 뒤 재시도 안내하도록 수정
+- Turnstile script 오류·만료·unmount·15초 timeout에서 모든 대기 요청을 종료하고 화면에서 다시 불러올 수 있도록 수정
+- Community 429 응답에 남은 제한 시간과 `Retry-After`를 제공하고 잘못된 공개 write JSON을 안전한 400으로 반환하도록 수정
 
 ### 문서
 
@@ -53,6 +63,9 @@
 - 신고자 신원과 관리자 인증정보를 API 응답·운영 로그에서 제외하고 browser role의 moderation RPC 실행 차단
 - 활성 사용자 제한을 게시글·댓글 작성 전에 검사하고 만료된 제한은 자동으로 제외
 - `develop`·`main` CI에 전체 test와 secret-shaped value scan을 추가하고 production secret 없는 일반 CI와 release gate 분리
+- 게시글·댓글 삭제에도 Turnstile과 actor/network 기준 10회/10분 제한을 적용
+- 모든 공개 변경 API가 Cloudflare가 덮어쓴 원점 전용 공유 헤더를 검증한 뒤에만 `CF-Connecting-IP`를 사용하고 production에서 local proxy mode를 거부하도록 강화
+- Release gate가 Cloudflare always-pass Turnstile key, 32자 미만 HMAC/proxy secret, Supabase URL·project ref 불일치와 비 production proxy mode를 거부하도록 강화
 
 ## [0.4.0] - 2026-09-02
 
