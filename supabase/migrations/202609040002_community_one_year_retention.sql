@@ -23,81 +23,9 @@ begin
   where created_at < p_now - interval '24 hours';
   get diagnostics rate_count = row_count;
 
-  select coalesce(array_agg(p.id), '{}'::uuid[])
-  into eligible_posts
-  from public.community_posts p
-  where p.status = 'deleted'
-    and p.purge_at <= p_now
-    and not exists (
-      select 1 from public.community_legal_holds h
-      where h.subject_type = 'post' and h.subject_id = p.id
-        and h.released_at is null and (h.ends_at is null or h.ends_at > p_now)
-    )
-    and not exists (
-      select 1
-      from public.community_comments c
-      join public.community_legal_holds h
-        on h.subject_type = 'comment' and h.subject_id = c.id
-      where c.post_id = p.id and h.released_at is null
-        and (h.ends_at is null or h.ends_at > p_now)
-    )
-    and not exists (
-      select 1
-      from public.community_reports r
-      join public.community_legal_holds h
-        on h.subject_type = 'report' and h.subject_id = r.id
-      where (r.post_id = p.id or r.comment_id in (
-        select id from public.community_comments where post_id = p.id
-      )) and h.released_at is null and (h.ends_at is null or h.ends_at > p_now)
-    )
-    and not exists (
-      select 1
-      from public.community_moderation_actions a
-      join public.community_legal_holds h
-        on h.subject_type = 'moderation_action' and h.subject_id = a.id
-      where (a.post_id = p.id or a.comment_id in (
-        select id from public.community_comments where post_id = p.id
-      )) and h.released_at is null and (h.ends_at is null or h.ends_at > p_now)
-    );
-
-  select coalesce(array_agg(c.id), '{}'::uuid[])
-  into eligible_comments
-  from public.community_comments c
-  where (
-      (c.status = 'deleted' and c.purge_at <= p_now)
-      or c.post_id = any(eligible_posts)
-    )
-    and not exists (
-      select 1 from public.community_legal_holds h
-      where h.subject_type = 'comment' and h.subject_id = c.id
-        and h.released_at is null and (h.ends_at is null or h.ends_at > p_now)
-    )
-    and not exists (
-      select 1
-      from public.community_reports r
-      join public.community_legal_holds h
-        on h.subject_type = 'report' and h.subject_id = r.id
-      where r.comment_id = c.id and h.released_at is null
-        and (h.ends_at is null or h.ends_at > p_now)
-    )
-    and not exists (
-      select 1
-      from public.community_moderation_actions a
-      join public.community_legal_holds h
-        on h.subject_type = 'moderation_action' and h.subject_id = a.id
-      where a.comment_id = c.id and h.released_at is null
-        and (h.ends_at is null or h.ends_at > p_now)
-    );
-
   delete from public.community_reports r
-  where (
-      r.post_id = any(eligible_posts)
-      or r.comment_id = any(eligible_comments)
-      or (
-        r.status <> 'open'
-        and r.resolved_at < p_now - interval '1 year'
-      )
-    )
+  where r.status <> 'open'
+    and r.resolved_at < p_now - interval '1 year'
     and not exists (
       select 1 from public.community_legal_holds h
       where h.subject_type = 'report' and h.subject_id = r.id
@@ -106,17 +34,32 @@ begin
   get diagnostics report_count = row_count;
 
   delete from public.community_moderation_actions a
-  where (
-      a.post_id = any(eligible_posts)
-      or a.comment_id = any(eligible_comments)
-      or a.created_at < p_now - interval '1 year'
-    )
+  where a.created_at < p_now - interval '1 year'
     and not exists (
       select 1 from public.community_legal_holds h
       where h.subject_type = 'moderation_action' and h.subject_id = a.id
         and h.released_at is null and (h.ends_at is null or h.ends_at > p_now)
     );
   get diagnostics moderation_count = row_count;
+
+  select coalesce(array_agg(c.id), '{}'::uuid[])
+  into eligible_comments
+  from public.community_comments c
+  where c.status = 'deleted'
+    and c.purge_at <= p_now
+    and not exists (
+      select 1 from public.community_legal_holds h
+      where h.subject_type = 'comment' and h.subject_id = c.id
+        and h.released_at is null and (h.ends_at is null or h.ends_at > p_now)
+    )
+    and not exists (
+      select 1 from public.community_reports r
+      where r.comment_id = c.id
+    )
+    and not exists (
+      select 1 from public.community_moderation_actions a
+      where a.comment_id = c.id
+    );
 
   delete from public.community_sanctions s
   where s.revoked_at is not null
@@ -131,6 +74,26 @@ begin
   delete from public.community_comments
   where id = any(eligible_comments);
   get diagnostics comment_count = row_count;
+
+  select coalesce(array_agg(p.id), '{}'::uuid[])
+  into eligible_posts
+  from public.community_posts p
+  where p.status = 'deleted'
+    and p.purge_at <= p_now
+    and not exists (
+      select 1 from public.community_legal_holds h
+      where h.subject_type = 'post' and h.subject_id = p.id
+        and h.released_at is null and (h.ends_at is null or h.ends_at > p_now)
+    )
+    and not exists (
+      select 1 from public.community_comments c where c.post_id = p.id
+    )
+    and not exists (
+      select 1 from public.community_reports r where r.post_id = p.id
+    )
+    and not exists (
+      select 1 from public.community_moderation_actions a where a.post_id = p.id
+    );
 
   delete from public.community_posts
   where id = any(eligible_posts);

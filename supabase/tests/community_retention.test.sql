@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(25);
 
 insert into auth.users (id, email, raw_user_meta_data, is_anonymous, created_at, last_sign_in_at)
 values
@@ -11,6 +11,7 @@ values
   (md5('retention-report-old')::uuid, 'retention-report-old@example.invalid', '{}'::jsonb, false, now(), now()),
   (md5('retention-report-young')::uuid, 'retention-report-young@example.invalid', '{}'::jsonb, false, now(), now()),
   (md5('retention-report-hold')::uuid, 'retention-report-hold@example.invalid', '{}'::jsonb, false, now(), now()),
+  (md5('retention-parent-dependent')::uuid, 'retention-parent-dependent@example.invalid', '{}'::jsonb, false, now(), now()),
   (md5('retention-sanction-old')::uuid, 'retention-sanction-old@example.invalid', '{}'::jsonb, false, now(), now()),
   (md5('retention-sanction-young')::uuid, 'retention-sanction-young@example.invalid', '{}'::jsonb, false, now(), now()),
   (md5('retention-sanction-hold')::uuid, 'retention-sanction-hold@example.invalid', '{}'::jsonb, false, now(), now());
@@ -32,7 +33,11 @@ insert into public.community_posts (
   ('71000000-0000-0000-0000-000000000003', md5('retention-author')::uuid,
    '테스트-작성자', '364일 보존 대상', '1년보다 짧은 삭제 콘텐츠', 'deleted', 'author',
    now() - interval '364 days', now() + interval '1 day',
-   '72000000-0000-0000-0000-000000000003', now() - interval '364 days');
+   '72000000-0000-0000-0000-000000000003', now() - interval '364 days'),
+  ('71000000-0000-0000-0000-000000000004', md5('retention-author')::uuid,
+   '테스트-작성자', '의존 레코드 보존 대상', '최근 의존 레코드가 있는 삭제 콘텐츠', 'deleted', 'author',
+   now() - interval '366 days', now() - interval '1 day',
+   '72000000-0000-0000-0000-000000000004', now() - interval '366 days');
 
 insert into public.community_comments (
   id, post_id, author_id, author_name, body, status, deletion_source, deleted_at, purge_at,
@@ -49,7 +54,10 @@ insert into public.community_comments (
   ('73000000-0000-0000-0000-000000000003', '71000000-0000-0000-0000-000000000003',
    md5('retention-author')::uuid, '테스트-작성자', 'hold가 설정된 삭제 댓글', 'deleted', 'author',
    now() - interval '366 days', now() - interval '1 day',
-   '74000000-0000-0000-0000-000000000003', now() - interval '366 days');
+   '74000000-0000-0000-0000-000000000003', now() - interval '366 days'),
+  ('73000000-0000-0000-0000-000000000004', '71000000-0000-0000-0000-000000000004',
+   md5('retention-author')::uuid, '테스트-작성자', '최근 공개 댓글', 'visible',
+   null, null, null, '74000000-0000-0000-0000-000000000004', now() - interval '1 day');
 
 insert into public.community_reports (
   id, reporter_id, reporter_abuse_key, post_id, reason, detail, status, created_at, resolved_at
@@ -62,17 +70,22 @@ insert into public.community_reports (
    now() - interval '364 days', now() - interval '364 days'),
   ('81000000-0000-0000-0000-000000000003', md5('retention-report-hold')::uuid,
    repeat('cd', 32), '71000000-0000-0000-0000-000000000002', 'spam', 'hold 신고', 'resolved',
-   now() - interval '366 days', now() - interval '366 days');
+   now() - interval '366 days', now() - interval '366 days'),
+  ('81000000-0000-0000-0000-000000000004', md5('retention-parent-dependent')::uuid,
+   repeat('de', 32), '71000000-0000-0000-0000-000000000004', 'spam', '진행 중인 신고', 'open',
+   now() - interval '1 day', null);
 
 insert into public.community_moderation_actions (
-  id, admin_id, action, target_type, user_id, reason, created_at
+  id, admin_id, action, target_type, post_id, user_id, reason, created_at
 ) values
   ('82000000-0000-0000-0000-000000000001', md5('retention-admin')::uuid,
-   'restrict', 'user', md5('retention-sanction-old')::uuid, '366일 운영 기록', now() - interval '366 days'),
+   'restrict', 'user', null, md5('retention-sanction-old')::uuid, '366일 운영 기록', now() - interval '366 days'),
   ('82000000-0000-0000-0000-000000000002', md5('retention-admin')::uuid,
-   'restrict', 'user', md5('retention-sanction-young')::uuid, '364일 운영 기록', now() - interval '364 days'),
+   'restrict', 'user', null, md5('retention-sanction-young')::uuid, '364일 운영 기록', now() - interval '364 days'),
   ('82000000-0000-0000-0000-000000000003', md5('retention-admin')::uuid,
-   'restrict', 'user', md5('retention-sanction-hold')::uuid, 'hold 운영 기록', now() - interval '366 days');
+   'restrict', 'user', null, md5('retention-sanction-hold')::uuid, 'hold 운영 기록', now() - interval '366 days'),
+  ('82000000-0000-0000-0000-000000000004', md5('retention-admin')::uuid,
+   'delete', 'post', '71000000-0000-0000-0000-000000000004', null, '최근 운영 기록', now() - interval '364 days');
 
 insert into public.community_sanctions (
   id, user_id, reason, starts_at, ends_at, created_by, created_at, revoked_at
@@ -135,6 +148,30 @@ select is(
    where id = '71000000-0000-0000-0000-000000000002'),
   1,
   'active legal hold preserves content'
+);
+select is(
+  (select count(*)::integer from public.community_comments
+   where id = '73000000-0000-0000-0000-000000000004'),
+  1,
+  'recent comments survive a purgeable parent'
+);
+select is(
+  (select count(*)::integer from public.community_reports
+   where id = '81000000-0000-0000-0000-000000000004'),
+  1,
+  'open reports survive a purgeable parent'
+);
+select is(
+  (select count(*)::integer from public.community_moderation_actions
+   where id = '82000000-0000-0000-0000-000000000004'),
+  1,
+  'recent moderation actions survive a purgeable parent'
+);
+select is(
+  (select count(*)::integer from public.community_posts
+   where id = '71000000-0000-0000-0000-000000000004'),
+  1,
+  'parents with retained dependents are deferred'
 );
 select is(
   (select count(*)::integer from public.community_comments
