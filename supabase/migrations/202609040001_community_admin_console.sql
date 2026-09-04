@@ -25,6 +25,7 @@ where c.status = 'deleted';
 alter table public.community_posts
   add constraint community_posts_deletion_metadata_check check (
     (status = 'deleted'
+      and deletion_source is not null
       and deletion_source in ('author', 'admin')
       and deleted_at is not null
       and purge_at is not null)
@@ -37,6 +38,7 @@ alter table public.community_posts
 alter table public.community_comments
   add constraint community_comments_deletion_metadata_check check (
     (status = 'deleted'
+      and deletion_source is not null
       and deletion_source in ('author', 'admin')
       and deleted_at is not null
       and purge_at is not null)

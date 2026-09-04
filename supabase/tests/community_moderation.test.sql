@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(34);
+select plan(36);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -300,6 +300,37 @@ select throws_ok(
   '22023',
   'invalid community restriction',
   'an expired restriction is rejected'
+);
+
+select throws_ok(
+  $$
+    insert into public.community_posts (
+      author_id, author_name, title, body, idempotency_key, status,
+      deletion_source, deleted_at, purge_at
+    ) values (
+      md5('102')::uuid, '테스트-작성자-0102', '삭제 주체 누락 게시글', '삭제 주체가 없는 삭제 게시글은 거부되어야 합니다.',
+      '61000000-0000-0000-0000-000000000002', 'deleted', null, now(), now() + interval '1 year'
+    )
+  $$,
+  '23514',
+  'new row for relation "community_posts" violates check constraint "community_posts_deletion_metadata_check"',
+  'deleted posts require a deletion source'
+);
+
+select throws_ok(
+  $$
+    insert into public.community_comments (
+      post_id, author_id, author_name, body, idempotency_key, status,
+      deletion_source, deleted_at, purge_at
+    ) values (
+      '60000000-0000-0000-0000-000000000001', md5('102')::uuid, '테스트-작성자-0102',
+      '삭제 주체가 없는 삭제 댓글은 거부되어야 합니다.', '62000000-0000-0000-0000-000000000001',
+      'deleted', null, now(), now() + interval '1 year'
+    )
+  $$,
+  '23514',
+  'new row for relation "community_comments" violates check constraint "community_comments_deletion_metadata_check"',
+  'deleted comments require a deletion source'
 );
 
 select * from finish();
