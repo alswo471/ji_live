@@ -35,6 +35,7 @@
 
 ### 문서
 
+- 공개 navigation에 노출하지 않는 `/admin` 직접 접근, 신고·숨김·삭제 대기·제재·운영 로그 tab과 1년 복구·보존 정책을 Community 관리자 운영화면 확장 설계로 기록
 - Mac에서 Windows로 작업 PC를 변경할 때 필요한 WSL2·GitHub SSH·Docker·Codex skill 복원 절차와 커뮤니티 구현 재개 지점 추가
 - Community MVP의 anonymous Auth, RLS, local migration, Seoul region과 Free plan backup 관련 공식 근거 추가
 - Cloudflare Turnstile token의 server-side 검증, 5분·1회 사용 제한과 fail-closed 처리 근거 추가
