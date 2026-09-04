@@ -20,7 +20,7 @@
 - idempotency key로 재시도 중복 작성을 방지하고 첫 write에서 안정적인 익명 nickname 프로필 생성
 - 기존 테마를 유지한 마켓·커뮤니티 공통 header와 반응형 익명 feed·글·댓글·신고 UI 추가
 - 기존 anonymous session 재사용과 CAPTCHA 기반 익명 계정 최초 생성 흐름 추가
-- 등록된 운영자만 사용하는 email OTP 기반 Community moderation console 추가
+- 등록된 운영자만 사용하는 email Magic Link 기반 Community moderation console 추가
 - 신고 queue에서 콘텐츠 숨김·복원·삭제와 작성자 기간 제한을 수행하는 관리 API 추가
 - 콘텐츠 조치·신고 해결·감사 로그를 하나의 database transaction으로 처리하는 moderation RPC 추가
 - 개인정보처리방침·이용약관·커뮤니티 운영정책·권리침해 문의·소개 페이지와 공통 footer 추가
@@ -28,6 +28,10 @@
 - 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·scheduler를 확인하는 release gate 추가
 - workspace 밖의 지정 경로에 권한을 제한한 Supabase logical dump를 만드는 backup command 추가
 - 실제 local Supabase Auth·RLS·RPC와 Cloudflare test key를 사용하는 Community 보안 통합 검사 추가
+
+### 수정
+
+- 관리자 로그인 직후 동일 session의 신고 목록 요청을 중복 실행하지 않고 오래된 실패 응답이 최신 성공 화면을 덮어쓰지 않도록 수정
 
 ### 문서
 
@@ -40,6 +44,8 @@
 ### 보안
 
 - 관리자 JWT를 server에서 다시 검증하고 `community_admins` 등록 여부를 확인한 뒤에만 관리 API 허용
+- 관리자 email Magic Link 요청에도 Cloudflare Turnstile token을 전달해 Supabase CAPTCHA 정책을 일관되게 적용
+- 신규 Free 프로젝트의 이메일 템플릿 제한에 맞춰 6자리 OTP 입력 대신 기본 Magic Link 안내 흐름으로 변경
 - 신고자 신원과 관리자 인증정보를 API 응답·운영 로그에서 제외하고 browser role의 moderation RPC 실행 차단
 - 활성 사용자 제한을 게시글·댓글 작성 전에 검사하고 만료된 제한은 자동으로 제외
 - `develop`·`main` CI에 전체 test와 secret-shaped value scan을 추가하고 production secret 없는 일반 CI와 release gate 분리

@@ -1,9 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { AdminLogin } from '@/components/community/admin-login';
 import { ModerationQueue } from '@/components/community/moderation-queue';
+import {
+  TurnstileChallenge,
+  type TurnstileChallengeHandle,
+} from '@/components/community/turnstile-challenge';
 import { SiteHeader } from '@/components/site/site-header';
 import { Button } from '@/components/ui/button';
 import { getBrowserSupabase } from '@/lib/community/supabase';
@@ -21,9 +25,13 @@ export default function CommunityAdminPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const challengeRef = useRef<TurnstileChallengeHandle>(null);
+  const loadRequestRef = useRef(0);
+  const loadedSessionTokenRef = useRef<string | null>(null);
 
   const load = useCallback(
     async (token: string, cursor: string | null = null) => {
+      const requestId = ++loadRequestRef.current;
       setLoading(true);
       setError(null);
       try {
@@ -34,16 +42,18 @@ export default function CommunityAdminPage() {
         });
         if (!response.ok) throw new Error('moderation load failed');
         const page = (await response.json()) as ModerationPage;
+        if (requestId !== loadRequestRef.current) return;
         setItems((current) =>
           cursor ? [...current, ...page.items] : page.items,
         );
         setNextCursor(page.nextCursor);
       } catch {
+        if (requestId !== loadRequestRef.current) return;
         setError(
           '신고 목록을 불러오지 못했습니다. 관리자 등록 상태를 확인해 주세요.',
         );
       } finally {
-        setLoading(false);
+        if (requestId === loadRequestRef.current) setLoading(false);
       }
     },
     [],
@@ -52,22 +62,30 @@ export default function CommunityAdminPage() {
   useEffect(() => {
     if (!enabled) return;
     const client = getBrowserSupabase();
-    void client.auth.getSession().then(async ({ data }) => {
-      const session = data.session;
+    const handleSession = (
+      session: {
+        access_token: string;
+        user: { is_anonymous?: boolean };
+      } | null,
+    ) => {
       const token = session?.user.is_anonymous
         ? null
         : (session?.access_token ?? null);
       setAccessToken(token);
       setCheckingSession(false);
-      if (token) await load(token);
-    });
+      if (!token) {
+        loadedSessionTokenRef.current = null;
+        return;
+      }
+      if (loadedSessionTokenRef.current === token) return;
+      loadedSessionTokenRef.current = token;
+      void load(token);
+    };
+    void client.auth
+      .getSession()
+      .then(({ data }) => handleSession(data.session));
     const { data } = client.auth.onAuthStateChange((_event, session) => {
-      const token = session?.user.is_anonymous
-        ? null
-        : (session?.access_token ?? null);
-      setAccessToken(token);
-      setCheckingSession(false);
-      if (token) void load(token);
+      handleSession(session);
     });
     return () => data.subscription.unsubscribe();
   }, [enabled, load]);
@@ -103,28 +121,30 @@ export default function CommunityAdminPage() {
               관리자 session을 확인하고 있습니다…
             </div>
           ) : !accessToken ? (
-            <AdminLogin
-              onRequestOtp={async (email) => {
-                const { error: authError } =
-                  await getBrowserSupabase().auth.signInWithOtp({
-                    email,
-                    options: { shouldCreateUser: false },
-                  });
-                if (authError) throw new Error('otp request failed');
-              }}
-              onVerifyOtp={async (email, token) => {
-                const { data, error: authError } =
-                  await getBrowserSupabase().auth.verifyOtp({
-                    email,
-                    token,
-                    type: 'email',
-                  });
-                if (authError || !data.session)
-                  throw new Error('otp verification failed');
-                setAccessToken(data.session.access_token);
-                await load(data.session.access_token);
-              }}
-            />
+            <>
+              <AdminLogin
+                onRequestCaptcha={async () => {
+                  if (!challengeRef.current)
+                    throw new Error('captcha challenge unavailable');
+                  return challengeRef.current.execute();
+                }}
+                onRequestSignInLink={async (email, captchaToken) => {
+                  const { error: authError } =
+                    await getBrowserSupabase().auth.signInWithOtp({
+                      email,
+                      options: {
+                        shouldCreateUser: false,
+                        captchaToken,
+                        emailRedirectTo: `${window.location.origin}/admin/community`,
+                      },
+                    });
+                  if (authError) throw new Error('sign-in link request failed');
+                }}
+              />
+              <div className="mx-auto mt-4 max-w-md">
+                <TurnstileChallenge ref={challengeRef} />
+              </div>
+            </>
           ) : (
             <>
               <section className="mb-8 flex flex-wrap items-start justify-between gap-4">

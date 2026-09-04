@@ -22,7 +22,7 @@
 - 데스크톱과 모바일을 고려한 반응형 화면
 - 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
 - 마켓·커뮤니티 공통 navigation과 반응형 익명 feed·작성·댓글·신고 UI
-- 운영자 email OTP와 등록된 admin membership으로 보호되는 신고 검토·숨김·복원·삭제·기간 제한 console
+- 운영자 email Magic Link와 등록된 admin membership으로 보호되는 신고 검토·숨김·복원·삭제·기간 제한 console
 
 ## 기술 스택
 
@@ -93,7 +93,7 @@ Community 기능은 기본적으로 비활성화되어 있으며 실제 secret�
 
 Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활성화됩니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 현재는 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
 
-관리 화면은 `/admin/community`에 있으며 public navigation에는 노출하지 않습니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, OTP 요청은 새 사용자를 자동 생성하지 않습니다. 콘텐츠 조치는 신고 해결과 감사 로그를 같은 database transaction으로 처리하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
+관리 화면은 `/admin/community`에 있으며 public navigation에는 노출하지 않습니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, Magic Link 요청은 Turnstile CAPTCHA를 통과해야 하며 새 사용자를 자동 생성하지 않습니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치는 신고 해결과 감사 로그를 같은 database transaction으로 처리하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
 
 ```bash
 pnpm dlx supabase start

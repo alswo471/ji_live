@@ -1,20 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { KeyRound, Mail } from 'lucide-react';
+import { CheckCircle2, KeyRound, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 export function AdminLogin({
-  onRequestOtp,
-  onVerifyOtp,
+  onRequestCaptcha,
+  onRequestSignInLink,
 }: {
-  onRequestOtp: (email: string) => Promise<void>;
-  onVerifyOtp: (email: string, token: string) => Promise<void>;
+  onRequestCaptcha: () => Promise<string>;
+  onRequestSignInLink: (email: string, captchaToken: string) => Promise<void>;
 }) {
   const [email, setEmail] = useState('');
-  const [token, setToken] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,31 +27,12 @@ export function AdminLogin({
     setSubmitting(true);
     setError(null);
     try {
-      await onRequestOtp(normalizedEmail);
+      const captchaToken = await onRequestCaptcha();
+      await onRequestSignInLink(normalizedEmail, captchaToken);
       setEmail(normalizedEmail);
-      setOtpSent(true);
+      setLinkSent(true);
     } catch {
-      setError('인증번호를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function verifyOtp(event: React.SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalizedToken = token.trim();
-    if (!/^\d{6}$/.test(normalizedToken)) {
-      setError('6자리 이메일 인증번호를 입력해 주세요.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onVerifyOtp(email, normalizedToken);
-    } catch {
-      setError(
-        '인증번호를 확인하지 못했습니다. 새 번호를 받아 다시 시도해 주세요.',
-      );
+      setError('로그인 링크를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
       setSubmitting(false);
     }
@@ -71,7 +51,7 @@ export function AdminLogin({
         운영 로그에 포함하지 않습니다.
       </p>
 
-      {!otpSent ? (
+      {!linkSent ? (
         <form className="mt-6 space-y-4" onSubmit={requestOtp}>
           <label htmlFor="admin-email" className="block text-sm font-semibold">
             관리자 이메일
@@ -96,46 +76,34 @@ export function AdminLogin({
             className="min-h-11 w-full"
             disabled={submitting}
           >
-            {submitting ? '전송 중…' : '인증번호 받기'}
+            {submitting ? '전송 중…' : '로그인 링크 받기'}
           </Button>
         </form>
       ) : (
-        <form className="mt-6 space-y-4" onSubmit={verifyOtp}>
-          <label htmlFor="admin-otp" className="block text-sm font-semibold">
-            이메일 인증번호
-          </label>
-          <Input
-            id="admin-otp"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={token}
-            onChange={(event) =>
-              setToken(event.target.value.replace(/\D/g, ''))
-            }
-            className="min-h-11 text-center text-lg tracking-[.35em]"
-            required
-          />
-          <Button
-            type="submit"
-            className="min-h-11 w-full"
-            disabled={submitting}
-          >
-            {submitting ? '확인 중…' : '관리자로 로그인'}
-          </Button>
+        <div className="mt-6 space-y-4">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <p className="flex items-center gap-2 font-bold text-primary">
+              <CheckCircle2 aria-hidden="true" className="size-4" />
+              관리자 로그인 링크를 보냈습니다.
+            </p>
+            <p className="mt-2 break-all text-sm font-semibold">{email}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              메일의 Sign in 버튼을 누르면 이 관리자 화면으로 돌아옵니다. 링크는
+              잠시 후 만료되며 한 번만 사용할 수 있습니다.
+            </p>
+          </div>
           <Button
             type="button"
             variant="ghost"
             className="min-h-11 w-full"
             onClick={() => {
-              setOtpSent(false);
-              setToken('');
+              setLinkSent(false);
               setError(null);
             }}
           >
             이메일 다시 입력
           </Button>
-        </form>
+        </div>
       )}
 
       {error && (
