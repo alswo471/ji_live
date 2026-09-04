@@ -18,6 +18,7 @@ vi.mock('@/components/community/turnstile-challenge', () => ({
 }));
 
 const POST_ID = '30000000-0000-4000-8000-000000000001';
+const SECOND_POST_ID = '30000000-0000-4000-8000-000000000002';
 
 const post = {
   id: POST_ID,
@@ -128,6 +129,56 @@ describe('CommunityDetailPage', () => {
     expect(screen.getByText('첫 페이지 댓글')).toBeVisible();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '댓글 더 보기' })).toBeEnabled(),
+    );
+  });
+
+  it('clears stale load-more progress when a post reload wins the race', async () => {
+    let resolveStalePage!: (response: Response) => void;
+    const stalePage = new Promise<Response>((resolve) => {
+      resolveStalePage = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = urlOf(input);
+        if (url.includes('cursor=stale-page')) return stalePage;
+        if (url.endsWith(`/posts/${SECOND_POST_ID}`)) {
+          return Promise.resolve(Response.json({ ...post, id: SECOND_POST_ID }));
+        }
+        if (url.endsWith(`/posts/${POST_ID}`)) {
+          return Promise.resolve(Response.json(post));
+        }
+        return Promise.resolve(
+          Response.json({ items: [firstComment], nextCursor: 'stale-page' }),
+        );
+      }),
+    );
+
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(
+        <CommunityDetailPage params={Promise.resolve({ id: POST_ID })} />,
+      );
+    });
+    expect(await screen.findByText('첫 페이지 댓글')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '댓글 더 보기' }));
+    expect(
+      screen.getByRole('button', { name: '댓글 불러오는 중…' }),
+    ).toBeDisabled();
+
+    await act(async () => {
+      view.rerender(
+        <CommunityDetailPage
+          params={Promise.resolve({ id: SECOND_POST_ID })}
+        />,
+      );
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '댓글 더 보기' })).toBeEnabled(),
+    );
+
+    resolveStalePage(
+      Response.json({ items: [], nextCursor: null }),
     );
   });
 });

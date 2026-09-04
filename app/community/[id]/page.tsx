@@ -44,6 +44,7 @@ export default function CommunityDetailPage({
       if (!targetId) return;
       const requestId = ++commentRequestRef.current;
       setState('loading');
+      setCommentsLoadingMore(false);
       setCommentError(null);
       try {
         const headers = session.accessToken
