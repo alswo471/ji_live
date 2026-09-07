@@ -1,0 +1,173 @@
+import { pathToFileURL } from 'node:url';
+
+export const REQUIRED_RELEASE_ENV = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+  'NEXT_PUBLIC_TURNSTILE_SITE_KEY',
+  'NEXT_PUBLIC_RIGHTS_CONTACT_URL',
+  'SUPABASE_SECRET_KEY',
+  'TURNSTILE_SECRET_KEY',
+  'COMMUNITY_HMAC_SECRET',
+  'COMMUNITY_TRUSTED_PROXY_MODE',
+  'COMMUNITY_TRUSTED_PROXY_SECRET',
+  'COMMUNITY_RETENTION_SECRET',
+  'COMMUNITY_RETENTION_DAYS',
+  'SUPABASE_PROJECT_REF',
+  'SUPABASE_ACCESS_TOKEN',
+];
+
+const REQUIRED_PROCESSING_FACTS = [
+  'COMMUNITY_PROCESSOR_LEGAL_NAME',
+  'COMMUNITY_PROCESSOR_COUNTRY',
+  'COMMUNITY_PROCESSING_PURPOSE',
+  'COMMUNITY_OVERSEAS_TRANSFER_METHOD',
+  'COMMUNITY_PROCESSING_RETENTION',
+];
+
+export function assertCommunityReleaseConfig(env) {
+  for (const name of [...REQUIRED_RELEASE_ENV, ...REQUIRED_PROCESSING_FACTS]) {
+    if (!env[name]?.trim())
+      throw new Error(`Missing release configuration: ${name}`);
+  }
+  if (env.NEXT_PUBLIC_COMMUNITY_ENABLED !== 'true') {
+    throw new Error(
+      'Community release requires NEXT_PUBLIC_COMMUNITY_ENABLED=true',
+    );
+  }
+  if (env.COMMUNITY_RETENTION_DAYS !== '365') {
+    throw new Error('COMMUNITY_RETENTION_DAYS must be 365');
+  }
+  let contact;
+  let supabase;
+  try {
+    contact = new URL(env.NEXT_PUBLIC_RIGHTS_CONTACT_URL);
+    supabase = new URL(env.NEXT_PUBLIC_SUPABASE_URL);
+  } catch {
+    throw new Error('Invalid release URL configuration');
+  }
+  if (contact.protocol !== 'https:') {
+    throw new Error('NEXT_PUBLIC_RIGHTS_CONTACT_URL must use HTTPS');
+  }
+  if (supabase.protocol !== 'https:') {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL must use HTTPS');
+  }
+  if (
+    supabase.hostname !==
+    `${env.SUPABASE_PROJECT_REF.trim().toLowerCase()}.supabase.co`
+  ) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL must match SUPABASE_PROJECT_REF');
+  }
+  const turnstileAlwaysPassKeys = new Set([
+    '1x00000000000000000000AA',
+    '1x00000000000000000000BB',
+    '1x0000000000000000000000000000000AA',
+  ]);
+  if (
+    turnstileAlwaysPassKeys.has(env.NEXT_PUBLIC_TURNSTILE_SITE_KEY.trim()) ||
+    turnstileAlwaysPassKeys.has(env.TURNSTILE_SECRET_KEY.trim())
+  ) {
+    throw new Error('Turnstile test keys are forbidden in release');
+  }
+  if (env.COMMUNITY_HMAC_SECRET.trim().length < 32) {
+    throw new Error('COMMUNITY_HMAC_SECRET must be at least 32 characters');
+  }
+  if (env.COMMUNITY_TRUSTED_PROXY_MODE !== 'cloudflare') {
+    throw new Error('COMMUNITY_TRUSTED_PROXY_MODE must be cloudflare');
+  }
+  if (env.COMMUNITY_TRUSTED_PROXY_SECRET.trim().length < 32) {
+    throw new Error(
+      'COMMUNITY_TRUSTED_PROXY_SECRET must be at least 32 characters',
+    );
+  }
+  if (env.COMMUNITY_RETENTION_SECRET.length < 32) {
+    throw new Error(
+      'COMMUNITY_RETENTION_SECRET must be at least 32 characters',
+    );
+  }
+}
+
+export async function verifyCommunityProjectRegion(env, request = fetch) {
+  assertCommunityReleaseConfig(env);
+  const response = await request(
+    `https://api.supabase.com/v1/projects/${encodeURIComponent(env.SUPABASE_PROJECT_REF)}`,
+    { headers: { Authorization: `Bearer ${env.SUPABASE_ACCESS_TOKEN}` } },
+  );
+  if (!response.ok) throw new Error('Unable to verify Supabase project region');
+  const data = await response.json();
+  if (data?.region !== 'ap-northeast-2') {
+    throw new Error('Supabase project region must be ap-northeast-2');
+  }
+}
+
+export async function verifyCommunityAdminConfigured(env, request = fetch) {
+  assertCommunityReleaseConfig(env);
+  const response = await request(
+    `${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/community_admins?select=user_id&limit=1`,
+    {
+      headers: {
+        apikey: env.SUPABASE_SECRET_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
+      },
+    },
+  );
+  if (!response.ok)
+    throw new Error('Unable to verify community admin configuration');
+  const data = await response.json();
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error('At least one community admin must be configured');
+  }
+}
+
+export async function verifyCommunityRetentionScheduler(
+  env,
+  request = fetch,
+  now = Date.now(),
+) {
+  assertCommunityReleaseConfig(env);
+  const response = await request(
+    `${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/get_community_retention_health`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SECRET_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    },
+  );
+  if (!response.ok) throw new Error('Unable to verify retention scheduler');
+  const health = await response.json();
+  const lastFinishedAt = Date.parse(health?.lastFinishedAt ?? '');
+  const expectedJob =
+    health?.jobName === 'community-retention-every-minute' &&
+    health?.schedule === '* * * * *' &&
+    health?.active === true &&
+    health?.lastStatus === 'succeeded';
+  const recentSuccess =
+    Number.isFinite(lastFinishedAt) &&
+    lastFinishedAt <= now + 60_000 &&
+    now - lastFinishedAt <= 180_000;
+  if (!expectedJob || !recentSuccess) {
+    throw new Error('Community retention scheduler is not healthy');
+  }
+}
+
+async function main() {
+  await verifyCommunityProjectRegion(process.env);
+  await verifyCommunityAdminConfigured(process.env);
+  await verifyCommunityRetentionScheduler(process.env);
+  process.stdout.write('Community release configuration verified.\n');
+}
+
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main().catch((error) => {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : 'Release check failed'}\n`,
+    );
+    process.exitCode = 1;
+  });
+}

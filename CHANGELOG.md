@@ -6,6 +6,68 @@
 
 ## [Unreleased]
 
+### 추가
+
+- 익명 커뮤니티의 게시글·댓글·신고·관리 table과 API-only write를 위한 RLS 보안 정책 추가
+- 사용자와 daily abuse key를 함께 집계하는 atomic rate limit 및 10명 신고·긴급 신고 임시 숨김 RPC 추가
+- anonymous JWT 검증, Turnstile server 검증과 원본 IP를 저장하지 않는 daily HMAC abuse key 추가
+- HTML·위험 링크·단축 URL·중복 링크·길이·UUID를 제한하는 게시글·댓글·신고 validation 추가
+- 사용자 UUID를 노출하지 않는 안정적인 익명 닉네임 생성 규칙 추가
+- visible 게시글 목록·상세·댓글을 opaque cursor로 조회하는 Community API 추가
+- 공개 DTO에서 작성자 UUID·상태·신고·관리 필드를 제거하고 선택적 소유권 여부만 제공
+- anonymous JWT·Turnstile·daily HMAC을 검증한 게시글·댓글·소유자 삭제·신고 API 추가
+- 게시글 3회/10분, 댓글 10회/10분, 신고 10회/1시간을 actor와 abuse key로 동시 집계하는 제한 추가
+- idempotency key로 재시도 중복 작성을 방지하고 첫 write에서 안정적인 익명 nickname 프로필 생성
+- 기존 테마를 유지한 마켓·커뮤니티 공통 header와 반응형 익명 feed·글·댓글·신고 UI 추가
+- 기존 anonymous session 재사용과 CAPTCHA 기반 익명 계정 최초 생성 흐름 추가
+- 등록된 운영자만 사용하는 email Magic Link 기반 Community moderation console 추가
+- 신고 queue에서 콘텐츠 숨김·복원·삭제와 작성자 기간 제한을 수행하는 관리 API 추가
+- 콘텐츠 조치·신고 해결·감사 로그를 하나의 database transaction으로 처리하는 moderation RPC 추가
+- 개인정보처리방침·이용약관·커뮤니티 운영정책·권리침해 문의·소개 페이지와 공통 footer 추가
+- 24시간 abuse key, 90일 비활성 익명 계정, 1년이 지난 삭제 콘텐츠·종료 처리 기록을 자동 파기하고 legal hold를 제외하는 retention API와 매분 실행되는 Supabase `pg_cron` job 추가
+- 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·실제 scheduler 최근 성공 상태와 정확한 `COMMUNITY_RETENTION_DAYS=365`를 확인하는 release gate 추가
+- workspace 밖의 지정 경로에 권한을 제한한 Supabase logical dump를 만드는 backup command 추가
+- 실제 local Supabase Auth·RLS·RPC와 Cloudflare test key로 관리자 read 권한, 작성자·관리자 삭제·복구, UUID 비공개, 제재·해제 audit와 legal hold 파기를 확인하는 Community 보안 통합 검사 추가
+- `/admin` 직접 접근과 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab을 제공하는 상태별 관리자 console 추가
+- 근거 없는 신고를 콘텐츠 변경 없이 종결하고 사유를 감사 기록에 남기는 신고 기각 조치 추가
+- 자동·관리자 숨김의 출처·사유·시각, 제목·본문·삭제 주체·사용자 대상까지 검색하는 운영 로그 filter 추가
+- 댓글별 신고, 서버 댓글 수 표시와 cursor 기반 댓글 더 보기 추가
+- 작성 제한 1·7·30일 preset과 접근 가능한 직접 종료 시각 입력 추가
+
+### 수정
+
+- 관리자 로그인 직후 동일 session의 신고 목록 요청을 중복 실행하지 않고 오래된 실패 응답이 최신 성공 화면을 덮어쓰지 않도록 수정
+- 신고 관리 조치 실패를 열린 확인 대화상자 안에서 안내하고 입력값과 키보드 초점을 유지하도록 수정
+- 작성자·관리자 삭제 주체를 구분해 모두 1년 동안 복구 가능하게 하고 작성자 삭제 복구에는 경고·관리 사유·이중 확인을 적용
+- 신고의 network-derived HMAC을 24시간 뒤 자동 숨김 집계에서 제외하고 정상 scheduler의 다음 1분 실행에서 scrub하도록 수정
+- 삭제 게시글의 댓글·신고·관리 조치별 독립 보존기한과 legal hold를 지킨 뒤 의존 그래프를 파기하고 자연 만료 제재도 종료 1년 뒤 파기하도록 수정
+- 숨김·복구·삭제·신고 기각·신고 기반 제재의 stale 전이를 409로 거부하고 중복 활성 제재를 만들지 않도록 수정
+- 익명 session token 갱신을 write 직전에 반영하고 401이면 만료 session을 지운 뒤 재시도 안내하도록 수정
+- 게시글·댓글 삭제 중 익명 session이 만료되면 처리되지 않은 Promise 대신 화면의 접근 가능한 오류로 재시도 방법을 안내하도록 수정
+- Turnstile script 오류·만료·unmount·15초 timeout에서 모든 대기 요청을 종료하고 화면에서 다시 불러올 수 있도록 수정
+- Community 429 응답에 남은 제한 시간과 `Retry-After`를 제공하고 잘못된 공개 write JSON을 안전한 400으로 반환하도록 수정
+
+### 문서
+
+- 공개 navigation에 노출하지 않는 `/admin` 직접 접근, 신고·숨김·삭제 대기·제재·운영 로그 tab과 1년 복구·보존 정책을 Community 관리자 운영화면 확장 설계로 기록
+- Mac에서 Windows로 작업 PC를 변경할 때 필요한 WSL2·GitHub SSH·Docker·Codex skill 복원 절차와 커뮤니티 구현 재개 지점 추가
+- Community MVP의 anonymous Auth, RLS, local migration, Seoul region과 Free plan backup 관련 공식 근거 추가
+- Cloudflare Turnstile token의 server-side 검증, 5분·1회 사용 제한과 fail-closed 처리 근거 추가
+- 관리자 OTP, 신고자 비공개, atomic moderation과 사용자 제한의 선택 이유·검증 이력 추가
+- 개인정보·약관 작성 근거와 Free plan 주간 암호화 backup·격리 복구 절차 추가
+
+### 보안
+
+- 관리자 JWT를 server에서 다시 검증하고 `community_admins` 등록 여부를 확인한 뒤에만 관리 API 허용
+- 관리자 email Magic Link 요청에도 Cloudflare Turnstile token을 전달해 Supabase CAPTCHA 정책을 일관되게 적용
+- 신규 Free 프로젝트의 이메일 템플릿 제한에 맞춰 6자리 OTP 입력 대신 기본 Magic Link 안내 흐름으로 변경
+- 신고자 신원과 관리자 인증정보를 API 응답·운영 로그에서 제외하고 browser role의 moderation RPC 실행 차단
+- 활성 사용자 제한을 게시글·댓글 작성 전에 검사하고 만료된 제한은 자동으로 제외
+- `develop`·`main` CI에 전체 test와 secret-shaped value scan을 추가하고 production secret 없는 일반 CI와 release gate 분리
+- 게시글·댓글 삭제에도 Turnstile과 actor/network 기준 10회/10분 제한을 적용
+- 모든 공개 변경 API가 Cloudflare가 덮어쓴 원점 전용 공유 헤더를 검증한 뒤에만 `CF-Connecting-IP`를 사용하고 production에서 local proxy mode를 거부하도록 강화
+- Release gate가 Cloudflare always-pass Turnstile key, 32자 미만 HMAC/proxy secret, Supabase URL·project ref 불일치와 비 production proxy mode를 거부하도록 강화
+
 ## [0.4.0] - 2026-09-02
 
 ### 추가
