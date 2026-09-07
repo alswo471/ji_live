@@ -31,7 +31,7 @@
 - 공개 사용자는 email, phone, real name 입력 없이 Supabase anonymous Auth만 사용한다.
 - 게시글은 plain text와 HTTPS external link 1개만 지원하고 image·file upload·rich HTML·URL shortener는 허용하지 않는다.
 - 모든 `INSERT`, `UPDATE`, `DELETE`는 application API를 통해서만 수행하며 browser의 Supabase direct write는 거부한다.
-- 원본 IP는 application DB에 저장하지 않고, daily HMAC abuse key는 생성 후 24시간 안에 파기한다.
+- 원본 IP는 application DB에 저장하지 않는다. Daily HMAC abuse key는 생성 24시간 뒤 집계에서 제외하고 정상 scheduler의 다음 1분 실행에서 scrub한다.
 - 일반 신고는 유효한 서로 다른 사용자와 abuse key가 각각 10개 누적될 때 임시 숨김한다. `privacy`와 `illegal` 신고는 1건에서 임시 숨김한다.
 - deleted content는 30일, 종료된 report·moderation 기록은 90일 후 파기한다.
 - Realtime, direct message, paid recommendation, user-to-user trading과 image upload는 이 plan에서 제외한다.

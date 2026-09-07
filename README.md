@@ -32,7 +32,7 @@
 | Framework / Build | Vinext, Vite 8                                                   |
 | UI / Chart        | shadcn/ui, Base UI, Lucide React, TradingView Lightweight Charts |
 | Data              | Hyperliquid Public API, Binance Public API, Bithumb Public API   |
-| Community backend | Supabase Postgres/Auth, Row Level Security                       |
+| Community backend | Supabase Postgres/Auth, Row Level Security, pg_cron              |
 | Abuse protection  | Cloudflare Turnstile, trusted proxy, daily HMAC rate key         |
 | Package manager   | pnpm                                                             |
 | Code quality      | Oxlint, Oxfmt                                                    |
@@ -95,7 +95,7 @@ Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활
 
 관리 화면은 public navigation에 노출하지 않으며 `/admin` 직접 접근 시 `/admin/community`로 이동합니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, Magic Link 요청은 Turnstile CAPTCHA를 통과해야 하며 새 사용자를 자동 생성하지 않습니다. 관리자는 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab에서 상태별 API를 사용합니다. 신고 대기에서는 근거 없는 신고를 콘텐츠 변경 없이 기각할 수 있고, 작성 제한은 1·7·30일 또는 직접 지정한 시각까지 설정합니다. 숨김 화면은 자동/관리자 조치의 출처·사유·시각을 보여 주고 운영 로그는 제목·본문·기간·대상·조치·삭제 주체를 함께 검색합니다. 관리자 응답은 신고자와 raw 사용자 UUID, abuse key, secret을 반환하지 않습니다.
 
-작성자와 관리자 삭제는 즉시 공개 API에서 제외하고 삭제 주체를 구분해 1년 동안 복구 가능한 삭제 대기로 보관합니다. 작성자 삭제 복구에는 관리 사유, 사용자 의사와 충돌할 수 있다는 경고, 이중 확인을 요구합니다. 부모 게시글은 댓글·신고·운영 기록 각각의 보존기한과 legal hold가 모두 끝난 뒤 의존 그래프와 함께 파기하고, 자연 만료된 제재도 종료 시점부터 1년 뒤 파기합니다. 신고에 사용한 network-derived HMAC은 신고 상태와 무관하게 생성 후 최대 24시간 안에 지웁니다. 1년은 법정 고정기간이 아니라 오조치 복구와 분쟁 대응을 위해 정한 내부 운영 정책입니다. 정식 삭제 요청은 개별 검토하며 진행 중인 분쟁·법령상 보존 사유는 별도 legal hold로 자동 파기에서 제외합니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치·신고 기각·신고 기반 작성 제한은 신고 처리와 감사 로그를 같은 database transaction으로 반영하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
+작성자와 관리자 삭제는 즉시 공개 API에서 제외하고 삭제 주체를 구분해 1년 동안 복구 가능한 삭제 대기로 보관합니다. 작성자 삭제 복구에는 관리 사유, 사용자 의사와 충돌할 수 있다는 경고, 이중 확인을 요구합니다. 부모 게시글은 댓글·신고·운영 기록 각각의 보존기한과 legal hold가 모두 끝난 뒤 의존 그래프와 함께 파기하고, 자연 만료된 제재도 종료 시점부터 1년 뒤 파기합니다. 신고에 사용한 network-derived HMAC은 생성 24시간 뒤 자동 숨김 집계에서 제외하며, 정상 운영에서는 매분 실행되는 Supabase `pg_cron` 작업이 다음 실행 때 값을 `null`로 scrub합니다. Scheduler 장애 중에는 물리 scrub이 늦어질 수 있으므로 공개 전 검사가 실제 job과 최근 성공 실행을 확인합니다. 1년은 법정 고정기간이 아니라 오조치 복구와 분쟁 대응을 위해 정한 내부 운영 정책입니다. 정식 삭제 요청은 개별 검토하며 진행 중인 분쟁·법령상 보존 사유는 별도 legal hold로 자동 파기에서 제외합니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치·신고 기각·신고 기반 작성 제한은 신고 처리와 감사 로그를 같은 database transaction으로 반영하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
 
 ```bash
 pnpm dlx supabase start
@@ -151,7 +151,7 @@ pnpm dlx supabase db lint
 pnpm dlx supabase stop
 ```
 
-Community 공개 전에는 실제 환경변수, 정확한 공개 정책값 `COMMUNITY_RETENTION_DAYS=365`, 개인정보처리방침에 표시할 처리·보유 고지, 자동 파기 scheduler 확인, 서울 region과 등록된 관리자를 확인합니다. 또한 production 신뢰 proxy mode와 32자 이상 proxy/HMAC secret, 실제 Turnstile key, Supabase URL과 project ref 일치를 검사합니다. Cloudflare 공식 always-pass test key, 개발용 `local` proxy mode 또는 서로 다른 Supabase project 조합은 공개 검사에서 거부합니다. 오류에는 현재 환경변수 값이나 secret을 출력하지 않습니다. 값이 없거나 정책과 다르면 검사가 실패하는 것이 정상입니다.
+Community 공개 전에는 실제 환경변수, 정확한 공개 정책값 `COMMUNITY_RETENTION_DAYS=365`, 개인정보처리방침에 표시할 처리·보유 고지, 서울 region과 등록된 관리자를 확인합니다. 자동 파기는 확인용 boolean을 신뢰하지 않고 Supabase의 `community-retention-every-minute` job이 활성 상태인지, 매분 schedule인지, 최근 3분 안에 성공했는지를 직접 조회합니다. 또한 production 신뢰 proxy mode와 32자 이상 proxy/HMAC secret, 실제 Turnstile key, Supabase URL과 project ref 일치를 검사합니다. Cloudflare 공식 always-pass test key, 개발용 `local` proxy mode 또는 서로 다른 Supabase project 조합은 공개 검사에서 거부합니다. 오류에는 현재 환경변수 값이나 secret을 출력하지 않습니다. 값이 없거나 정책과 다르면 검사가 실패하는 것이 정상입니다.
 
 ```bash
 pnpm check:community-release

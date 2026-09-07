@@ -4,6 +4,7 @@ import {
   assertCommunityReleaseConfig,
   verifyCommunityAdminConfigured,
   verifyCommunityProjectRegion,
+  verifyCommunityRetentionScheduler,
 } from '../../scripts/check-community-release.mjs';
 
 const VALID_ENV = Object.fromEntries(
@@ -27,8 +28,7 @@ Object.assign(VALID_ENV, {
   COMMUNITY_RETENTION_SECRET: 'retention-secret-at-least-32-characters',
   COMMUNITY_HMAC_SECRET: 'community-hmac-secret-at-least-32-characters',
   COMMUNITY_TRUSTED_PROXY_MODE: 'cloudflare',
-  COMMUNITY_TRUSTED_PROXY_SECRET:
-    'trusted-proxy-secret-at-least-32-characters',
+  COMMUNITY_TRUSTED_PROXY_SECRET: 'trusted-proxy-secret-at-least-32-characters',
   COMMUNITY_RETENTION_SCHEDULE_CONFIRMED: 'true',
 });
 
@@ -69,13 +69,68 @@ describe('community release gate', () => {
     ).toThrow('COMMUNITY_PROCESSING_RETENTION');
   });
 
-  it('requires the retention scheduler confirmation', () => {
+  it('does not treat an operator confirmation flag as scheduler evidence', () => {
     expect(() =>
       assertCommunityReleaseConfig({
         ...VALID_ENV,
         COMMUNITY_RETENTION_SCHEDULE_CONFIRMED: 'false',
       }),
-    ).toThrow('COMMUNITY_RETENTION_SCHEDULE_CONFIRMED');
+    ).not.toThrow();
+  });
+
+  it('verifies the installed retention cron job and its recent successful run', async () => {
+    const request = vi.fn(async () =>
+      Response.json({
+        jobName: 'community-retention-every-minute',
+        schedule: '* * * * *',
+        active: true,
+        lastStatus: 'succeeded',
+        lastFinishedAt: '2026-09-07T03:59:00.000Z',
+      }),
+    );
+
+    await expect(
+      verifyCommunityRetentionScheduler(
+        VALID_ENV,
+        request,
+        Date.parse('2026-09-07T04:00:00.000Z'),
+      ),
+    ).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledWith(
+      expect.stringContaining('/rest/v1/rpc/get_community_retention_health'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it.each([
+    [
+      'inactive',
+      {
+        jobName: 'community-retention-every-minute',
+        schedule: '* * * * *',
+        active: false,
+        lastStatus: 'succeeded',
+        lastFinishedAt: '2026-09-07T03:59:00.000Z',
+      },
+    ],
+    [
+      'stale',
+      {
+        jobName: 'community-retention-every-minute',
+        schedule: '* * * * *',
+        active: true,
+        lastStatus: 'succeeded',
+        lastFinishedAt: '2026-09-07T03:50:00.000Z',
+      },
+    ],
+  ])('rejects a %s retention scheduler', async (_case, health) => {
+    await expect(
+      verifyCommunityRetentionScheduler(
+        VALID_ENV,
+        async () => Response.json(health),
+        Date.parse('2026-09-07T04:00:00.000Z'),
+      ),
+    ).rejects.toThrow('retention scheduler');
   });
 
   it('requires the exact one-year community retention policy without exposing values', () => {

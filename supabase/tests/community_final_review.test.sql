@@ -81,12 +81,6 @@ insert into public.community_reports (
   id, reporter_id, reporter_abuse_key, reporter_abuse_key_expires_at,
   post_id, comment_id, reason, detail, status, created_at, resolved_at
 ) values
-  ('95000000-0000-4000-8000-000000000001', md5('final-reporter-1')::uuid,
-   repeat('a1', 32), '2026-09-04T13:00:00Z', '91000000-0000-4000-8000-000000000001', null,
-   'spam', '23시간 key', 'open', '2026-09-03T13:00:00Z', null),
-  ('95000000-0000-4000-8000-000000000002', md5('final-reporter-2')::uuid,
-   repeat('a2', 32), '2026-09-04T11:00:00Z', '91000000-0000-4000-8000-000000000001', null,
-   'spam', '25시간 key', 'open', '2026-09-03T11:00:00Z', null),
   ('95000000-0000-4000-8000-000000000003', md5('final-reporter-3')::uuid,
    repeat('a3', 32), '2025-09-04T12:00:00Z', null, '93000000-0000-4000-8000-000000000001',
    'spam', '오래된 의존 신고', 'resolved', '2025-09-03T12:00:00Z', '2025-09-03T12:00:00Z'),
@@ -343,6 +337,17 @@ select is(
   'hidden',
   'ten fresh distinct network keys still trigger automatic hiding'
 );
+
+insert into public.community_reports (
+  id, reporter_id, reporter_abuse_key, reporter_abuse_key_expires_at,
+  post_id, comment_id, reason, detail, status, created_at, resolved_at
+) values
+  ('95000000-0000-4000-8000-000000000001', md5('final-reporter-1')::uuid,
+   repeat('a1', 32), '2026-09-04T13:00:00Z', '91000000-0000-4000-8000-000000000001', null,
+   'spam', '23시간 key', 'open', '2026-09-03T13:00:00Z', null),
+  ('95000000-0000-4000-8000-000000000002', md5('final-reporter-2')::uuid,
+   repeat('a2', 32), '2026-09-04T11:00:00Z', '91000000-0000-4000-8000-000000000001', null,
+   'spam', '25시간 key', 'open', '2026-09-03T11:00:00Z', null);
 
 select lives_ok(
   $$ select public.run_community_retention('2026-09-04T12:00:00Z') $$,

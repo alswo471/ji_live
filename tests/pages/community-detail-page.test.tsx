@@ -1,6 +1,16 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import CommunityDetailPage from '@/app/community/[id]/page';
+
+const sessionMock = vi.hoisted(() => ({
+  invalidateSession: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/hooks/use-community-session', () => ({
   useCommunitySession: () => ({
@@ -9,13 +19,21 @@ vi.mock('@/hooks/use-community-session', () => ({
     error: null,
     ensureSession: vi.fn().mockResolvedValue('anonymous-token'),
     getAccessToken: vi.fn().mockResolvedValue('anonymous-token'),
-    invalidateSession: vi.fn().mockResolvedValue(undefined),
+    invalidateSession: sessionMock.invalidateSession,
   }),
 }));
 
-vi.mock('@/components/community/turnstile-challenge', () => ({
-  TurnstileChallenge: () => <div aria-label="사용자 확인" />,
-}));
+vi.mock('@/components/community/turnstile-challenge', async () => {
+  const React = await import('react');
+  return {
+    TurnstileChallenge: React.forwardRef((_props, ref) => {
+      React.useImperativeHandle(ref, () => ({
+        execute: vi.fn().mockResolvedValue('turnstile-token'),
+      }));
+      return <div aria-label="사용자 확인" />;
+    }),
+  };
+});
 
 const POST_ID = '30000000-0000-4000-8000-000000000001';
 const SECOND_POST_ID = '30000000-0000-4000-8000-000000000002';
@@ -52,6 +70,7 @@ describe('CommunityDetailPage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    sessionMock.invalidateSession.mockClear();
   });
 
   it('shows the total comment count and consumes every next cursor', async () => {
@@ -88,7 +107,9 @@ describe('CommunityDetailPage', () => {
       render(<CommunityDetailPage params={Promise.resolve({ id: POST_ID })} />);
     });
 
-    expect(await screen.findByRole('heading', { name: '댓글 42' })).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: '댓글 42' }),
+    ).toBeVisible();
     expect(screen.getByText('첫 페이지 댓글')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '댓글 더 보기' }));
 
@@ -128,7 +149,9 @@ describe('CommunityDetailPage', () => {
     );
     expect(screen.getByText('첫 페이지 댓글')).toBeVisible();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '댓글 더 보기' })).toBeEnabled(),
+      expect(
+        screen.getByRole('button', { name: '댓글 더 보기' }),
+      ).toBeEnabled(),
     );
   });
 
@@ -143,7 +166,9 @@ describe('CommunityDetailPage', () => {
         const url = urlOf(input);
         if (url.includes('cursor=stale-page')) return stalePage;
         if (url.endsWith(`/posts/${SECOND_POST_ID}`)) {
-          return Promise.resolve(Response.json({ ...post, id: SECOND_POST_ID }));
+          return Promise.resolve(
+            Response.json({ ...post, id: SECOND_POST_ID }),
+          );
         }
         if (url.endsWith(`/posts/${POST_ID}`)) {
           return Promise.resolve(Response.json(post));
@@ -174,11 +199,70 @@ describe('CommunityDetailPage', () => {
       );
     });
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '댓글 더 보기' })).toBeEnabled(),
+      expect(
+        screen.getByRole('button', { name: '댓글 더 보기' }),
+      ).toBeEnabled(),
     );
 
-    resolveStalePage(
-      Response.json({ items: [], nextCursor: null }),
+    resolveStalePage(Response.json({ items: [], nextCursor: null }));
+  });
+
+  it('shows recovery guidance when an expired session rejects post deletion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = urlOf(input);
+        if (init?.method === 'DELETE') {
+          return Promise.resolve(new Response(null, { status: 401 }));
+        }
+        if (url.endsWith(`/posts/${POST_ID}`)) {
+          return Promise.resolve(Response.json({ ...post, canDelete: true }));
+        }
+        return Promise.resolve(
+          Response.json({ items: [firstComment], nextCursor: null }),
+        );
+      }),
     );
+
+    await act(async () => {
+      render(<CommunityDetailPage params={Promise.resolve({ id: POST_ID })} />);
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '삭제' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '익명 세션이 만료되었습니다. 다시 시도해 주세요.',
+    );
+    expect(sessionMock.invalidateSession).toHaveBeenCalledOnce();
+  });
+
+  it('shows recovery guidance when an expired session rejects comment deletion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = urlOf(input);
+        if (init?.method === 'DELETE') {
+          return Promise.resolve(new Response(null, { status: 401 }));
+        }
+        if (url.endsWith(`/posts/${POST_ID}`)) {
+          return Promise.resolve(Response.json(post));
+        }
+        return Promise.resolve(
+          Response.json({
+            items: [{ ...firstComment, canDelete: true }],
+            nextCursor: null,
+          }),
+        );
+      }),
+    );
+
+    await act(async () => {
+      render(<CommunityDetailPage params={Promise.resolve({ id: POST_ID })} />);
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '삭제' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '익명 세션이 만료되었습니다. 다시 시도해 주세요.',
+    );
+    expect(sessionMock.invalidateSession).toHaveBeenCalledOnce();
   });
 });

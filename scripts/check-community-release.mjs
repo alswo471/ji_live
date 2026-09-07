@@ -22,7 +22,6 @@ const REQUIRED_PROCESSING_FACTS = [
   'COMMUNITY_PROCESSING_PURPOSE',
   'COMMUNITY_OVERSEAS_TRANSFER_METHOD',
   'COMMUNITY_PROCESSING_RETENTION',
-  'COMMUNITY_RETENTION_SCHEDULE_CONFIRMED',
 ];
 
 export function assertCommunityReleaseConfig(env) {
@@ -37,9 +36,6 @@ export function assertCommunityReleaseConfig(env) {
   }
   if (env.COMMUNITY_RETENTION_DAYS !== '365') {
     throw new Error('COMMUNITY_RETENTION_DAYS must be 365');
-  }
-  if (env.COMMUNITY_RETENTION_SCHEDULE_CONFIRMED !== 'true') {
-    throw new Error('COMMUNITY_RETENTION_SCHEDULE_CONFIRMED must be true');
   }
   let contact;
   let supabase;
@@ -122,9 +118,45 @@ export async function verifyCommunityAdminConfigured(env, request = fetch) {
   }
 }
 
+export async function verifyCommunityRetentionScheduler(
+  env,
+  request = fetch,
+  now = Date.now(),
+) {
+  assertCommunityReleaseConfig(env);
+  const response = await request(
+    `${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/get_community_retention_health`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SECRET_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    },
+  );
+  if (!response.ok) throw new Error('Unable to verify retention scheduler');
+  const health = await response.json();
+  const lastFinishedAt = Date.parse(health?.lastFinishedAt ?? '');
+  const expectedJob =
+    health?.jobName === 'community-retention-every-minute' &&
+    health?.schedule === '* * * * *' &&
+    health?.active === true &&
+    health?.lastStatus === 'succeeded';
+  const recentSuccess =
+    Number.isFinite(lastFinishedAt) &&
+    lastFinishedAt <= now + 60_000 &&
+    now - lastFinishedAt <= 180_000;
+  if (!expectedJob || !recentSuccess) {
+    throw new Error('Community retention scheduler is not healthy');
+  }
+}
+
 async function main() {
   await verifyCommunityProjectRegion(process.env);
   await verifyCommunityAdminConfigured(process.env);
+  await verifyCommunityRetentionScheduler(process.env);
   process.stdout.write('Community release configuration verified.\n');
 }
 

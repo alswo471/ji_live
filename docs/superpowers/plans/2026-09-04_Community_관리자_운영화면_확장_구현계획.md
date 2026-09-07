@@ -833,7 +833,7 @@ Expected: FAIL on missing admin console endpoints or deletion metadata before fi
 
 - [ ] **Step 4: Release gate의 1년 정책 검증 구현**
 
-`REQUIRED_RELEASE_ENV`에 `COMMUNITY_RETENTION_DAYS`를 추가하고 `assertCommunityReleaseConfig`가 정확히 문자열 `365`인지 확인한다. `COMMUNITY_PROCESSING_RETENTION` 고지값, `COMMUNITY_RETENTION_SCHEDULE_CONFIRMED=true`, 서울 region과 관리자 등록 검사는 그대로 유지한다.
+`REQUIRED_RELEASE_ENV`에 `COMMUNITY_RETENTION_DAYS`를 추가하고 `assertCommunityReleaseConfig`가 정확히 문자열 `365`인지 확인한다. `COMMUNITY_PROCESSING_RETENTION` 고지값, 서울 region과 관리자 등록 검사는 유지한다. 후속 최종 보완에서는 수동 `COMMUNITY_RETENTION_SCHEDULE_CONFIRMED` flag를 제거하고, service-role health RPC로 실제 `pg_cron` job의 활성 상태와 최근 성공 실행을 확인하도록 강화했다.
 
 - [ ] **Step 5: 개인정보·운영·프로젝트 문서 동기화**
 
@@ -895,7 +895,7 @@ Expected: working tree clean, six implementation commits visible, branch remains
 
 ## 최종 전체 검토 수정 부록
 
-- [x] 신고 abuse key를 최대 24시간 내 scrub하고 23/25시간 경계를 검증했다.
+- [x] 신고 abuse key를 24시간 뒤 집계에서 제외하고 정상 scheduler의 다음 1분 실행에서 scrub하며 23/25시간 경계를 검증했다.
 - [x] 삭제 부모의 댓글·신고·관리 조치·legal hold 의존 그래프와 자연 만료 제재의 파기 기준을 검증했다.
 - [x] 신고 기각, report-aware atomic moderation, stale transition 409와 중복 활성 제재 거부를 구현했다.
 - [x] 숨김 출처·사유·시각, audit snapshot/삭제 주체/user filter와 제한 직접 종료 시각을 구현했다.
@@ -903,6 +903,15 @@ Expected: working tree clean, six implementation commits visible, branch remains
 - [x] 429 재시도 metadata, malformed JSON 400, release config 검증과 Cloudflare→Oracle 원점 공유 비밀 경계를 구현했다.
 - [x] README, CHANGELOG, 운영 문서, 프로젝트 소개·히스토리·참고자료와 두 설계를 현재 동작에 맞췄다.
 - [x] 최종 검증: Vitest `67 files / 482 passed / 5 skipped`, typecheck·lint·build 성공, fresh reset에서 DB lint 오류 0건과 pgTAP `4 files / 123 tests`, opt-in integration 파일 `6/6`(live local 5건 + calendar 1건), release gate `27/27` 통과.
+
+### 2026-09-07 release blocker 후속 보완
+
+- [x] 확인용 scheduler boolean을 제거하고 매분 실행되는 Supabase `pg_cron` forward migration을 추가했다.
+- [x] Service role 전용 health RPC와 release gate가 정확한 job 이름·schedule·활성 상태·최근 3분 내 성공 실행을 직접 확인한다.
+- [x] HMAC의 24시간 집계 제외와 scheduler 기반 물리 scrub 시점을 구분해 문서의 과도한 보장을 바로잡았다.
+- [x] 게시글·댓글 삭제의 만료 session 오류를 화면에서 알리고 session 초기화 뒤 재시도할 수 있게 했다.
+- [x] 23시간·25시간 pgTAP fixture가 wall clock과 충돌하지 않도록 retention 호출 직전에 생성한다.
+- [x] 전체 Vitest `67 files / 487 passed / 6 skipped`, typecheck, lint, build, fresh database reset·lint, pgTAP `4 files / 123 tests`, opt-in integration `7/7`, release gate `30/30`과 실제 local cron `succeeded` 실행 이력을 재검증했다.
 
 기존 deferred minor인 유효 base64 cursor tuple의 필드별 세부 test와 pending moderation 입력 비활성화/progress label은 이번 수정 범위에서도 독립적이어서 그대로 보류한다. 실제 Oracle·Cloudflare staging smoke와 Magic Link 전달 확인은 외부 배포 환경·운영 자격증명이 없어 완료로 표시하지 않는다.
 

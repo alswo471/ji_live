@@ -34,6 +34,7 @@ export default function CommunityDetailPage({
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const session = useCommunitySession();
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
@@ -114,6 +115,50 @@ export default function CommunityDetailPage({
     }
   }
 
+  function deletionErrorMessage(error: unknown) {
+    if (
+      error instanceof Error &&
+      error.message === '익명 세션이 만료되었습니다. 다시 시도해 주세요.'
+    ) {
+      return error.message;
+    }
+    return '삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  async function deletePost() {
+    if (!challengeRef.current) return;
+    setActionError(null);
+    try {
+      await communityWrite(
+        `/api/community/posts/${id}`,
+        'DELETE',
+        null,
+        session,
+        challengeRef.current,
+      );
+      location.href = '/community';
+    } catch (error) {
+      setActionError(deletionErrorMessage(error));
+    }
+  }
+
+  async function deleteComment(commentId: string) {
+    if (!challengeRef.current) return;
+    setActionError(null);
+    try {
+      await communityWrite(
+        `/api/community/comments/${commentId}`,
+        'DELETE',
+        null,
+        session,
+        challengeRef.current,
+      );
+      await reload();
+    } catch (error) {
+      setActionError(deletionErrorMessage(error));
+    }
+  }
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_0%,var(--brand-soft),transparent_32%)] opacity-60" />
@@ -166,17 +211,7 @@ export default function CommunityDetailPage({
                     <Button
                       variant="destructive"
                       className="min-h-11"
-                      onClick={async () => {
-                        if (!challengeRef.current) return;
-                        await communityWrite(
-                          `/api/community/posts/${id}`,
-                          'DELETE',
-                          null,
-                          session,
-                          challengeRef.current,
-                        );
-                        location.href = '/community';
-                      }}
+                      onClick={() => void deletePost()}
                     >
                       삭제
                     </Button>
@@ -198,22 +233,8 @@ export default function CommunityDetailPage({
                   />
                   <CommentList
                     comments={comments}
-                    onReport={(input) =>
-                      write('/api/community/reports', input)
-                    }
-                    onDelete={(commentId) => {
-                      void (async () => {
-                        if (!challengeRef.current) return;
-                        await communityWrite(
-                          `/api/community/comments/${commentId}`,
-                          'DELETE',
-                          null,
-                          session,
-                          challengeRef.current,
-                        );
-                        await reload();
-                      })();
-                    }}
+                    onReport={(input) => write('/api/community/reports', input)}
+                    onDelete={(commentId) => void deleteComment(commentId)}
                   />
                   {commentError ? (
                     <p
@@ -231,7 +252,9 @@ export default function CommunityDetailPage({
                       disabled={commentsLoadingMore}
                       onClick={() => void loadMoreComments()}
                     >
-                      {commentsLoadingMore ? '댓글 불러오는 중…' : '댓글 더 보기'}
+                      {commentsLoadingMore
+                        ? '댓글 불러오는 중…'
+                        : '댓글 더 보기'}
                     </Button>
                   ) : null}
                 </div>
@@ -239,6 +262,14 @@ export default function CommunityDetailPage({
               <div className="mt-3 rounded-2xl border bg-card p-4">
                 <TurnstileChallenge ref={challengeRef} />
               </div>
+              {actionError ? (
+                <p
+                  role="alert"
+                  className="mt-3 text-sm font-medium text-destructive"
+                >
+                  {actionError}
+                </p>
+              ) : null}
             </>
           )}
         </div>

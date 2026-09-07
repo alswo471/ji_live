@@ -55,3 +55,11 @@ Backup 자체가 복구 가능성을 보장하지 않는다. 복구 테스트 �
 - 복구된 삭제 대기 row의 `deletion_source`, `deleted_at`, `purge_at`과 legal hold 연결을 표본 확인하고, 백업에 남았다는 이유만으로 파기 시점이 지난 데이터를 공개 상태로 되돌리지 않는다.
 - `/admin`의 삭제 대기에서 작성자·관리자 삭제가 구분되는지, 작성자 삭제 복구가 경고·관리 사유·이중 확인을 거치는지, 복구 후 공개 상세가 다시 조회되는지 격리 환경에서 확인한다.
 - 실제 장애 복구 전에 최신 Supabase 공식 restore 절차와 현재 plan 제약을 다시 확인한다.
+
+## 자동 파기 scheduler 운영
+
+- Migration은 Supabase `pg_cron`에 `community-retention-every-minute` job을 등록하고 매분 `run_community_retention(now())`을 호출한다.
+- Network-derived HMAC은 생성 24시간 뒤 집계에서 제외된다. 정상 scheduler에서는 만료 뒤 다음 1분 실행에 `null`로 scrub되지만, database 또는 scheduler 장애 중에는 물리 scrub이 늦어질 수 있다.
+- `pnpm check:community-release`는 운영자가 적은 확인용 flag를 신뢰하지 않는다. Service role 전용 health RPC로 job 이름, `* * * * *` schedule, 활성 상태와 최근 3분 안의 성공 실행을 직접 검증한다.
+- 복구 후에는 migration 적용 여부만 보지 말고 `cron.job`의 활성 job과 `cron.job_run_details`의 최근 `succeeded` 실행을 확인한 뒤 Community 공개를 재개한다.
+- Health RPC와 `cron` metadata는 `service_role`만 조회할 수 있으며 browser·익명·일반 인증 사용자에게 공개하지 않는다.

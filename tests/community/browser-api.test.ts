@@ -3,7 +3,9 @@ import { communityWrite } from '@/lib/community/browser-api';
 import type { CommunitySessionState } from '@/hooks/use-community-session';
 import type { TurnstileChallengeHandle } from '@/components/community/turnstile-challenge';
 
-function session(overrides: Partial<CommunitySessionState> = {}): CommunitySessionState {
+function session(
+  overrides: Partial<CommunitySessionState> = {},
+): CommunitySessionState {
   return {
     status: 'ready',
     accessToken: 'stale-token',
@@ -28,7 +30,13 @@ describe('communityWrite', () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ id: 'post' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await communityWrite('/api/community/posts', 'POST', { body: '내용' }, auth, human);
+    await communityWrite(
+      '/api/community/posts',
+      'POST',
+      { body: '내용' },
+      auth,
+      human,
+    );
 
     expect(auth.getAccessToken).toHaveBeenCalledTimes(1);
     expect(auth.ensureSession).not.toHaveBeenCalled();
@@ -53,8 +61,14 @@ describe('communityWrite', () => {
     );
 
     await expect(
-      communityWrite('/api/community/posts/post-id', 'DELETE', null, auth, human),
-    ).rejects.toThrow('community write failed');
+      communityWrite(
+        '/api/community/posts/post-id',
+        'DELETE',
+        null,
+        auth,
+        human,
+      ),
+    ).rejects.toThrow('익명 세션이 만료되었습니다. 다시 시도해 주세요.');
 
     expect(fetch).toHaveBeenCalledWith(
       '/api/community/posts/post-id',

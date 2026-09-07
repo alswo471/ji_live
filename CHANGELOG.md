@@ -24,8 +24,8 @@
 - 신고 queue에서 콘텐츠 숨김·복원·삭제와 작성자 기간 제한을 수행하는 관리 API 추가
 - 콘텐츠 조치·신고 해결·감사 로그를 하나의 database transaction으로 처리하는 moderation RPC 추가
 - 개인정보처리방침·이용약관·커뮤니티 운영정책·권리침해 문의·소개 페이지와 공통 footer 추가
-- 24시간 abuse key, 90일 비활성 익명 계정, 1년이 지난 삭제 콘텐츠·종료 처리 기록을 자동 파기하고 legal hold를 제외하는 scheduler 전용 retention API 추가
-- 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·scheduler와 정확한 `COMMUNITY_RETENTION_DAYS=365`를 확인하는 release gate 추가
+- 24시간 abuse key, 90일 비활성 익명 계정, 1년이 지난 삭제 콘텐츠·종료 처리 기록을 자동 파기하고 legal hold를 제외하는 retention API와 매분 실행되는 Supabase `pg_cron` job 추가
+- 서울 Supabase region·관리자·HTTPS 문의처·처리 사실·실제 scheduler 최근 성공 상태와 정확한 `COMMUNITY_RETENTION_DAYS=365`를 확인하는 release gate 추가
 - workspace 밖의 지정 경로에 권한을 제한한 Supabase logical dump를 만드는 backup command 추가
 - 실제 local Supabase Auth·RLS·RPC와 Cloudflare test key로 관리자 read 권한, 작성자·관리자 삭제·복구, UUID 비공개, 제재·해제 audit와 legal hold 파기를 확인하는 Community 보안 통합 검사 추가
 - `/admin` 직접 접근과 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab을 제공하는 상태별 관리자 console 추가
@@ -39,10 +39,11 @@
 - 관리자 로그인 직후 동일 session의 신고 목록 요청을 중복 실행하지 않고 오래된 실패 응답이 최신 성공 화면을 덮어쓰지 않도록 수정
 - 신고 관리 조치 실패를 열린 확인 대화상자 안에서 안내하고 입력값과 키보드 초점을 유지하도록 수정
 - 작성자·관리자 삭제 주체를 구분해 모두 1년 동안 복구 가능하게 하고 작성자 삭제 복구에는 경고·관리 사유·이중 확인을 적용
-- 신고의 network-derived HMAC을 최대 24시간 안에 제거하면서 만료 전 서로 다른 network 집계만 자동 숨김에 사용하도록 수정
+- 신고의 network-derived HMAC을 24시간 뒤 자동 숨김 집계에서 제외하고 정상 scheduler의 다음 1분 실행에서 scrub하도록 수정
 - 삭제 게시글의 댓글·신고·관리 조치별 독립 보존기한과 legal hold를 지킨 뒤 의존 그래프를 파기하고 자연 만료 제재도 종료 1년 뒤 파기하도록 수정
 - 숨김·복구·삭제·신고 기각·신고 기반 제재의 stale 전이를 409로 거부하고 중복 활성 제재를 만들지 않도록 수정
 - 익명 session token 갱신을 write 직전에 반영하고 401이면 만료 session을 지운 뒤 재시도 안내하도록 수정
+- 게시글·댓글 삭제 중 익명 session이 만료되면 처리되지 않은 Promise 대신 화면의 접근 가능한 오류로 재시도 방법을 안내하도록 수정
 - Turnstile script 오류·만료·unmount·15초 timeout에서 모든 대기 요청을 종료하고 화면에서 다시 불러올 수 있도록 수정
 - Community 429 응답에 남은 제한 시간과 `Retry-After`를 제공하고 잘못된 공개 write JSON을 안전한 400으로 반환하도록 수정
 

@@ -177,6 +177,23 @@ describe.runIf(runIntegration)('local community security integration', () => {
     );
   }, 60_000);
 
+  it('installs an active minute retention job and exposes service-only health', async () => {
+    const health = await service.rpc('get_community_retention_health');
+    const anonymousHealth = await actors[0].client.rpc(
+      'get_community_retention_health',
+    );
+
+    expect(health.error).toBeNull();
+    expect(health.data).toMatchObject({
+      jobName: 'community-retention-every-minute',
+      schedule: '* * * * *',
+      active: true,
+    });
+    expect(health.data).not.toHaveProperty('command');
+    expect(anonymousHealth.error).not.toBeNull();
+    expect(anonymousHealth.data).toBeNull();
+  });
+
   it('rejects anonymous and unregistered users from every admin read API while allowing the configured admin', async () => {
     const handlers = [
       {
