@@ -59,7 +59,7 @@ export default function CommunityPage() {
                   onLoadMore={() => void posts.loadMore()}
                 />
               </section>
-              <aside className="lg:sticky lg:top-24">
+              <aside className="lg:sticky lg:top-36">
                 <PostForm
                   onSubmit={async (input) => {
                     if (!challengeRef.current)
