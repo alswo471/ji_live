@@ -8,6 +8,9 @@
 
 ### 추가
 
+- 시장별 URL 메뉴와 한글·영문명·심볼 검색 및 검색 초기화 추가
+- ETF·뉴스 준비 화면과 시장 심리 데이터 미연결 안내 추가 (실제 데이터 연동 전)
+- 큰 홍보 문구 대신 시장 요약·종목 목록·가격 기준 안내 중심으로 메인 화면 구성
 - 익명 커뮤니티의 게시글·댓글·신고·관리 table과 API-only write를 위한 RLS 보안 정책 추가
 - 사용자와 daily abuse key를 함께 집계하는 atomic rate limit 및 10명 신고·긴급 신고 임시 숨김 RPC 추가
 - anonymous JWT 검증, Turnstile server 검증과 원본 IP를 저장하지 않는 daily HMAC abuse key 추가
