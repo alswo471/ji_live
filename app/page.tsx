@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { SentimentCard } from '@/components/market/sentiment-card';
+import { ReferenceFxGrid } from '@/components/market/reference-fx-grid';
 import Link from 'next/link';
 import { IndicatorGrid } from '@/components/market/indicator-grid';
 import { MarketStatusBar } from '@/components/market/market-status-bar';
@@ -90,6 +91,7 @@ export default function Home() {
               </output>
             )}
           </section>
+          <ReferenceFxGrid />
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_250px]">
             <section className="min-w-0" aria-label={label + ' 목록'}>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
