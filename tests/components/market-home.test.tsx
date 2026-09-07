@@ -130,7 +130,7 @@ describe('마켓 탐색', () => {
       screen.getByRole('link', { name: /삼성전자 상세 보기/ }),
     ).toBeInTheDocument();
   });
-  it.each(['etf', 'news'])(
+  it.each(['news'])(
     '미연결 %s 메뉴에 종목을 섞어 표시하지 않는다',
     async (section) => {
       window.history.replaceState({}, '', '/?market=' + section);

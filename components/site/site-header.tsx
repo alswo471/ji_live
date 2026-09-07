@@ -82,7 +82,7 @@ export function SiteHeader({
             className="flex min-h-11 items-center gap-1 border-b-2 border-transparent px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:border-primary aria-[current=page]:text-primary"
           >
             {section.label}
-            {(section.value === 'etf' || section.value === 'news') && (
+            {section.value === 'news' && (
               <span className="rounded bg-muted px-1 text-[10px] font-normal">
                 준비
               </span>

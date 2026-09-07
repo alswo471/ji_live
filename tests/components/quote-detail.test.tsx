@@ -88,12 +88,20 @@ describe('QuoteDetail', () => {
     expect(screen.queryByText('전일 종가')).not.toBeInTheDocument();
     expect(screen.getByText('비교 기준')).toBeVisible();
     expect(screen.getByText('24시간 전')).toBeVisible();
-    expect(screen.getByText('Hyperliquid 파생상품')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('USDT/KRW 환산')).not.toBeInTheDocument();
+    const evidenceButton = screen.getByRole('button', { name: '이 종목의 데이터 근거' });
+    await userEvent.click(evidenceButton);
+    const evidenceDialog = await screen.findByRole('dialog', { name: '데이터 근거' });
+    expect(within(evidenceDialog).getByText('Hyperliquid 파생상품')).toBeVisible();
     expect(screen.getByText('USDT/KRW 환산')).toBeVisible();
-    expect(screen.getByText('추종상품 거래량')).toBeVisible();
     expect(screen.getByText(/실제 KRX·NXT 거래량이 아닙니다/)).toBeVisible();
     expect(screen.getByText(/실제 주식 가격이 아닌 해외 파생상품 기반 참고 추정가/)).toBeVisible();
     expect(screen.getByText('기준 시각')).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(evidenceButton).toHaveFocus();
+    expect(screen.getByText('추종상품 거래량')).toBeVisible();
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['1분', '15분', '1시간', '4시간', '일봉', '주봉', '월봉']);
     expect(screen.getByRole('tab', { name: '1분' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: '1분' })).toHaveAttribute('tabindex', '0');
@@ -194,7 +202,7 @@ describe('QuoteDetail', () => {
     expect(screen.queryByText('$3,472.18')).not.toBeInTheDocument();
   });
 
-  it('합성환율에는 주식 파생 면책 대신 FX 계산 근거를 표시한다', () => {
+  it('합성환율에는 주식 파생 면책 대신 FX 계산 근거를 표시한다', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
 
     render(<QuoteDetail initialQuote={{
@@ -214,6 +222,7 @@ describe('QuoteDetail', () => {
       sourceLabel: 'Bithumb KRW-USDT',
     }} />);
 
+    await userEvent.click(screen.getByRole('button', { name: '이 종목의 데이터 근거' }));
     expect(screen.getByText(/Bithumb KRW-USDT 거래상품을 기준으로 계산한 합성환율/)).toBeVisible();
     expect(screen.getByText(/은행 고시환율과 다를 수 있습니다/)).toBeVisible();
     expect(screen.queryByText(/실제 주식 가격이 아닌 해외 파생상품/)).not.toBeInTheDocument();

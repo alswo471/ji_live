@@ -9,6 +9,8 @@ import { PriceChange } from './price-change';
 import { QuoteBadge } from './quote-badge';
 import { SiteFooter } from '@/components/site/site-footer';
 import { SentimentCard } from './sentiment-card';
+import { OfficialDailyPanel } from './official-daily-panel';
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { useDisplayPreferences } from '@/hooks/use-display-preferences';
 import { useMarketCandles } from '@/hooks/use-market-candles';
 import { useMarketDashboard } from '@/hooks/use-market-dashboard';
@@ -107,8 +109,19 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
           <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1"><h1 className="text-3xl font-black tracking-[-.05em] sm:text-5xl">{displayName}</h1><span className="font-mono text-sm font-semibold text-muted-foreground">{quote.symbol}</span></div>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2"><p className="font-mono text-3xl font-black tabular-nums sm:text-4xl">{formatNumber(quote.price, quote.currency)}</p><PriceChange value={quote.changeRate} direction={quote.changeDirection} className="text-base sm:text-lg" /></div>
           <div className="mt-3"><QuoteBadge quote={quote} /></div>
+          <p className="mt-2 text-xs text-muted-foreground">공급자 기준 · {formatAsOf(quote.asOf)}</p>
         </fieldset>
 
+        <section className="mt-8" aria-labelledby="price-chart-heading">
+          <div className="mb-4"><p className="flex items-center gap-2 text-xs font-bold text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" />PRICE &amp; VOLUME</p><h2 id="price-chart-heading" className="mt-1 text-xl font-black">가격·거래량 차트</h2></div>
+          <div className="mb-3 max-w-full overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex min-w-max gap-2 rounded-xl border bg-card/60 p-1" role="tablist" aria-label="차트 봉 단위 선택">{RANGES.map((item, index) => <button key={item.value} id={`candle-tab-${item.value}`} type="button" role="tab" tabIndex={range === item.value ? 0 : -1} aria-selected={range === item.value} aria-controls="market-price-chart" onClick={() => setRange(item.value)} onKeyDown={(event) => moveRangeFocus(event, index)} className={`min-h-11 min-w-14 rounded-lg px-3 text-sm font-bold transition-colors ${range === item.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{item.label}</button>)}</div></div>
+          <div id="market-price-chart" role="tabpanel" aria-labelledby={`candle-tab-${range}`}>
+            <MarketChart candles={candles} interval={range} label={`${displayName} 가격 차트`} currency={quote.currency} theme={preferences.theme} state={state} message={message} />
+          </div>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">상승 캔들은 빨강, 하락 캔들은 파랑으로 표시합니다. 색상과 함께 상단 OHLC 수치를 확인하세요.</p>
+        </section>
+
+        <p className="mt-6 text-xs font-semibold text-muted-foreground">선택한 봉의 최근 수치 · {RANGES.find((item) => item.value === range)?.label}</p>
         <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <DataPoint label="시가" value={formatNumber(latest?.open ?? null, quote.currency)} />
           <DataPoint label="고가" value={formatNumber(latest?.high ?? null, quote.currency)} />
@@ -120,8 +133,14 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
           <DataPoint label={volumeLabel} value={formatVolume(latest?.volume ?? null)} />
         </dl>
 
-        <section className="mt-6 rounded-2xl border bg-card/60 p-4 sm:p-5" aria-labelledby="quote-evidence-heading">
-          <h2 id="quote-evidence-heading" className="text-sm font-black">데이터 근거</h2>
+        <Dialog>
+          <DialogTrigger className="mt-3 inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">이 종목의 데이터 근거</DialogTrigger>
+          <DialogContent showCloseButton={false} className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle>데이터 근거</DialogTitle>
+            <DialogClose className="min-h-11 rounded-lg border px-4 text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">닫기</DialogClose>
+          </div>
+          <DialogDescription>{displayName}의 공급자와 계산 기준입니다. 차트 수치는 선택한 봉 기준입니다.</DialogDescription>
           <dl className="mt-3 grid gap-3 sm:grid-cols-3">
             <DataPoint label="공급자" value={quote.sourceLabel ?? '출처 확인 중'} />
             <DataPoint label="기준 시각" value={formatAsOf(quote.asOf)} />
@@ -143,16 +162,9 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
           {quote.priceKind === 'derived-estimate' && quote.assetClass === 'fx' && <p className="mt-4 rounded-xl border border-sky-500/30 bg-sky-400/10 p-3 text-xs leading-5 text-sky-950 dark:text-sky-100">
             Bithumb KRW-USDT 거래상품을 기준으로 계산한 합성환율입니다. 은행 고시환율과 다를 수 있습니다.
           </p>}
-        </section>
-
-        <section className="mt-8" aria-labelledby="price-chart-heading">
-          <div className="mb-4"><p className="flex items-center gap-2 text-xs font-bold text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" />PRICE &amp; VOLUME</p><h2 id="price-chart-heading" className="mt-1 text-xl font-black">가격·거래량 차트</h2></div>
-          <div className="mb-3 max-w-full overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex min-w-max gap-2 rounded-xl border bg-card/60 p-1" role="tablist" aria-label="차트 봉 단위 선택">{RANGES.map((item, index) => <button key={item.value} id={`candle-tab-${item.value}`} type="button" role="tab" tabIndex={range === item.value ? 0 : -1} aria-selected={range === item.value} aria-controls="market-price-chart" onClick={() => setRange(item.value)} onKeyDown={(event) => moveRangeFocus(event, index)} className={`min-h-11 min-w-14 rounded-lg px-3 text-sm font-bold transition-colors ${range === item.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>{item.label}</button>)}</div></div>
-          <div id="market-price-chart" role="tabpanel" aria-labelledby={`candle-tab-${range}`}>
-            <MarketChart candles={candles} interval={range} label={`${displayName} 가격 차트`} currency={quote.currency} theme={preferences.theme} state={state} message={message} />
-          </div>
-          <p className="mt-3 text-xs leading-5 text-muted-foreground">상승 캔들은 빨강, 하락 캔들은 파랑으로 표시합니다. 색상과 함께 상단 OHLC 수치를 확인하세요.</p>
-        </section>
+          </DialogContent>
+        </Dialog>
+        {quote.assetClass === 'kr-stock' && <div className="mt-6"><OfficialDailyPanel kind="stock" symbol={quote.symbol} /></div>}
       </div>
       {quote.symbol === 'BTC' && <div className="px-4 pb-8 sm:px-6 lg:px-8"><div className="max-w-sm"><SentimentCard /></div></div>}
       <SiteFooter />

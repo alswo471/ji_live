@@ -5,6 +5,7 @@ import { SiteFooter } from '@/components/site/site-footer';
 import { ReferenceFxGrid } from '@/components/market/reference-fx-grid';
 import { SentimentCard } from '@/components/market/sentiment-card';
 import { IndicatorGrid } from '@/components/market/indicator-grid';
+import { OfficialDailyPanel } from '@/components/market/official-daily-panel';
 import { useMarketDashboard } from '@/hooks/use-market-dashboard';
 import { useDisplayPreferences } from '@/hooks/use-display-preferences';
 
@@ -27,9 +28,10 @@ export default function IndicatorsPage() {
           <div>
             <h1 className="text-2xl font-bold">시장 지표</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              환율, 금 연동 상품과 시장별 투자 심리를 확인하세요.
+              주가지수, 환율, 금과 시장 심리를 종류별로 확인하세요.
             </p>
           </div>
+          <OfficialDailyPanel kind="indices" />
           <ReferenceFxGrid />
           <section aria-label="금 연동 상품">
             <h2 className="mb-3 text-lg font-bold">금 · PAXG</h2>
@@ -48,29 +50,12 @@ export default function IndicatorsPage() {
           </section>
           <section aria-label="시장별 공포·탐욕">
             <h2 className="mb-3 text-lg font-bold">공포·탐욕 지수</h2>
-            <div className="grid items-start gap-4 md:grid-cols-3">
+            <div className="max-w-sm">
               <SentimentCard />
-              {['한국 주식', '미국 주식'].map((market) => (
-                <article key={market} className="rounded-xl border bg-card p-5">
-                  <h3 className="text-sm font-bold">{market}</h3>
-                  <p className="mt-6 font-semibold text-muted-foreground">
-                    데이터 미연동
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    공개 제공이 가능한 출처를 검토 중입니다. 비트코인 지수나
-                    임의의 점수로 대체하지 않습니다.
-                  </p>
-                </article>
-              ))}
             </div>
+            <p className="mt-3 text-sm text-muted-foreground">한국·미국 주식 심리 지표는 데이터 미연동입니다. 비트코인 지수로 대체하지 않습니다.</p>
           </section>
-          <section className="rounded-xl border bg-card p-5">
-            <h2 className="text-sm font-bold">주가지수</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              코스피·나스닥 지수는 데이터 미연동 상태입니다. ETF·파생상품 가격을
-              실제 지수로 표시하지 않습니다.
-            </p>
-          </section>
+          <p className="text-sm text-muted-foreground">나스닥 지수는 데이터 미연동입니다. ETF·파생상품을 실제 지수로 표시하지 않습니다.</p>
         </div>
         <SiteFooter />
       </div>
