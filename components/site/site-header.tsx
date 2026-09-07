@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { RefreshCw, TrendingUp } from 'lucide-react';
+import Image from 'next/image';
+import { RefreshCw } from 'lucide-react';
 import { DisplayControls } from '@/components/market/display-controls';
 import { Button } from '@/components/ui/button';
 import { useDisplayPreferences } from '@/hooks/use-display-preferences';
@@ -13,7 +14,7 @@ export function SiteHeader({
   onRefresh,
   marketSection,
 }: {
-  current: 'market' | 'community';
+  current: 'market' | 'community' | 'indicators';
   refreshing?: boolean;
   onRefresh?: () => void;
   marketSection?: MarketSection;
@@ -27,9 +28,16 @@ export function SiteHeader({
           <Link
             href="/"
             aria-label="지투라이브 마켓 홈"
-            className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <TrendingUp aria-hidden="true" className="size-5" />
+            <Image
+              src="/brand/g2-b2.png"
+              alt=""
+              width={48}
+              height={48}
+              unoptimized
+              className="size-full object-cover"
+            />
           </Link>
           <div className="min-w-0">
             <p className="truncate text-[10px] font-bold tracking-[.2em] text-primary">
@@ -81,6 +89,13 @@ export function SiteHeader({
             )}
           </a>
         ))}
+        <Link
+          href="/indicators"
+          aria-current={current === 'indicators' ? 'page' : undefined}
+          className="flex min-h-11 items-center border-b-2 border-transparent px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:border-primary aria-[current=page]:text-primary"
+        >
+          시장 지표
+        </Link>
         {communityEnabled && (
           <Link
             href="/community"

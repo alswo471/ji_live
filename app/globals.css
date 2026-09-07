@@ -156,6 +156,15 @@ body {
 }
 
 .quote-flash-rise { animation: quote-flash-rise 400ms ease-out; }
+.market-ticker-track { display: flex; width: max-content; min-width: 200%; animation: market-ticker-scroll 45s linear infinite; }
+.market-ticker-group { display: flex; flex: 1 0 auto; align-items: center; justify-content: space-around; gap: 3rem; padding: 0 1.5rem; min-height: 44px; white-space: nowrap; }
+@keyframes market-ticker-scroll { to { transform: translateX(-50%); } }
+.market-ticker:hover .market-ticker-track { animation-play-state: paused; }
+.market-ticker:focus-within .market-ticker-track { animation: none; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .market-ticker-track { animation: none; min-width: 100%; }
+  .market-ticker-copy { display: none; }
+}
 .quote-flash-fall { animation: quote-flash-fall 400ms ease-out; }
 
 @media (prefers-reduced-motion: reduce) {

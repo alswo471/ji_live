@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef } from 'react';
-import { MessagesSquare } from 'lucide-react';
+import Link from 'next/link';
+import { PenLine, ShieldCheck } from 'lucide-react';
 import { CommunityFeed } from '@/components/community/community-feed';
 import { PostForm } from '@/components/community/post-form';
 import {
@@ -22,24 +23,27 @@ export default function CommunityPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_0%,var(--brand-soft),transparent_32%)] opacity-60" />
-      <div className="relative mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background/80">
-        <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur-xl">
+      <div className="mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background">
+        <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-xl">
           <SiteHeader current="community" />
         </header>
-        <div className="mx-auto max-w-5xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
-          <section className="mb-8">
-            <p className="flex items-center gap-2 text-xs font-bold tracking-[.16em] text-primary">
-              <MessagesSquare aria-hidden="true" className="size-4" /> MARKET
-              COMMUNITY
-            </p>
-            <h1 className="mt-2 text-3xl font-black tracking-[-.05em] sm:text-5xl">
-              시장을 같이 읽는 곳
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              시장 정보와 의견을 익명으로 나누세요. 개인정보·불법 콘텐츠·금전
-              요구는 금지됩니다.
-            </p>
+        <div className="px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+          <section className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">커뮤니티</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                시장 이야기와 궁금한 점을 익명으로 나누세요.
+              </p>
+            </div>
+            {enabled && (
+              <a
+                href="#community-compose"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <PenLine aria-hidden="true" className="size-4" />
+                글쓰기
+              </a>
+            )}
           </section>
           {!enabled ? (
             <div className="rounded-2xl border bg-card px-6 py-16 text-center">
@@ -49,7 +53,7 @@ export default function CommunityPage() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
               <section aria-label="최신 게시글">
                 <CommunityFeed
                   state={posts.state}
@@ -59,7 +63,12 @@ export default function CommunityPage() {
                   onLoadMore={() => void posts.loadMore()}
                 />
               </section>
-              <aside className="lg:sticky lg:top-36">
+              <aside
+                id="community-compose"
+                tabIndex={-1}
+                aria-label="게시글 작성"
+                className="scroll-mt-56 rounded-xl focus-visible:ring-2 focus-visible:ring-ring lg:scroll-mt-36"
+              >
                 <PostForm
                   onSubmit={async (input) => {
                     if (!challengeRef.current)
@@ -85,6 +94,27 @@ export default function CommunityPage() {
               </aside>
             </div>
           )}
+          <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-5">
+            <div className="flex items-start gap-3">
+              <ShieldCheck
+                aria-hidden="true"
+                className="mt-0.5 size-5 shrink-0 text-primary"
+              />
+              <div>
+                <h2 className="text-sm font-semibold">함께 지키는 커뮤니티</h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  개인정보·불법 콘텐츠·금전 요구는 금지됩니다. 문제가 있는 글은
+                  신고해 주세요.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/legal/community-guidelines"
+              className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-primary hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              운영정책 보기
+            </Link>
+          </section>
         </div>
         <SiteFooter />
       </div>
