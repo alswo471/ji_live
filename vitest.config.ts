@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       '@': projectRoot,
       'next/link': path.resolve(projectRoot, 'node_modules/vinext/dist/shims/link.js'),
+      'next/image': path.resolve(projectRoot, 'node_modules/vinext/dist/shims/image.js'),
     },
   },
   test: {

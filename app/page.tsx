@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { SentimentCard } from '@/components/market/sentiment-card';
 import Link from 'next/link';
 import { IndicatorGrid } from '@/components/market/indicator-grid';
 import { MarketStatusBar } from '@/components/market/market-status-bar';
@@ -190,13 +191,7 @@ export default function Home() {
                   </div>
                 </dl>
               </section>
-              <section className="rounded-xl border border-dashed p-5">
-                <h2 className="text-sm font-bold">시장 심리</h2>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  공포·탐욕 지수는 준비 중입니다. 데이터가 연결되면 시장별
-                  기준과 함께 표시합니다.
-                </p>
-              </section>
+              <SentimentCard />
             </aside>
           </div>
           {!!data?.notices.length && (

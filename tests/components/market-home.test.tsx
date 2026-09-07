@@ -32,24 +32,26 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/');
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          quotes: [
-            samsung,
-            {
-              ...samsung,
-              symbol: 'TSLA',
-              name: '테슬라',
-              nameKo: '테슬라',
-              nameEn: 'Tesla',
-              assetClass: 'us-stock',
-            },
-          ],
-          fetchedAt: '2026-09-07T00:00:00Z',
-          notices: [],
-        }),
-      ),
+    vi.fn().mockImplementation(async (url: string) =>
+      url === '/api/market/sentiment'
+        ? new Response('{}', { status: 503 })
+        : new Response(
+            JSON.stringify({
+              quotes: [
+                samsung,
+                {
+                  ...samsung,
+                  symbol: 'TSLA',
+                  name: '테슬라',
+                  nameKo: '테슬라',
+                  nameEn: 'Tesla',
+                  assetClass: 'us-stock',
+                },
+              ],
+              fetchedAt: '2026-09-07T00:00:00Z',
+              notices: [],
+            }),
+          ),
     ),
   );
 });
