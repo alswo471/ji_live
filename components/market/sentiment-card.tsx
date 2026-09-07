@@ -13,7 +13,7 @@ const LABELS: Record<string, string> = {
   'Extreme Greed': '극심한 탐욕',
 };
 
-export function SentimentCard() {
+export function SentimentCard({ compact = false }: { compact?: boolean }) {
   const [data, setData] = useState<
     (BitcoinSentiment & { stale: boolean }) | null
   >(null);
@@ -71,48 +71,56 @@ export function SentimentCard() {
   }, []);
   return (
     <section
-      className="rounded-xl border bg-card p-5"
+      className={compact ? 'min-w-0 p-4' : 'rounded-xl border bg-card p-5'}
       aria-label="비트코인 공포·탐욕 지수"
     >
       <h2 className="text-sm font-bold">공포·탐욕 지수</h2>
       <p className="mt-1 text-xs text-muted-foreground">비트코인 · 일별 지표</p>
       {data ? (
         <>
-          <svg
-            viewBox="0 0 200 120"
-            className="mt-4 w-full"
-            role="img"
-            aria-label={`${LABELS[data.classification]} ${data.value}점, 100점 만점`}
-          >
-            <path
-              d="M 20 100 A 80 80 0 0 1 180 100"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="16"
-              className="text-muted"
-            />
-            <path
-              d="M 20 100 A 80 80 0 0 1 180 100"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="16"
-              pathLength="100"
-              strokeDasharray={`${data.value} 100`}
-              className="text-primary"
-            />
-            <line
-              x1="100"
-              y1="100"
-              x2="35"
-              y2="100"
-              stroke="currentColor"
-              strokeWidth="3"
-              transform={`rotate(${data.value * 1.8} 100 100)`}
-            />
-            <circle cx="100" cy="100" r="5" fill="currentColor" />
-          </svg>
+          {!compact && (
+            <svg
+              viewBox="0 0 200 120"
+              className="mt-4 w-full"
+              role="img"
+              aria-label={`${LABELS[data.classification]} ${data.value}점, 100점 만점`}
+            >
+              <path
+                d="M 20 100 A 80 80 0 0 1 180 100"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="16"
+                className="text-muted"
+              />
+              <path
+                d="M 20 100 A 80 80 0 0 1 180 100"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="16"
+                pathLength="100"
+                strokeDasharray={`${data.value} 100`}
+                className="text-primary"
+              />
+              <line
+                x1="100"
+                y1="100"
+                x2="35"
+                y2="100"
+                stroke="currentColor"
+                strokeWidth="3"
+                transform={`rotate(${data.value * 1.8} 100 100)`}
+              />
+              <circle cx="100" cy="100" r="5" fill="currentColor" />
+            </svg>
+          )}
           <div className="flex items-baseline justify-between gap-2">
-            <strong className="text-3xl font-bold tabular-nums">
+            <strong
+              className={
+                compact
+                  ? 'text-lg font-bold tabular-nums'
+                  : 'text-3xl font-bold tabular-nums'
+              }
+            >
               {data.value}
               <span className="ml-1 text-xs font-normal text-muted-foreground">
                 / 100
@@ -148,11 +156,13 @@ export function SentimentCard() {
         rel="noreferrer"
         className="mt-3 inline-flex min-h-11 items-center text-xs font-semibold text-primary underline focus-visible:ring-2 focus-visible:ring-ring"
       >
-        출처: Alternative.me
+        ⓘ Alternative.me
       </a>
-      <p className="text-xs leading-5 text-muted-foreground">
-        한국·미국 주식의 심리 지수가 아닙니다.
-      </p>
+      {!compact && (
+        <p className="text-xs leading-5 text-muted-foreground">
+          한국·미국 주식의 심리 지수가 아닙니다.
+        </p>
+      )}
     </section>
   );
 }

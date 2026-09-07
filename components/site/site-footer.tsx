@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowUpRight, MessageCircle } from 'lucide-react';
 import { COMMUNITY_LEGAL_LINKS } from '@/lib/legal/community-policy';
 import { FEEDBACK_CONTACT_URL } from '@/lib/site/contact';
+import { DataSourcesDialog } from './data-sources-dialog';
 
 export function SiteFooter() {
   const contactUrl = FEEDBACK_CONTACT_URL;
@@ -24,6 +25,7 @@ export function SiteFooter() {
         </a>
       </div>
       <nav aria-label="정책 및 문의" className="flex flex-wrap gap-x-5 gap-y-3">
+        <DataSourcesDialog />
         {COMMUNITY_LEGAL_LINKS.map((link) => (
           <Link
             key={link.href}

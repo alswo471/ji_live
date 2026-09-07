@@ -8,6 +8,7 @@ import { MarketChart } from './market-chart';
 import { PriceChange } from './price-change';
 import { QuoteBadge } from './quote-badge';
 import { SiteFooter } from '@/components/site/site-footer';
+import { SentimentCard } from './sentiment-card';
 import { useDisplayPreferences } from '@/hooks/use-display-preferences';
 import { useMarketCandles } from '@/hooks/use-market-candles';
 import { useMarketDashboard } from '@/hooks/use-market-dashboard';
@@ -153,6 +154,7 @@ export function QuoteDetail({ initialQuote }: { initialQuote: MarketQuote }) {
           <p className="mt-3 text-xs leading-5 text-muted-foreground">상승 캔들은 빨강, 하락 캔들은 파랑으로 표시합니다. 색상과 함께 상단 OHLC 수치를 확인하세요.</p>
         </section>
       </div>
+      {quote.symbol === 'BTC' && <div className="px-4 pb-8 sm:px-6 lg:px-8"><div className="max-w-sm"><SentimentCard /></div></div>}
       <SiteFooter />
     </div>
   </main>;

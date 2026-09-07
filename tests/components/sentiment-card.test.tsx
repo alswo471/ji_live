@@ -7,16 +7,14 @@ describe('SentimentCard', () => {
   it('실제 응답의 값·분류·출처를 함께 표시한다', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          Response.json({
-            value: 33,
-            classification: 'Fear',
-            asOf: '2026-09-07T00:00:00Z',
-            stale: true,
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        Response.json({
+          value: 33,
+          classification: 'Fear',
+          asOf: '2026-09-07T00:00:00Z',
+          stale: true,
+        }),
+      ),
     );
     render(<SentimentCard />);
     expect(
@@ -24,7 +22,7 @@ describe('SentimentCard', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/갱신 지연/)).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: '출처: Alternative.me' }),
+      screen.getByRole('link', { name: /Alternative.me/ }),
     ).toHaveAttribute(
       'href',
       'https://alternative.me/crypto/fear-and-greed-index/',

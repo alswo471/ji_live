@@ -14,7 +14,7 @@ export function SiteHeader({
   onRefresh,
   marketSection,
 }: {
-  current: 'market' | 'community';
+  current: 'market' | 'community' | 'indicators';
   refreshing?: boolean;
   onRefresh?: () => void;
   marketSection?: MarketSection;
@@ -89,6 +89,13 @@ export function SiteHeader({
             )}
           </a>
         ))}
+        <Link
+          href="/indicators"
+          aria-current={current === 'indicators' ? 'page' : undefined}
+          className="flex min-h-11 items-center border-b-2 border-transparent px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:border-primary aria-[current=page]:text-primary"
+        >
+          시장 지표
+        </Link>
         {communityEnabled && (
           <Link
             href="/community"

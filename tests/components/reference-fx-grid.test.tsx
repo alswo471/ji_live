@@ -4,7 +4,7 @@ import { ReferenceFxGrid } from '@/components/market/reference-fx-grid';
 
 afterEach(() => vi.unstubAllGlobals());
 describe('ReferenceFxGrid', () => {
-  it('발표일·100엔 단위·등락률·출처를 표시한다', async () => {
+  it('발표일·100엔 단위·등락률을 표시하고 상세 출처는 카드에 반복하지 않는다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -45,8 +45,8 @@ describe('ReferenceFxGrid', () => {
     expect(screen.getByText('비교값 미제공')).toBeInTheDocument();
     expect(screen.getByText(/2026-09-03 발표값 대비/)).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /출처: European Central Bank/ }),
-    ).toBeInTheDocument();
+      screen.queryByRole('link', { name: /European Central Bank/ }),
+    ).not.toBeInTheDocument();
   });
   it('장애에는 임시 환율 대신 실패 상태를 표시한다', async () => {
     vi.stubGlobal(

@@ -41,6 +41,23 @@ beforeEach(() => {
                 samsung,
                 {
                   ...samsung,
+                  symbol: 'USDTKRW',
+                  name: 'USDT/KRW',
+                  nameKo: 'USDT/KRW',
+                  assetClass: 'fx',
+                  price: 1400,
+                },
+                {
+                  ...samsung,
+                  symbol: 'PAXG',
+                  name: '금',
+                  nameKo: '금',
+                  assetClass: 'metal',
+                  currency: 'USDT',
+                  price: 4000,
+                },
+                {
+                  ...samsung,
                   symbol: 'TSLA',
                   name: '테슬라',
                   nameKo: '테슬라',
@@ -58,6 +75,27 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('마켓 탐색', () => {
+  it('전광판은 별도 조작 버튼 없이 지표 상세 링크를 제공한다', async () => {
+    render(<Home />);
+    await screen.findByRole('link', { name: /삼성전자 상세 보기/ });
+    expect(screen.getByRole('link', { name: '시장 지표' })).toHaveAttribute(
+      'href',
+      '/indicators',
+    );
+    const summary = screen.getByRole('region', { name: '시장 요약' });
+    expect(summary.textContent).toContain('4,000 USDT');
+    expect(
+      summary.querySelector('[aria-label="비트코인 공포·탐욕 지수"]'),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /전광판/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTitle('시장 지표 상세 보기')).toHaveAttribute(
+      'href',
+      '/indicators',
+    );
+    expect(summary.textContent).not.toContain('USDT/KRW');
+  });
   it('URL에서 선택한 시장만 보여준다', async () => {
     window.history.replaceState({}, '', '/?market=us-stock');
     render(<Home />);

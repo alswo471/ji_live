@@ -50,6 +50,19 @@ const quote: MarketQuote = {
 };
 
 describe('QuoteDetail', () => {
+  it.each(['BTC', 'ETH'])('%s 상세에서 비트코인에만 심리 게이지를 표시한다', async (symbol) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (input === '/api/market/sentiment') return Response.json({ value: 33, classification: 'Fear', asOf: '2026-09-07T00:00:00Z', stale: false });
+      return new Promise(() => {});
+    });
+    render(<QuoteDetail initialQuote={{ ...quote, symbol, assetClass: 'crypto' }} />);
+    if (symbol === 'BTC') {
+      expect(await screen.findByRole('img', { name: '공포 33점, 100점 만점' })).toBeVisible();
+      expect(screen.getByRole('link', { name: /Alternative.me/ })).toBeVisible();
+    } else {
+      expect(screen.queryByRole('region', { name: '비트코인 공포·탐욕 지수' })).not.toBeInTheDocument();
+    }
+  });
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
