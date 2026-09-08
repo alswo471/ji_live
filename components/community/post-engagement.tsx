@@ -50,6 +50,7 @@ export function PostEngagement({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [viewError, setViewError] = useState(false);
+  const [viewPending, setViewPending] = useState(false);
   const [recommendError, setRecommendError] = useState(false);
   const [recommendPending, setRecommendPending] = useState(false);
 
@@ -61,6 +62,7 @@ export function PostEngagement({
   const recordView = useCallback(async () => {
     if (viewedPostRef.current === postId || !challengeRef.current) return;
     viewedPostRef.current = postId;
+    setViewPending(true);
     setViewError(false);
     try {
       setEngagement(
@@ -76,6 +78,8 @@ export function PostEngagement({
       );
     } catch {
       setViewError(true);
+    } finally {
+      setViewPending(false);
     }
   }, [postId]);
 
@@ -148,7 +152,12 @@ export function PostEngagement({
           className="min-h-11 min-w-28"
           aria-pressed={engagement?.recommended ?? false}
           aria-busy={recommendPending}
-          disabled={!engagement?.canRecommend || recommendPending}
+          disabled={
+            loading ||
+            viewPending ||
+            !engagement?.canRecommend ||
+            recommendPending
+          }
           onClick={() => void recommend()}
         >
           <ThumbsUp aria-hidden="true" />

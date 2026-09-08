@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { forwardRef, useImperativeHandle } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PostEngagement } from '@/components/community/post-engagement';
@@ -35,6 +41,14 @@ const ENGAGEMENT = {
   recommended: false,
   canRecommend: true,
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
 
 describe('PostEngagement', () => {
   beforeEach(() => {
@@ -94,6 +108,107 @@ describe('PostEngagement', () => {
       expect.any(Object),
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes recommendations behind the automatic view response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json(ENGAGEMENT)),
+    );
+    const viewResponse = deferred<typeof ENGAGEMENT>();
+    communityWriteMock
+      .mockImplementationOnce(() => viewResponse.promise)
+      .mockResolvedValueOnce({
+        ...ENGAGEMENT,
+        viewCount: 13,
+        recommendationCount: 4,
+        recommended: true,
+      })
+      .mockResolvedValueOnce({
+        ...ENGAGEMENT,
+        viewCount: 13,
+      });
+
+    render(
+      <PostEngagement
+        postId={POST_ID}
+        initialViewCount={12}
+        initialRecommendationCount={3}
+      />,
+    );
+
+    const button = await screen.findByRole('button', { name: '추천 3' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(communityWriteMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      viewResponse.resolve({ ...ENGAGEMENT, viewCount: 13 });
+      await viewResponse.promise;
+    });
+    await waitFor(() => expect(button).toBeEnabled());
+
+    fireEvent.click(button);
+    const cancelButton = await screen.findByRole('button', {
+      name: '추천 취소 4',
+    });
+    fireEvent.click(cancelButton);
+    expect(
+      await screen.findByRole('button', { name: '추천 3' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      communityWriteMock.mock.calls.slice(1).map((call) => call[2]),
+    ).toEqual([
+      { action: 'recommend', recommended: true },
+      { action: 'recommend', recommended: false },
+    ]);
+  });
+
+  it('keeps recommendations disabled while a retried load records its view', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(Response.json(ENGAGEMENT));
+    vi.stubGlobal('fetch', fetchMock);
+    const viewResponse = deferred<typeof ENGAGEMENT>();
+    communityWriteMock
+      .mockImplementationOnce(() => viewResponse.promise)
+      .mockResolvedValueOnce({
+        ...ENGAGEMENT,
+        viewCount: 13,
+        recommendationCount: 4,
+        recommended: true,
+      });
+
+    render(
+      <PostEngagement
+        postId={POST_ID}
+        initialViewCount={null}
+        initialRecommendationCount={null}
+      />,
+    );
+
+    await screen.findByText('추천 수를 불러오지 못했습니다.');
+    fireEvent.click(screen.getByRole('button', { name: '집계 다시 불러오기' }));
+    const button = await screen.findByRole('button', { name: '추천 3' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(communityWriteMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      viewResponse.resolve({ ...ENGAGEMENT, viewCount: 13 });
+      await viewResponse.promise;
+    });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    expect(
+      await screen.findByRole('button', { name: '추천 취소 4' }),
+    ).toBeEnabled();
+    expect(communityWriteMock.mock.calls[1]?.[2]).toEqual({
+      action: 'recommend',
+      recommended: true,
+    });
   });
 
   it('retries the same desired recommendation state after failure', async () => {
