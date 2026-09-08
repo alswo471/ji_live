@@ -40,7 +40,7 @@ export function CommentList({
               />
             </div>
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-6">
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6">
             {comment.body}
           </p>
         </article>

@@ -111,6 +111,13 @@ describe('CommunityDetailPage', () => {
       await screen.findByRole('heading', { name: '댓글 42' }),
     ).toBeVisible();
     expect(screen.getByText('첫 페이지 댓글')).toBeVisible();
+    expect(
+      screen
+        .getByText('첫 페이지 댓글')
+        .compareDocumentPosition(
+          screen.getByRole('textbox', { name: '댓글' }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '댓글 더 보기' }));
 
     expect(await screen.findByText('두 번째 페이지 댓글')).toBeVisible();

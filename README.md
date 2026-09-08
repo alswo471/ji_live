@@ -27,7 +27,7 @@
 - GitHub Actions 품질 검사 결과 Slack 알림
 - 데스크톱과 모바일을 고려한 반응형 화면
 - 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
-- 마켓·커뮤니티 공통 navigation과 반응형 익명 feed·작성·댓글 페이지네이션·게시글/댓글 신고 UI
+- 마켓·커뮤니티 공통 navigation과 게시판형 익명 feed·접이식 글쓰기(접어도 초안 유지)·댓글 페이지네이션·게시글/댓글 신고 UI
 - `/admin` 직접 접근, 운영자 email Magic Link와 등록된 admin membership으로 보호되는 신고 대기·숨김·삭제 대기·제재·운영 로그 console
 
 ## 기술 스택

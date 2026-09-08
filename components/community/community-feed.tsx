@@ -40,14 +40,19 @@ export function CommunityFeed({
       {items.map((post) => (
         <article
           key={post.id}
-          className="border-b p-5 transition-colors last:border-b-0 hover:bg-muted/30"
+          className="border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/30 sm:px-5"
         >
           <Link
             href={`/community/${post.id}`}
             className="block min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <h3 className="break-words text-base font-semibold tracking-tight">
+            <h3 className="break-all text-base font-semibold tracking-tight">
               {post.title}
+              <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium tabular-nums text-primary">
+                <MessageCircle aria-hidden="true" className="size-3.5" />
+                <span className="sr-only">댓글 </span>
+                {post.commentCount}
+              </span>
             </h3>
             <p className="mt-1 line-clamp-1 break-all text-sm leading-6 text-muted-foreground">
               {post.excerpt}
@@ -63,10 +68,6 @@ export function CommunityFeed({
                 minute: '2-digit',
               }).format(new Date(post.createdAt))}
             </time>
-            <span className="inline-flex items-center gap-1">
-              <MessageCircle aria-hidden="true" className="size-3.5" />
-              댓글 {post.commentCount}
-            </span>
             {post.linkUrl && (
               <span className="inline-flex min-w-0 items-center gap-1 break-all">
                 <ExternalLink aria-hidden="true" className="size-3.5" />

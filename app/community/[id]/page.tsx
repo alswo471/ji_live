@@ -161,9 +161,8 @@ export default function CommunityDetailPage({
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_0%,var(--brand-soft),transparent_32%)] opacity-60" />
-      <div className="relative mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background/80">
-        <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur-xl">
+      <div className="mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background">
+        <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-xl">
           <SiteHeader current="community" />
         </header>
         <div className="mx-auto max-w-3xl px-4 pb-16 pt-8 sm:px-6">
@@ -186,13 +185,19 @@ export default function CommunityDetailPage({
           {state === 'ready' && post && (
             <>
               <article className="mt-4 rounded-2xl border bg-card p-5 sm:p-7">
-                <p className="text-xs text-muted-foreground">
-                  {post.authorName}
-                </p>
-                <h1 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                <h1 className="break-all text-xl font-bold tracking-tight sm:text-2xl">
                   {post.title}
                 </h1>
-                <p className="mt-6 whitespace-pre-wrap text-sm leading-7 sm:text-base">
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-b pb-5 text-xs text-muted-foreground">
+                  <span>{post.authorName}</span>
+                  <time dateTime={post.createdAt}>
+                    {new Intl.DateTimeFormat('ko-KR', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    }).format(new Date(post.createdAt))}
+                  </time>
+                </div>
+                <p className="mt-6 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-base leading-7">
                   {post.body}
                 </p>
                 {post.linkUrl && (
@@ -224,13 +229,10 @@ export default function CommunityDetailPage({
                 </div>
               </article>
               <section className="mt-6 rounded-2xl border bg-card p-5 sm:p-7">
-                <h2 className="text-lg font-black">댓글 {post.commentCount}</h2>
+                <h2 className="text-base font-bold">
+                  댓글 {post.commentCount}
+                </h2>
                 <div className="mt-5">
-                  <CommentForm
-                    onSubmit={(input) =>
-                      write(`/api/community/posts/${id}/comments`, input)
-                    }
-                  />
                   <CommentList
                     comments={comments}
                     onReport={(input) => write('/api/community/reports', input)}
@@ -257,6 +259,13 @@ export default function CommunityDetailPage({
                         : '댓글 더 보기'}
                     </Button>
                   ) : null}
+                  <div className="mt-5 border-t pt-5">
+                    <CommentForm
+                      onSubmit={(input) =>
+                        write(`/api/community/posts/${id}/comments`, input)
+                      }
+                    />
+                  </div>
                 </div>
               </section>
               <div className="mt-3 rounded-2xl border bg-card p-4">

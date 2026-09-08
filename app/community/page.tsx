@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { PenLine, ShieldCheck } from 'lucide-react';
 import { CommunityFeed } from '@/components/community/community-feed';
@@ -20,6 +20,12 @@ export default function CommunityPage() {
   const session = useCommunitySession();
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
   const enabled = process.env.NEXT_PUBLIC_COMMUNITY_ENABLED === 'true';
+  const [composeOpen, setComposeOpen] = useState(false);
+  const composeRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (composeOpen)
+      composeRef.current?.querySelector<HTMLInputElement>('input')?.focus();
+  }, [composeOpen]);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -27,7 +33,7 @@ export default function CommunityPage() {
         <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-xl">
           <SiteHeader current="community" />
         </header>
-        <div className="px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
           <section className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">커뮤니티</h1>
@@ -36,13 +42,16 @@ export default function CommunityPage() {
               </p>
             </div>
             {enabled && (
-              <a
-                href="#community-compose"
+              <button
+                type="button"
+                aria-expanded={composeOpen}
+                aria-controls="community-compose"
+                onClick={() => setComposeOpen((open) => !open)}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <PenLine aria-hidden="true" className="size-4" />
-                글쓰기
-              </a>
+                {composeOpen ? '글쓰기 접기' : '글쓰기'}
+              </button>
             )}
           </section>
           {!enabled ? (
@@ -53,7 +62,7 @@ export default function CommunityPage() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+            <div className="space-y-6">
               <section aria-label="최신 게시글">
                 <CommunityFeed
                   state={posts.state}
@@ -64,10 +73,12 @@ export default function CommunityPage() {
                 />
               </section>
               <aside
+                ref={composeRef}
+                hidden={!composeOpen}
                 id="community-compose"
                 tabIndex={-1}
                 aria-label="게시글 작성"
-                className="scroll-mt-56 rounded-xl focus-visible:ring-2 focus-visible:ring-ring lg:scroll-mt-36"
+                className="scroll-mt-40 rounded-xl focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PostForm
                   onSubmit={async (input) => {

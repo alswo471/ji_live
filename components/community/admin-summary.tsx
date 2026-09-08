@@ -38,7 +38,7 @@ export function AdminSummary({ summary }: { summary: Summary | null }) {
                   ? `${card.label} 건수 불러오는 중`
                   : `${card.label} ${count.toLocaleString('ko-KR')}건 보기`
               }
-              className="group min-w-0 rounded-2xl border bg-card/80 p-4 shadow-sm outline-none transition-colors hover:bg-muted/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="group min-w-0 rounded-xl border bg-card p-4 outline-none transition-colors hover:bg-muted/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-muted-foreground">
                 <Icon

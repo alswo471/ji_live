@@ -17,6 +17,7 @@ import {
   type TurnstileChallengeHandle,
 } from '@/components/community/turnstile-challenge';
 import { SiteHeader } from '@/components/site/site-header';
+import { SiteFooter } from '@/components/site/site-footer';
 import { Button } from '@/components/ui/button';
 import {
   type AdminConsoleFilters as FilterValues,
@@ -244,12 +245,12 @@ function AdminConsole() {
 
   return (
     <>
-      <section className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <section className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-xs font-bold tracking-[.16em] text-primary">
             <ShieldCheck aria-hidden="true" className="size-4" /> OPERATIONS
           </p>
-          <h1 className="mt-2 text-3xl font-black tracking-[-.05em] sm:text-5xl">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight">
             Community 운영 콘솔
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -279,7 +280,7 @@ function AdminConsole() {
         </Button>
       </section>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         <AdminSummary summary={admin.summary} />
         <AdminConsoleNav tab={tab} />
         <AdminConsoleFilters
@@ -324,9 +325,8 @@ export default function CommunityAdminPage() {
 
   return (
     <main className="min-h-screen overflow-x-clip bg-background text-foreground">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_0%,var(--brand-soft),transparent_32%)] opacity-60" />
-      <div className="relative mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background/80">
-        <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur-xl">
+      <div className="mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background">
+        <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-xl">
           <SiteHeader current="community" />
         </header>
         <div className="mx-auto min-w-0 max-w-6xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
@@ -338,6 +338,7 @@ export default function CommunityAdminPage() {
             </div>
           )}
         </div>
+        <SiteFooter />
       </div>
     </main>
   );
