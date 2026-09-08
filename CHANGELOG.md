@@ -8,6 +8,8 @@
 
 ### 추가
 
+- 제목·작성자·작성일·조회·추천 열의 카페형 커뮤니티 목록과 별도 `작성` 페이지 추가
+- actor·게시글별 rolling 24시간 조회수, desired-state 추천·취소, service-role 전용 atomic RPC와 receipt 자동 정리 추가
 - 커뮤니티의 초안을 유지하는 접이식 글쓰기, 제목 옆 댓글 수, 댓글을 먼저 읽는 상세 배치와 관리자 화면 디자인 통일
 - 공공데이터포털 국내 주식 공식 일별 기록(최근 90일), 코스피·코스닥, 동일 기준일 전체 ETF 목록 기반 거래량 TOP 10 연결. 원천 날짜·미제공·재시도·지연 표시와 서버 전용 키의 Encoding/Decoding 지원
 - 홈 로고 위에 금·환율이 흐르는 얇은 전광판과 hover·키보드 초점 정지, reduced-motion 지원 추가. 후속 피드백으로 별도 재생 버튼과 초점 시 스크롤바 제거
@@ -72,6 +74,7 @@
 
 ### 보안
 
+- 조회 60회/분과 추천·취소 20회/분을 actor와 daily HMAC으로 제한하고 anon/authenticated의 집계 table·RPC 직접 접근 차단
 - 관리자 JWT를 server에서 다시 검증하고 `community_admins` 등록 여부를 확인한 뒤에만 관리 API 허용
 - 관리자 email Magic Link 요청에도 Cloudflare Turnstile token을 전달해 Supabase CAPTCHA 정책을 일관되게 적용
 - 신규 Free 프로젝트의 이메일 템플릿 제한에 맞춰 6자리 OTP 입력 대신 기본 Magic Link 안내 흐름으로 변경

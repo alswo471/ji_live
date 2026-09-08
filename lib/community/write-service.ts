@@ -144,6 +144,8 @@ function postRecord(value: unknown): CommunityPostRecord {
     status: status(row),
     createdAt: string(row, 'created_at'),
     commentCount: 0,
+    viewCount: null,
+    recommendationCount: null,
   };
 }
 
@@ -416,6 +418,8 @@ function toPost(post: CommunityPostRecord): CommunityPostDetail {
     body: post.body,
     linkUrl: post.linkUrl,
     commentCount: post.commentCount,
+    viewCount: post.viewCount,
+    recommendationCount: post.recommendationCount,
     createdAt: post.createdAt,
     canDelete: true,
   };

@@ -51,7 +51,16 @@ export interface CommunityPostSummary {
   excerpt: string;
   linkUrl: string | null;
   commentCount: number;
+  viewCount: number | null;
+  recommendationCount: number | null;
   createdAt: string;
+}
+
+export interface CommunityEngagement {
+  viewCount: number;
+  recommendationCount: number;
+  recommended: boolean;
+  canRecommend: boolean;
 }
 
 export interface CommunityPostDetail extends Omit<

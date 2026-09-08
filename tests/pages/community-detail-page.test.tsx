@@ -35,6 +35,10 @@ vi.mock('@/components/community/turnstile-challenge', async () => {
   };
 });
 
+vi.mock('@/components/community/post-engagement', () => ({
+  PostEngagement: () => <div aria-label="게시글 집계" />,
+}));
+
 const POST_ID = '30000000-0000-4000-8000-000000000001';
 const SECOND_POST_ID = '30000000-0000-4000-8000-000000000002';
 
@@ -45,6 +49,8 @@ const post = {
   body: '댓글 전체 개수와 다음 페이지를 확인합니다.',
   linkUrl: null,
   commentCount: 42,
+  viewCount: 12,
+  recommendationCount: 3,
   createdAt: '2026-09-04T05:00:00.000Z',
   canDelete: false,
 };

@@ -91,6 +91,8 @@ describe('community read routes', () => {
         body: '본문',
         linkUrl: null,
         commentCount: 0,
+        viewCount: 0,
+        recommendationCount: 0,
         createdAt: '2026-09-03T01:00:00.000Z',
         canDelete: actorId === 'actor-id',
       }),

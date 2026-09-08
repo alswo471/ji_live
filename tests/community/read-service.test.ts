@@ -27,6 +27,8 @@ function createPost(
     status: 'visible',
     createdAt: '2026-09-03T01:00:00.000Z',
     commentCount: 2,
+    viewCount: 12,
+    recommendationCount: 3,
     ...overrides,
   };
 }
@@ -102,6 +104,8 @@ describe('listPosts', () => {
         excerpt: '오늘 시장에 대한 긴 본문입니다.',
         linkUrl: 'https://example.com/article',
         commentCount: 2,
+        viewCount: 12,
+        recommendationCount: 3,
         createdAt: '2026-09-03T01:00:00.000Z',
       },
     ]);
@@ -131,6 +135,8 @@ describe('getPost', () => {
     expect(post).toMatchObject({
       id: POST_ID,
       body: '오늘 시장에 대한 긴 본문입니다.',
+      viewCount: 12,
+      recommendationCount: 3,
       canDelete: true,
     });
     expect(post).not.toHaveProperty('authorId');

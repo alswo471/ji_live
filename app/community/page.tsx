@@ -1,31 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { PenLine, ShieldCheck } from 'lucide-react';
 import { CommunityFeed } from '@/components/community/community-feed';
-import { PostForm } from '@/components/community/post-form';
-import {
-  TurnstileChallenge,
-  type TurnstileChallengeHandle,
-} from '@/components/community/turnstile-challenge';
 import { SiteHeader } from '@/components/site/site-header';
 import { SiteFooter } from '@/components/site/site-footer';
 import { useCommunityPosts } from '@/hooks/use-community-posts';
-import { useCommunitySession } from '@/hooks/use-community-session';
-import { communityWrite } from '@/lib/community/browser-api';
 
 export default function CommunityPage() {
   const posts = useCommunityPosts();
-  const session = useCommunitySession();
-  const challengeRef = useRef<TurnstileChallengeHandle>(null);
   const enabled = process.env.NEXT_PUBLIC_COMMUNITY_ENABLED === 'true';
-  const [composeOpen, setComposeOpen] = useState(false);
-  const composeRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (composeOpen)
-      composeRef.current?.querySelector<HTMLInputElement>('input')?.focus();
-  }, [composeOpen]);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -42,16 +26,13 @@ export default function CommunityPage() {
               </p>
             </div>
             {enabled && (
-              <button
-                type="button"
-                aria-expanded={composeOpen}
-                aria-controls="community-compose"
-                onClick={() => setComposeOpen((open) => !open)}
+              <Link
+                href="/community/write"
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <PenLine aria-hidden="true" className="size-4" />
-                {composeOpen ? '글쓰기 접기' : '글쓰기'}
-              </button>
+                글쓰기
+              </Link>
             )}
           </section>
           {!enabled ? (
@@ -62,7 +43,7 @@ export default function CommunityPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div>
               <section aria-label="최신 게시글">
                 <CommunityFeed
                   state={posts.state}
@@ -72,37 +53,6 @@ export default function CommunityPage() {
                   onLoadMore={() => void posts.loadMore()}
                 />
               </section>
-              <aside
-                ref={composeRef}
-                hidden={!composeOpen}
-                id="community-compose"
-                tabIndex={-1}
-                aria-label="게시글 작성"
-                className="scroll-mt-40 rounded-xl focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <PostForm
-                  onSubmit={async (input) => {
-                    if (!challengeRef.current)
-                      throw new Error('challenge unavailable');
-                    await communityWrite(
-                      '/api/community/posts',
-                      'POST',
-                      input,
-                      session,
-                      challengeRef.current,
-                    );
-                    await posts.reload();
-                  }}
-                />
-                <div className="mt-3 rounded-2xl border bg-card p-4">
-                  <TurnstileChallenge ref={challengeRef} />
-                  {session.error && (
-                    <p role="alert" className="text-sm text-destructive">
-                      {session.error}
-                    </p>
-                  )}
-                </div>
-              </aside>
             </div>
           )}
           <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-5">

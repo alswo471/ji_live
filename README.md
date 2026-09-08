@@ -27,7 +27,7 @@
 - GitHub Actions 품질 검사 결과 Slack 알림
 - 데스크톱과 모바일을 고려한 반응형 화면
 - 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
-- 마켓·커뮤니티 공통 navigation과 게시판형 익명 feed·접이식 글쓰기(접어도 초안 유지)·댓글 페이지네이션·게시글/댓글 신고 UI
+- 마켓·커뮤니티 공통 navigation과 제목 중심 게시판·별도 글쓰기 페이지·실제 조회수·추천·댓글 페이지네이션·게시글/댓글 신고 UI
 - `/admin` 직접 접근, 운영자 email Magic Link와 등록된 admin membership으로 보호되는 신고 대기·숨김·삭제 대기·제재·운영 로그 console
 
 ## 기술 스택
@@ -101,11 +101,13 @@ pnpm install
 
 Community 기능은 기본적으로 비활성화되어 있으며 실제 secret은 `.env.local`에만 저장합니다. Local database를 개발할 때는 Docker 호환 runtime을 실행한 후 아래 command를 사용합니다.
 
-Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활성화됩니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고는 anonymous JWT, Turnstile, 신뢰된 proxy가 전달한 주소의 daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 삭제도 별도 Turnstile과 10회/10분 제한을 통과해야 하며 429 응답은 재시도 가능 시간, 잘못된 JSON은 안전한 400 응답을 제공합니다. 현재는 운영 검증이 완료되기 전이므로 production navigation은 계속 비활성화합니다.
+Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활성화됩니다. 활성화된 환경에서는 visible 게시글·댓글만 읽고 사용자 UUID와 내부 관리 필드를 공개 DTO에서 제외합니다. 작성·삭제·신고·조회 반영·추천은 anonymous JWT, Turnstile, 신뢰된 proxy가 전달한 주소의 daily HMAC abuse key와 atomic rate limit을 검증한 server API를 통해서만 수행합니다. 조회는 actor·게시글별 rolling 24시간에 1회만 누적하고 60회/분, 추천·취소는 합계 20회/분으로 actor와 daily HMAC을 함께 제한합니다. 삭제는 10회/10분 제한을 따르며 429 응답은 재시도 가능 시간, 잘못된 JSON은 안전한 400 응답을 제공합니다. 집계 migration 적용 전에는 기존 글 읽기를 유지하고 수치를 `—`로 표시하며, DB를 먼저 적용한 뒤 앱을 반영해야 합니다. 현재 원격 적용 보류 사유와 절차는 [커뮤니티 원격 DB 적용 상태](./docs/operations/2026-09-08_원격_DB_적용상태.md)를 따릅니다. 운영 검증이 완료되기 전에는 production navigation을 활성화하지 않습니다.
 
 관리 화면은 public navigation에 노출하지 않으며 `/admin` 직접 접근 시 `/admin/community`로 이동합니다. Supabase Auth에 미리 생성한 영구 사용자 UUID를 `community_admins`에 수동 등록해야 접근할 수 있고, Magic Link 요청은 Turnstile CAPTCHA를 통과해야 하며 새 사용자를 자동 생성하지 않습니다. 관리자는 신고 대기·숨김·삭제 대기·제재·운영 로그 다섯 tab에서 상태별 API를 사용합니다. 신고 대기에서는 근거 없는 신고를 콘텐츠 변경 없이 기각할 수 있고, 작성 제한은 1·7·30일 또는 직접 지정한 시각까지 설정합니다. 숨김 화면은 자동/관리자 조치의 출처·사유·시각을 보여 주고 운영 로그는 제목·본문·기간·대상·조치·삭제 주체를 함께 검색합니다. 관리자 응답은 신고자와 raw 사용자 UUID, abuse key, secret을 반환하지 않습니다.
 
 작성자와 관리자 삭제는 즉시 공개 API에서 제외하고 삭제 주체를 구분해 1년 동안 복구 가능한 삭제 대기로 보관합니다. 작성자 삭제 복구에는 관리 사유, 사용자 의사와 충돌할 수 있다는 경고, 이중 확인을 요구합니다. 부모 게시글은 댓글·신고·운영 기록 각각의 보존기한과 legal hold가 모두 끝난 뒤 의존 그래프와 함께 파기하고, 자연 만료된 제재도 종료 시점부터 1년 뒤 파기합니다. 신고에 사용한 network-derived HMAC은 생성 24시간 뒤 자동 숨김 집계에서 제외하며, 정상 운영에서는 매분 실행되는 Supabase `pg_cron` 작업이 다음 실행 때 값을 `null`로 scrub합니다. Scheduler 장애 중에는 물리 scrub이 늦어질 수 있으므로 공개 전 검사가 실제 job과 최근 성공 실행을 확인합니다. 1년은 법정 고정기간이 아니라 오조치 복구와 분쟁 대응을 위해 정한 내부 운영 정책입니다. 정식 삭제 요청은 개별 검토하며 진행 중인 분쟁·법령상 보존 사유는 별도 legal hold로 자동 파기에서 제외합니다. Free 플랜에서는 기본 이메일 템플릿을 유지하고, 사용량이 늘면 Supabase Pro 전환을 검토합니다. 콘텐츠 조치·신고 기각·신고 기반 작성 제한은 신고 처리와 감사 로그를 같은 database transaction으로 반영하며 활성 제재 사용자의 새 게시글·댓글 작성을 차단합니다.
+
+조회 중복 방지 receipt는 actor·게시글·마지막 반영 시각만 저장하고 24시간 이후 매시 자동 정리합니다. 이 receipt가 파기되어도 누적 조회수는 유지됩니다. 추천 관계는 추천 취소 시 즉시 삭제되고, 사용자나 게시글의 실제 파기 시 cascade로 정리됩니다. 원본 IP는 저장하지 않으며 브라우저 데이터 삭제·새 기기를 통한 중복을 완전히 판별하는 기능은 아닙니다.
 
 ```bash
 pnpm dlx supabase start
@@ -155,7 +157,7 @@ Local Supabase를 포함한 Community 보안 통합 검사는 database를 reset�
 ```bash
 pnpm dlx supabase start
 pnpm dlx supabase db reset
-RUN_LOCAL_SUPABASE_TESTS=true pnpm exec vitest run tests/integration/community-security.test.ts
+RUN_LOCAL_SUPABASE_TESTS=true pnpm exec vitest run tests/integration/community-security.test.ts tests/integration/community-engagement.test.ts
 pnpm dlx supabase test db
 pnpm dlx supabase db lint
 pnpm dlx supabase stop

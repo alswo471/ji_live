@@ -1,5 +1,6 @@
 export const COMMUNITY_RETENTION_POLICY = {
   abuseKeyHours: 24,
+  viewReceiptHours: 24,
   deletedContentDays: 365,
   closedModerationDays: 365,
   closedSanctionDays: 365,
@@ -32,7 +33,7 @@ export const COMMUNITY_PRIVACY_SECTIONS: readonly CommunityPolicySection[] = [
     id: 'items',
     title: '2. 처리 항목',
     paragraphs: [
-      '익명 사용자 UUID, 무작위 닉네임, 게시글·댓글·신고 내용과 작성 시각, 인증·보안 접속기록, 원본 IP를 즉시 단기 변환한 daily HMAC 식별값을 처리합니다.',
+      '익명 사용자 UUID, 무작위 닉네임, 게시글·댓글·신고 내용과 작성 시각, 게시글별 최근 조회 반영 시각과 추천 여부, 인증·보안 접속기록, 원본 IP를 즉시 단기 변환한 daily HMAC 식별값을 처리합니다.',
       '실명, 생년월일, 주소, 전화번호, 증권계좌, 보유자산과 정확한 위치정보는 커뮤니티 이용을 위해 수집하지 않습니다. 관리자 email은 관리자 인증 목적으로만 Supabase Auth에서 처리합니다.',
     ],
   },
@@ -47,7 +48,8 @@ export const COMMUNITY_PRIVACY_SECTIONS: readonly CommunityPolicySection[] = [
     id: 'retention',
     title: '4. 보유기간',
     paragraphs: [
-      'daily HMAC 식별값과 rate event는 최대 24시간, 작성자·관리자 삭제 콘텐츠와 처리된 신고·관리 기록, 종료된 제재는 접근을 제한한 뒤 최대 1년 보관합니다. 이 기간은 분쟁 대응과 오조치 복구를 위한 운영정책입니다. 공개 작성물과 진행 중 신고가 없는 비활성 익명 계정은 마지막 활동 후 90일이 지나면 파기 대상이 됩니다.',
+      'daily HMAC 식별값과 rate event는 최대 24시간 보관합니다. 동일 사용자·게시글의 조회 중복을 막는 receipt는 마지막으로 반영된 조회로부터 24시간 이후 자동 파기하며 누적 조회 숫자는 유지합니다. 추천 관계는 추천을 취소하거나 사용자·게시글이 실제 파기될 때 삭제됩니다.',
+      '작성자·관리자 삭제 콘텐츠와 처리된 신고·관리 기록, 종료된 제재는 접근을 제한한 뒤 최대 1년 보관합니다. 이 기간은 분쟁 대응과 오조치 복구를 위한 운영정책입니다. 공개 작성물과 진행 중 신고가 없는 비활성 익명 계정은 마지막 활동 후 90일이 지나면 파기 대상이 됩니다.',
       '법령상 보존 또는 진행 중인 분쟁 대응이 필요한 자료는 해당 목적에 필요한 범위와 기간 동안 legal hold로 분리한 뒤 사유가 종료되면 파기합니다.',
     ],
   },

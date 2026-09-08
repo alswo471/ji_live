@@ -70,6 +70,8 @@ function postRecord(
     status: 'visible',
     createdAt: '2026-09-03T01:00:00.000Z',
     commentCount: 0,
+    viewCount: null,
+    recommendationCount: null,
     ...overrides,
   };
 }
@@ -248,7 +250,9 @@ describe('deletePost', () => {
     const events: string[] = [];
     const repo = repository({
       consumeRateLimit: async (request) => {
-        events.push(`rate:${request.action}:${request.limit}:${request.windowSeconds}`);
+        events.push(
+          `rate:${request.action}:${request.limit}:${request.windowSeconds}`,
+        );
         return { allowed: true, retryAfterSeconds: 0, retryAt: null };
       },
       findPostOwnership: async () => {

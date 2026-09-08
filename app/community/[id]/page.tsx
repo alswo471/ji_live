@@ -6,6 +6,7 @@ import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { CommentForm } from '@/components/community/comment-form';
 import { CommentList } from '@/components/community/comment-list';
 import { ReportDialog } from '@/components/community/report-dialog';
+import { PostEngagement } from '@/components/community/post-engagement';
 import {
   TurnstileChallenge,
   type TurnstileChallengeHandle,
@@ -211,6 +212,11 @@ export default function CommunityDetailPage({
                     {new URL(post.linkUrl).hostname}
                   </a>
                 )}
+                <PostEngagement
+                  postId={id}
+                  initialViewCount={post.viewCount}
+                  initialRecommendationCount={post.recommendationCount}
+                />
                 <div className="mt-5 flex justify-end gap-2">
                   {post.canDelete && (
                     <Button

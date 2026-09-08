@@ -22,6 +22,8 @@ export interface CommunityPostRecord {
   status: CommunityContentStatus;
   createdAt: string;
   commentCount: number;
+  viewCount: number | null;
+  recommendationCount: number | null;
 }
 
 export interface CommunityCommentRecord {
@@ -85,6 +87,7 @@ function getStatus(
 function toPostRecord(
   value: unknown,
   commentCount: number,
+  counters: { viewCount: number; recommendationCount: number } | null,
 ): CommunityPostRecord {
   const row = asRecord(value);
   return {
@@ -97,7 +100,51 @@ function toPostRecord(
     status: getStatus(row, 'status'),
     createdAt: getString(row, 'created_at'),
     commentCount,
+    viewCount: counters?.viewCount ?? null,
+    recommendationCount: counters?.recommendationCount ?? null,
   };
+}
+
+function getCounter(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new CommunityRepositoryError();
+  }
+  return value;
+}
+
+async function loadPostCounters(postIds: string[]) {
+  if (postIds.length === 0) {
+    return new Map<
+      string,
+      { viewCount: number; recommendationCount: number }
+    >();
+  }
+
+  const { data, error } = await getServerSupabase()
+    .from('community_posts')
+    .select('id,view_count,recommendation_count')
+    .in('id', postIds);
+
+  // The engagement migration is deployed separately. Existing reads remain
+  // available during that short window, while the UI renders unknown as —.
+  if (error?.code === '42703') return null;
+  if (error || !Array.isArray(data)) {
+    throw new CommunityRepositoryError(error?.message);
+  }
+
+  return new Map(
+    data.map((value) => {
+      const row = asRecord(value);
+      return [
+        getString(row, 'id'),
+        {
+          viewCount: getCounter(row, 'view_count'),
+          recommendationCount: getCounter(row, 'recommendation_count'),
+        },
+      ] as const;
+    }),
+  );
 }
 
 function getParentStatus(value: unknown): CommunityContentStatus {
@@ -161,9 +208,16 @@ export const communityReadRepository: CommunityReadRepository = {
     const counts = await loadVisibleCommentCounts(
       data.map((value) => getString(asRecord(value), 'id')),
     );
+    const counters = await loadPostCounters(
+      data.map((value) => getString(asRecord(value), 'id')),
+    );
     return data.map((value) => {
       const id = getString(asRecord(value), 'id');
-      return toPostRecord(value, counts.get(id) ?? 0);
+      return toPostRecord(
+        value,
+        counts.get(id) ?? 0,
+        counters?.get(id) ?? null,
+      );
     });
   },
 
@@ -179,7 +233,8 @@ export const communityReadRepository: CommunityReadRepository = {
     if (!data) return null;
 
     const counts = await loadVisibleCommentCounts([id]);
-    return toPostRecord(data, counts.get(id) ?? 0);
+    const counters = await loadPostCounters([id]);
+    return toPostRecord(data, counts.get(id) ?? 0, counters?.get(id) ?? null);
   },
 
   async findComments(postId, { cursor, limit }) {

@@ -39,8 +39,7 @@ function dependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     createPost: async (actor, input) => ({
@@ -50,6 +49,8 @@ function dependencies(
       body: input.body,
       linkUrl: input.linkUrl,
       commentCount: 0,
+      viewCount: null,
+      recommendationCount: null,
       createdAt: '2026-09-03T01:00:00.000Z',
       canDelete: actor.id === ACTOR.id,
     }),
@@ -157,6 +158,8 @@ describe('community post write route', () => {
             body: input.body,
             linkUrl: input.linkUrl,
             commentCount: 0,
+            viewCount: null,
+            recommendationCount: null,
             createdAt: '2026-09-03T01:00:00.000Z',
             canDelete: true,
           };
@@ -176,8 +179,7 @@ function commentDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     createComment: async (actor, postId, input) => ({
@@ -198,8 +200,7 @@ function deletePostDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     deletePost: async () => undefined,
@@ -213,8 +214,7 @@ function deleteCommentDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     deleteComment: async () => undefined,
@@ -228,8 +228,7 @@ function reportDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     reportContent: async () => ({ accepted: true, temporarilyHidden: false }),
@@ -252,7 +251,11 @@ describe('remaining community write routes', () => {
 
     const response = await handleCreatePostRequest(
       postRequest(VALID_BODY),
-      dependencies({ resolveClientIp: getTrustedClientIp, createAbuseKey, createPost }),
+      dependencies({
+        resolveClientIp: getTrustedClientIp,
+        createAbuseKey,
+        createPost,
+      }),
     );
 
     expect(response.status).toBe(403);

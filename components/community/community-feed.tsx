@@ -33,14 +33,17 @@ export function CommunityFeed({
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
-      <div className="flex items-center justify-between border-b bg-muted/40 px-5 py-3 text-xs font-semibold text-muted-foreground">
-        <span>게시글</span>
-        <span>최신순</span>
+      <div className="hidden grid-cols-[minmax(0,1fr)_10rem_8rem_4rem_4rem] items-center gap-4 border-b bg-muted/40 px-5 py-3 text-center text-xs font-semibold text-muted-foreground md:grid">
+        <span className="text-left">제목</span>
+        <span>작성자</span>
+        <span>작성일</span>
+        <span>조회</span>
+        <span>추천</span>
       </div>
       {items.map((post) => (
         <article
           key={post.id}
-          className="border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/30 sm:px-5"
+          className="grid gap-2 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/30 sm:px-5 md:grid-cols-[minmax(0,1fr)_10rem_8rem_4rem_4rem] md:items-center md:gap-4"
         >
           <Link
             href={`/community/${post.id}`}
@@ -54,13 +57,22 @@ export function CommunityFeed({
                 {post.commentCount}
               </span>
             </h3>
-            <p className="mt-1 line-clamp-1 break-all text-sm leading-6 text-muted-foreground">
+            <p className="mt-1 line-clamp-1 break-all text-xs leading-5 text-muted-foreground">
               {post.excerpt}
             </p>
+            {post.linkUrl ? (
+              <span className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <ExternalLink aria-hidden="true" className="size-3.5" />
+                {new URL(post.linkUrl).hostname}
+              </span>
+            ) : null}
           </Link>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-            <span>{post.authorName}</span>
-            <time dateTime={post.createdAt}>
+          <div className="grid grid-cols-2 items-center gap-x-4 gap-y-2 text-xs text-muted-foreground md:contents md:text-center">
+            <span className="truncate md:block">{post.authorName}</span>
+            <time
+              className="text-right md:text-center"
+              dateTime={post.createdAt}
+            >
               {new Intl.DateTimeFormat('ko-KR', {
                 month: 'short',
                 day: 'numeric',
@@ -68,12 +80,16 @@ export function CommunityFeed({
                 minute: '2-digit',
               }).format(new Date(post.createdAt))}
             </time>
-            {post.linkUrl && (
-              <span className="inline-flex min-w-0 items-center gap-1 break-all">
-                <ExternalLink aria-hidden="true" className="size-3.5" />
-                {new URL(post.linkUrl).hostname}
+            <span>
+              <span className="md:hidden">조회 </span>
+              <span className="tabular-nums">{post.viewCount ?? '—'}</span>
+            </span>
+            <span className="text-right md:text-center">
+              <span className="md:hidden">추천 </span>
+              <span className="tabular-nums">
+                {post.recommendationCount ?? '—'}
               </span>
-            )}
+            </span>
           </div>
         </article>
       ))}

@@ -99,6 +99,8 @@ function toPostSummary(post: CommunityPostRecord): CommunityPostSummary {
     excerpt: createExcerpt(post.body),
     linkUrl: post.linkUrl,
     commentCount: post.commentCount,
+    viewCount: post.viewCount,
+    recommendationCount: post.recommendationCount,
     createdAt: post.createdAt,
   };
 }
@@ -114,6 +116,8 @@ function toPostDetail(
     body: post.body,
     linkUrl: post.linkUrl,
     commentCount: post.commentCount,
+    viewCount: post.viewCount,
+    recommendationCount: post.recommendationCount,
     createdAt: post.createdAt,
     ...(actorId ? { canDelete: post.authorId === actorId } : {}),
   };
