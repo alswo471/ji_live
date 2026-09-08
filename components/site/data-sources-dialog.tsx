@@ -30,6 +30,10 @@ export function DataSourcesDialog() {
         </DialogDescription>
         <div className="space-y-5 text-sm leading-6 [&_a]:font-semibold [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 [&_a]:focus-visible:ring-2">
           <section>
+            <h3 className="font-bold">국내 공식 일별 기록</h3>
+            <p className="mt-1 text-muted-foreground">금융위원회 공공데이터포털의 <a href="https://www.data.go.kr/data/15094808/openapi.do" target="_blank" rel="noreferrer">주식</a>·<a href="https://www.data.go.kr/data/15094807/openapi.do" target="_blank" rel="noreferrer">지수</a>·<a href="https://www.data.go.kr/data/15094806/openapi.do" target="_blank" rel="noreferrer">ETF</a> 일별 데이터를 사용합니다. 기준일 다음 영업일 오후 1시 이후 제공되는 기록이며 장중 시세가 아닙니다. ETF 순위는 같은 기준일 전체 목록의 거래량 순입니다. 주식 기록은 최근 90일 내 제공된 거래일만 표시하며 현재 추정가와 시점이 달라 두 값의 차이를 오차율로 표시하지 않습니다.</p>
+          </section>
+          <section>
             <h3 className="font-bold">주식 참고 추정가</h3>
             <p className="mt-1 text-muted-foreground">
               <a

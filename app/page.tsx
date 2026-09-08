@@ -6,6 +6,7 @@ import { MarketSummary } from '@/components/market/market-summary';
 import Link from 'next/link';
 import { MarketStatusBar } from '@/components/market/market-status-bar';
 import { QuoteTable } from '@/components/market/quote-table';
+import { OfficialDailyPanel } from '@/components/market/official-daily-panel';
 import { SiteFooter } from '@/components/site/site-footer';
 import { SiteHeader } from '@/components/site/site-header';
 import { useMarketDashboard } from '@/hooks/use-market-dashboard';
@@ -56,7 +57,7 @@ export default function Home() {
             onRefresh={() => void refresh()}
           />
         </header>
-        <MarketStatusBar state={state} fetchedAt={data?.fetchedAt} />
+        {!pending && <MarketStatusBar state={state} fetchedAt={data?.fetchedAt} />}
         <div className="space-y-8 px-4 py-6 sm:px-6 lg:px-8">
           <div>
             <section className="min-w-0" aria-label={label + ' 목록'}>
@@ -86,7 +87,7 @@ export default function Home() {
                   </label>
                 )}
               </div>
-              {pending ? (
+              {section === 'etf' ? <OfficialDailyPanel kind="etf" /> : pending ? (
                 <div className="flex min-h-72 flex-col items-center justify-center rounded-2xl border bg-card px-6 py-12 text-center">
                   <span className="mb-4 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                     준비 중
