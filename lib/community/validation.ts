@@ -101,6 +101,12 @@ function validateUuid(value: string, code: string, message: string) {
 
 export function validatePostInput(value: unknown): PostInput {
   const record = getRecord(value);
+  if (record.kind !== undefined && record.kind !== 'normal') {
+    throw new CommunityInputError(
+      'invalid_post_kind',
+      '일반 글만 작성할 수 있습니다.',
+    );
+  }
   const title = getString(
     record,
     'title',

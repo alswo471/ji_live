@@ -1,4 +1,5 @@
 import { createAnonymousName } from './nickname';
+import { validatePostKind } from './post-kind';
 import {
   type CommunityCommentRecord,
   type CommunityContentStatus,
@@ -136,6 +137,7 @@ function postRecord(value: unknown): CommunityPostRecord {
   const row = record(value);
   return {
     id: string(row, 'id'),
+    kind: row.kind === undefined ? 'normal' : validatePostKind(row.kind),
     authorId: string(row, 'author_id'),
     authorName: string(row, 'author_name'),
     title: string(row, 'title'),
@@ -207,12 +209,15 @@ export const communityWriteRepository: CommunityWriteRepository = {
   },
 
   async findPostByIdempotency(actorId, key) {
-    const { data, error } = await getServerSupabase()
-      .from('community_posts')
-      .select(POST_COLUMNS)
-      .eq('author_id', actorId)
-      .eq('idempotency_key', key)
-      .maybeSingle();
+    const build = (withKind: boolean) =>
+      getServerSupabase()
+        .from('community_posts')
+        .select(`${POST_COLUMNS}${withKind ? ',kind' : ''}`)
+        .eq('author_id', actorId)
+        .eq('idempotency_key', key)
+        .maybeSingle();
+    let { data, error } = await build(true);
+    if (error?.code === '42703') ({ data, error } = await build(false));
     if (error) providerError(error);
     return data ? postRecord(data) : null;
   },
@@ -413,6 +418,7 @@ export const communityWriteRepository: CommunityWriteRepository = {
 function toPost(post: CommunityPostRecord): CommunityPostDetail {
   return {
     id: post.id,
+    kind: post.kind,
     authorName: post.authorName,
     title: post.title,
     body: post.body,

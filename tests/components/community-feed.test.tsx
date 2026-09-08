@@ -27,6 +27,7 @@ describe('CommunityFeed', () => {
         items={[
           {
             id: 'post-id',
+            kind: 'required',
             authorName: '차분한-고양이-0001',
             title: '<script>alert(1)</script>',
             excerpt: '시장 의견',
@@ -34,7 +35,7 @@ describe('CommunityFeed', () => {
             commentCount: 2,
             viewCount: 12,
             recommendationCount: 3,
-            createdAt: '2026-09-03T01:00:00.000Z',
+            createdAt: '2026-04-14T15:00:00.000Z',
           },
         ]}
         hasMore
@@ -45,6 +46,8 @@ describe('CommunityFeed', () => {
     expect(screen.getByText('<script>alert(1)</script>')).toBeInTheDocument();
     expect(document.querySelector('script')).toBeNull();
     expect(screen.getByText('example.com')).toBeInTheDocument();
+    expect(screen.getByText('필독')).toBeInTheDocument();
+    expect(screen.getByText('2026.04.15.')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(
@@ -59,6 +62,7 @@ describe('CommunityFeed', () => {
         items={[
           {
             id: 'post-id',
+            kind: 'normal',
             authorName: '차분한-고양이-0001',
             title: '집계 준비 중인 글',
             excerpt: '기존 글은 계속 읽힙니다.',

@@ -61,6 +61,7 @@ function postRecord(
   overrides: Partial<CommunityPostRecord> = {},
 ): CommunityPostRecord {
   return {
+    kind: 'normal',
     id: POST_ID,
     authorId: ACTOR.id,
     authorName: '차분한-고양이-0001',

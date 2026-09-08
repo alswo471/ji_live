@@ -19,6 +19,7 @@ vi.mock('@/hooks/use-community-session', () => ({
     status: 'ready',
     accessToken: 'token',
     error: null,
+    getAccessToken: async () => 'token',
   }),
 }));
 vi.mock('@/components/community/turnstile-challenge', () => ({
@@ -32,7 +33,48 @@ beforeEach(() => {
   communityWriteMock.mockReset();
   pushMock.mockReset();
   vi.stubEnv('NEXT_PUBLIC_COMMUNITY_ENABLED', 'true');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(null, { status: 403 })),
+  );
 });
+
+it.each(['normal', 'notice', 'required'])(
+  'creates selected administrator kind %s atomically through the admin route',
+  async (kind) => {
+    const requests: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url, options) => {
+        if (options.method === 'POST') {
+          requests.push(JSON.parse(options.body));
+          return Response.json({ id: '30000000-0000-4000-8000-000000000001' });
+        }
+        return Response.json({ canManage: true, ready: true });
+      }),
+    );
+    render(<CommunityWritePage />);
+    fireEvent.change(await screen.findByLabelText('글 종류'), {
+      target: { value: kind },
+    });
+    fireEvent.change(screen.getByLabelText('제목'), {
+      target: { value: '종류 검증 제목' },
+    });
+    fireEvent.change(screen.getByLabelText('내용'), {
+      target: { value: '종류 검증 본문' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '글 올리기' }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    expect(requests).toEqual([
+      expect.objectContaining({
+        kind,
+        title: '종류 검증 제목',
+        body: '종류 검증 본문',
+      }),
+    ]);
+    expect(communityWriteMock).not.toHaveBeenCalled();
+  },
+);
 
 it('reuses the post form and navigates to the returned post after success', async () => {
   communityWriteMock.mockResolvedValue({

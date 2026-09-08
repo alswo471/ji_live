@@ -18,7 +18,8 @@ export type AdminAuditAction =
   | 'delete'
   | 'dismiss'
   | 'restrict'
-  | 'unrestrict';
+  | 'unrestrict'
+  | 'kind_change';
 export type AdminAuditTargetType = AdminContentTargetType | 'user';
 
 export interface AdminSummary {
@@ -334,7 +335,8 @@ function auditAction(value: unknown): AdminAuditAction {
     value !== 'delete' &&
     value !== 'dismiss' &&
     value !== 'restrict' &&
-    value !== 'unrestrict'
+    value !== 'unrestrict' &&
+    value !== 'kind_change'
   ) {
     unavailable();
   }
@@ -701,7 +703,8 @@ export async function listAdminAudit(
     selectedAction !== 'delete' &&
     selectedAction !== 'dismiss' &&
     selectedAction !== 'restrict' &&
-    selectedAction !== 'unrestrict'
+    selectedAction !== 'unrestrict' &&
+    selectedAction !== 'kind_change'
   ) {
     invalid('invalid_audit_action', '관리 조치 유형을 확인해 주세요.');
   }

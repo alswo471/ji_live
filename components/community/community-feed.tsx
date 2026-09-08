@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ExternalLink, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { CommunityPostSummary } from '@/lib/community/types';
+import { formatCommunityDate, postKindLabels } from '@/lib/community/post-kind';
 
 type FeedState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -49,7 +50,14 @@ export function CommunityFeed({
             href={`/community/${post.id}`}
             className="block min-h-11 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <h3 className="break-all text-base font-semibold tracking-tight">
+            <h3
+              className={`break-all text-base font-semibold tracking-tight ${post.kind === 'notice' || post.kind === 'required' ? 'text-red-700 dark:text-red-300' : ''}`}
+            >
+              {(post.kind === 'notice' || post.kind === 'required') && (
+                <span className="mr-2 inline-flex shrink-0 whitespace-nowrap rounded bg-red-100 px-1.5 py-0.5 align-middle text-xs font-bold text-red-800 dark:bg-red-950 dark:text-red-200">
+                  {postKindLabels[post.kind]}
+                </span>
+              )}
               {post.title}
               <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium tabular-nums text-primary">
                 <MessageCircle aria-hidden="true" className="size-3.5" />
@@ -73,12 +81,7 @@ export function CommunityFeed({
               className="text-right md:text-center"
               dateTime={post.createdAt}
             >
-              {new Intl.DateTimeFormat('ko-KR', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              }).format(new Date(post.createdAt))}
+              {formatCommunityDate(post.createdAt)}
             </time>
             <span>
               <span className="md:hidden">조회 </span>

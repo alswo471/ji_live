@@ -12,6 +12,7 @@ import type {
   CommunityPostSummary,
   PostPage,
 } from './types';
+import { postKindRank } from './post-kind';
 
 const DEFAULT_POST_LIMIT = 20;
 const DEFAULT_COMMENT_LIMIT = 30;
@@ -40,7 +41,13 @@ function getLimit(value: number, fallback: number) {
 }
 
 function encodeCursor(cursor: CommunityPageCursor) {
-  return btoa(JSON.stringify([cursor.createdAt, cursor.id]))
+  return btoa(
+    JSON.stringify([
+      cursor.createdAt,
+      cursor.id,
+      ...(cursor.kindRank === undefined ? [] : [cursor.kindRank]),
+    ]),
+  )
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replace(/=+$/g, '');
@@ -51,19 +58,29 @@ function decodeCursor(value: string): CommunityPageCursor {
     const base64 = value.replaceAll('-', '+').replaceAll('_', '/');
     const padding = '='.repeat((4 - (base64.length % 4)) % 4);
     const decoded: unknown = JSON.parse(atob(base64 + padding));
-    if (!Array.isArray(decoded) || decoded.length !== 2) throw new Error();
+    if (!Array.isArray(decoded) || ![2, 3].includes(decoded.length))
+      throw new Error();
 
-    const [createdAt, id] = decoded;
+    const [createdAt, id, kindRank] = decoded;
+    if (decoded.length === 3 && ![0, 1, 2].includes(kindRank))
+      throw new Error();
     if (
       typeof createdAt !== 'string' ||
       typeof id !== 'string' ||
       !isCommunityUuid(id) ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(
+        createdAt,
+      ) ||
       Number.isNaN(Date.parse(createdAt)) ||
-      new Date(createdAt).toISOString() !== createdAt
+      new Date(createdAt).toISOString().slice(0, 19) !== createdAt.slice(0, 19)
     ) {
       throw new Error();
     }
-    return { createdAt, id: id.toLowerCase() };
+    return {
+      createdAt,
+      id: id.toLowerCase(),
+      ...(kindRank === undefined ? {} : { kindRank }),
+    };
   } catch {
     throw new CommunityReadInputError(
       'invalid_cursor',
@@ -94,6 +111,7 @@ function createExcerpt(body: string) {
 function toPostSummary(post: CommunityPostRecord): CommunityPostSummary {
   return {
     id: post.id,
+    kind: post.kind,
     authorName: post.authorName,
     title: post.title,
     excerpt: createExcerpt(post.body),
@@ -111,6 +129,7 @@ function toPostDetail(
 ): CommunityPostDetail {
   return {
     id: post.id,
+    kind: post.kind,
     authorName: post.authorName,
     title: post.title,
     body: post.body,
@@ -137,17 +156,20 @@ function toComment(
   };
 }
 
-function createPage<T extends { id: string; createdAt: string }>(
-  items: T[],
-  limit: number,
-) {
+function createPage<
+  T extends { id: string; createdAt: string; kind?: keyof typeof postKindRank },
+>(items: T[], limit: number) {
   const pageItems = items.slice(0, limit);
   const last = pageItems.at(-1);
   return {
     pageItems,
     nextCursor:
       items.length > limit && last
-        ? encodeCursor({ createdAt: last.createdAt, id: last.id })
+        ? encodeCursor({
+            createdAt: last.createdAt,
+            id: last.id,
+            ...(last.kind ? { kindRank: postKindRank[last.kind] } : {}),
+          })
         : null,
   };
 }
@@ -158,13 +180,24 @@ export async function listPosts(
   repository: CommunityReadRepository = communityReadRepository,
 ): Promise<PostPage> {
   const selectedLimit = getLimit(limit, DEFAULT_POST_LIMIT);
+  const decoded = validateCommunityCursor(cursor);
+  if (decoded && decoded.kindRank === undefined) {
+    throw new CommunityReadInputError(
+      'stale_cursor',
+      '글 정렬이 변경되었습니다. 목록을 새로고침해 주세요.',
+    );
+  }
   const rows = await repository.findPosts({
-    cursor: validateCommunityCursor(cursor),
+    cursor: decoded,
     limit: selectedLimit + 1,
   });
   const visible = rows
     .filter((post) => post.status === 'visible')
-    .sort(compareNewestFirst)
+    .sort(
+      (left, right) =>
+        postKindRank[right.kind] - postKindRank[left.kind] ||
+        compareNewestFirst(left, right),
+    )
     .map(toPostSummary);
   const page = createPage(visible, selectedLimit);
   return { items: page.pageItems, nextCursor: page.nextCursor };

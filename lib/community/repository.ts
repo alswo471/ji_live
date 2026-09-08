@@ -1,10 +1,12 @@
 import { getServerSupabase } from './supabase';
+import { validatePostKind, type CommunityPostKind } from './post-kind';
 
 export type CommunityContentStatus = 'visible' | 'hidden' | 'deleted';
 
 export type CommunityPageCursor = {
   createdAt: string;
   id: string;
+  kindRank?: number;
 };
 
 export type CommunityPageQuery = {
@@ -14,6 +16,7 @@ export type CommunityPageQuery = {
 
 export interface CommunityPostRecord {
   id: string;
+  kind: CommunityPostKind;
   authorId: string;
   authorName: string;
   title: string;
@@ -92,6 +95,7 @@ function toPostRecord(
   const row = asRecord(value);
   return {
     id: getString(row, 'id'),
+    kind: row.kind === undefined ? 'normal' : validatePostKind(row.kind),
     authorId: getString(row, 'author_id'),
     authorName: getString(row, 'author_name'),
     title: getString(row, 'title'),
@@ -188,20 +192,32 @@ async function loadVisibleCommentCounts(postIds: string[]) {
 
 export const communityReadRepository: CommunityReadRepository = {
   async findPosts({ cursor, limit }) {
-    let query = getServerSupabase()
-      .from('community_posts')
-      .select('id,author_id,author_name,title,body,link_url,status,created_at')
-      .eq('status', 'visible')
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(limit);
+    const build = (ranked: boolean) => {
+      let query = getServerSupabase()
+        .from('community_posts')
+        .select(
+          `id,author_id,author_name,title,body,link_url,status,created_at${ranked ? ',kind,kind_rank' : ''}`,
+        )
+        .eq('status', 'visible');
+      if (ranked) query = query.order('kind_rank', { ascending: false });
+      query = query
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit);
 
-    if (cursor) {
-      query = query.or(
-        `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
-      );
+      if (cursor) {
+        query = query.or(
+          ranked
+            ? `kind_rank.lt.${cursor.kindRank},and(kind_rank.eq.${cursor.kindRank},created_at.lt.${cursor.createdAt}),and(kind_rank.eq.${cursor.kindRank},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
+            : `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+        );
+      }
+      return query;
+    };
+    let { data, error } = await build(true);
+    if (error?.code === '42703' && (!cursor || cursor.kindRank === 0)) {
+      ({ data, error } = await build(false));
     }
-    const { data, error } = await query;
     if (error || !Array.isArray(data))
       throw new CommunityRepositoryError(error?.message);
 
@@ -222,12 +238,17 @@ export const communityReadRepository: CommunityReadRepository = {
   },
 
   async findPost(id) {
-    const { data, error } = await getServerSupabase()
-      .from('community_posts')
-      .select('id,author_id,author_name,title,body,link_url,status,created_at')
-      .eq('id', id)
-      .eq('status', 'visible')
-      .maybeSingle();
+    const build = (ranked: boolean) =>
+      getServerSupabase()
+        .from('community_posts')
+        .select(
+          `id,author_id,author_name,title,body,link_url,status,created_at${ranked ? ',kind' : ''}`,
+        )
+        .eq('id', id)
+        .eq('status', 'visible')
+        .maybeSingle();
+    let { data, error } = await build(true);
+    if (error?.code === '42703') ({ data, error } = await build(false));
 
     if (error) throw new CommunityRepositoryError(error.message);
     if (!data) return null;

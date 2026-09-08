@@ -8,6 +8,8 @@
 
 ### 추가
 
+- 관리자 일반·공지·필독 작성/변경·고정 해제, 종류별 페이지네이션과 한국 시간 `YYYY.MM.DD.` 날짜 표시 추가 (원격 DB 적용 대기)
+- 종류 변경을 기존 1년 보관 감사 기록에 연계하고 서버 권한/DB 준비에 따른 선택기, 저장 실패 입력 유지와 중복 요청 방지 추가
 - 제목·작성자·작성일·조회·추천 열의 카페형 커뮤니티 목록과 별도 `작성` 페이지 추가
 - actor·게시글별 rolling 24시간 조회수, desired-state 추천·취소, service-role 전용 atomic RPC와 receipt 자동 정리 추가
 - 제목 옆 댓글 수, 댓글을 먼저 읽는 상세 배치와 관리자 화면 디자인 통일
@@ -75,6 +77,7 @@
 
 ### 보안
 
+- 일반 작성의 공지·필독 주입 거부, service_role 일반 쓰기의 종류 열 변경 차단, 관리자 전용 원자 생성/변경 RPC와 트랜잭션 내 관리자 재검증 추가
 - 조회 60회/분과 추천·취소 20회/분을 actor와 daily HMAC으로 제한하고 anon/authenticated의 집계 table·RPC 직접 접근 차단
 - 관리자 JWT를 server에서 다시 검증하고 `community_admins` 등록 여부를 확인한 뒤에만 관리 API 허용
 - 관리자 email Magic Link 요청에도 Cloudflare Turnstile token을 전달해 Supabase CAPTCHA 정책을 일관되게 적용

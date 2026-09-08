@@ -86,6 +86,7 @@ describe('community read routes', () => {
       POST_ID,
       async (_id, actorId) => ({
         id: POST_ID,
+        kind: 'normal',
         authorName: '차분한-고양이-0001',
         title: '시장 이야기',
         body: '본문',

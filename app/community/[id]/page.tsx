@@ -7,6 +7,13 @@ import { CommentForm } from '@/components/community/comment-form';
 import { CommentList } from '@/components/community/comment-list';
 import { ReportDialog } from '@/components/community/report-dialog';
 import { PostEngagement } from '@/components/community/post-engagement';
+import { PostKindControl } from '@/components/community/post-kind-control';
+import { useCommunityPostKindPermission } from '@/hooks/use-community-post-kind-permission';
+import {
+  formatCommunityDate,
+  postKindLabels,
+  validatePostKind,
+} from '@/lib/community/post-kind';
 import {
   TurnstileChallenge,
   type TurnstileChallengeHandle,
@@ -38,6 +45,7 @@ export default function CommunityDetailPage({
   const [actionError, setActionError] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const session = useCommunitySession();
+  const permission = useCommunityPostKindPermission(session.accessToken);
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
   const commentRequestRef = useRef(0);
 
@@ -186,18 +194,56 @@ export default function CommunityDetailPage({
           {state === 'ready' && post && (
             <>
               <article className="mt-4 rounded-2xl border bg-card p-5 sm:p-7">
-                <h1 className="break-all text-xl font-bold tracking-tight sm:text-2xl">
+                <h1
+                  className={`break-all text-xl font-bold tracking-tight sm:text-2xl ${post.kind === 'notice' || post.kind === 'required' ? 'text-red-700 dark:text-red-300' : ''}`}
+                >
+                  {(post.kind === 'notice' || post.kind === 'required') && (
+                    <span className="mr-2 inline-flex shrink-0 whitespace-nowrap rounded bg-red-100 px-2 py-1 align-middle text-xs font-bold text-red-800 dark:bg-red-950 dark:text-red-200">
+                      {postKindLabels[post.kind]}
+                    </span>
+                  )}
                   {post.title}
                 </h1>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-b pb-5 text-xs text-muted-foreground">
                   <span>{post.authorName}</span>
                   <time dateTime={post.createdAt}>
+                    {formatCommunityDate(post.createdAt)}{' '}
                     {new Intl.DateTimeFormat('ko-KR', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
+                      timeZone: 'Asia/Seoul',
+                      hour: '2-digit',
+                      minute: '2-digit',
                     }).format(new Date(post.createdAt))}
                   </time>
                 </div>
+                {permission.canManage && (
+                  <PostKindControl
+                    key={post.id}
+                    kind={post.kind}
+                    onSave={async (kind) => {
+                      const saved = await permission.write(
+                        `/api/admin/community/posts/${post.id}/kind`,
+                        'PATCH',
+                        { kind },
+                        session.getAccessToken,
+                      );
+                      return {
+                        kind: validatePostKind(
+                          (saved as { kind?: unknown } | null)?.kind,
+                        ),
+                      };
+                    }}
+                    onChanged={(kind) =>
+                      setPost((current) =>
+                        current ? { ...current, kind } : current,
+                      )
+                    }
+                  />
+                )}
+                {permission.error && (
+                  <p role="alert" className="mt-3 text-sm text-destructive">
+                    {permission.error}
+                  </p>
+                )}
                 <p className="mt-6 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-base leading-7">
                   {post.body}
                 </p>

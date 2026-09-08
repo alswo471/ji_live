@@ -70,6 +70,31 @@ function repository(
 }
 
 describe('admin console input validation', () => {
+  it('accepts kind-change audit entries in the retained audit feed', async () => {
+    const page = await listAdminAudit(
+      { action: 'kind_change' },
+      repository({
+        findAudit: async () => [
+          {
+            id: AUDIT_ID,
+            adminId: AUTHOR_ID,
+            action: 'kind_change',
+            targetType: 'post',
+            targetId: POST_ID,
+            targetAuthorId: AUTHOR_ID,
+            reason: '글 종류 변경: notice → normal',
+            createdAt: '2026-09-09T00:00:00.000Z',
+            targetTitle: null,
+            targetBody: null,
+            deletionSource: null,
+          },
+        ],
+      }),
+      SECRET,
+    );
+    expect(page.items[0].action).toBe('kind_change');
+    expect(JSON.stringify(page)).not.toContain(AUTHOR_ID);
+  });
   it.each(['unknown', '', null])('rejects an invalid admin tab: %s', (tab) => {
     expect(() => validateAdminTab(tab)).toThrow(CommunityAdminConsoleError);
     expect(() => validateAdminTab(tab)).toThrow(
@@ -428,7 +453,9 @@ describe('admin console summary, sanctions and audit', () => {
     });
 
     expect(selections[0]).toContain('target_title_snapshot');
-    expect(selections[0]).not.toContain('community_posts(id,author_id,title,body)');
+    expect(selections[0]).not.toContain(
+      'community_posts(id,author_id,title,body)',
+    );
     expect(equalities).toEqual([
       ['action', 'delete'],
       ['target_type', 'post'],

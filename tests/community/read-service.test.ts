@@ -19,6 +19,7 @@ function createPost(
 ): CommunityPostRecord {
   return {
     id: POST_ID,
+    kind: 'normal',
     authorId: ACTOR_ID,
     authorName: '차분한-고양이-0001',
     title: '시장 이야기',
@@ -61,6 +62,54 @@ function createRepository(
 }
 
 describe('listPosts', () => {
+  it('keeps kind rank ahead of date and carries it to the next page', async () => {
+    let next: unknown;
+    const repository = createRepository({
+      findPosts: async ({ cursor }) => {
+        next = cursor;
+        return [
+          createPost({ kind: 'normal' }),
+          createPost({
+            kind: 'required',
+            createdAt: '2020-01-01T00:00:00.000Z',
+          }),
+          createPost({ kind: 'notice' }),
+        ];
+      },
+    });
+    const page = await listPosts(null, 2, repository);
+    expect(page.items.map((post) => post.kind)).toEqual(['required', 'notice']);
+    await listPosts(page.nextCursor, 2, repository);
+    expect(next).toEqual({
+      createdAt: '2026-09-03T01:00:00.000Z',
+      id: POST_ID,
+      kindRank: 1,
+    });
+  });
+  it('rejects a legacy post cursor with a restart message instead of silently omitting pinned rows', async () => {
+    const cursor = btoa(JSON.stringify(['2026-09-03T01:00:00.000Z', POST_ID]));
+    await expect(
+      listPosts(cursor, 20, createRepository()),
+    ).rejects.toMatchObject({ code: 'stale_cursor' });
+  });
+  it('round-trips PostgreSQL timestamps without truncating microseconds at a page boundary', async () => {
+    let next: unknown;
+    const repository = createRepository({
+      findPosts: async ({ cursor }) => {
+        next = cursor;
+        return [
+          createPost({ createdAt: '2026-09-09T01:02:03.123456+00:00' }),
+          createPost({ createdAt: '2026-09-09T01:02:03.123455+00:00' }),
+        ];
+      },
+    });
+    const page = await listPosts(null, 1, repository);
+    await listPosts(page.nextCursor, 1, repository);
+    expect(next).toMatchObject({
+      createdAt: '2026-09-09T01:02:03.123456+00:00',
+      kindRank: 0,
+    });
+  });
   it('clamps the limit, sorts newest first and returns an opaque next cursor', async () => {
     const repository = createRepository({
       findPosts: async ({ limit }) => {
@@ -98,6 +147,7 @@ describe('listPosts', () => {
 
     expect(page.items).toEqual([
       {
+        kind: 'normal',
         id: '10000000-0000-4000-8000-000000000003',
         authorName: '차분한-고양이-0001',
         title: '시장 이야기',

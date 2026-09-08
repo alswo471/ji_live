@@ -13,10 +13,12 @@ import { SiteFooter } from '@/components/site/site-footer';
 import { SiteHeader } from '@/components/site/site-header';
 import { useCommunitySession } from '@/hooks/use-community-session';
 import { communityWrite } from '@/lib/community/browser-api';
+import { useCommunityPostKindPermission } from '@/hooks/use-community-post-kind-permission';
 
 function CommunityWriteForm() {
   const router = useRouter();
   const session = useCommunitySession();
+  const permission = useCommunityPostKindPermission(session.accessToken);
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
 
   return (
@@ -26,15 +28,24 @@ function CommunityWriteForm() {
         페이지를 떠나면 작성 중인 내용이 사라집니다.
       </p>
       <PostForm
+        canManageKind={permission.canManage}
         onSubmit={async (input) => {
           if (!challengeRef.current) throw new Error();
-          const result = await communityWrite(
-            '/api/community/posts',
-            'POST',
-            input,
-            session,
-            challengeRef.current,
-          );
+          const result =
+            input.kind !== undefined
+              ? await permission.write(
+                  '/api/admin/community/posts',
+                  'POST',
+                  input,
+                  session.getAccessToken,
+                )
+              : await communityWrite(
+                  '/api/community/posts',
+                  'POST',
+                  input,
+                  session,
+                  challengeRef.current,
+                );
           if (
             !result ||
             typeof result !== 'object' ||
@@ -44,6 +55,12 @@ function CommunityWriteForm() {
           router.push(`/community/${(result as { id: string }).id}`);
         }}
       />
+      {permission.status === 'unavailable' && (
+        <output className="block text-sm text-muted-foreground">
+          공지·필독 작성 연결을 확인하지 못했습니다. 일반 글은 작성할 수
+          있습니다.
+        </output>
+      )}
       <div className="rounded-2xl border bg-card p-4">
         <TurnstileChallenge ref={challengeRef} />
         {session.error ? (

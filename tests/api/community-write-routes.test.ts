@@ -43,6 +43,7 @@ function dependencies(
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     createPost: async (actor, input) => ({
+      kind: 'normal',
       id: '30000000-0000-4000-8000-000000000001',
       authorName: '차분한-고양이-0001',
       title: input.title,
@@ -57,6 +58,29 @@ function dependencies(
     ...overrides,
   };
 }
+
+it.each(['notice', 'required'])(
+  'rejects forged kind %s before the regular route inserts',
+  async (kind) => {
+    let inserted = false;
+    const result = await handleCreatePostRequest(
+      postRequest({
+        title: '공지 제목',
+        body: '본문',
+        idempotencyKey: IDEMPOTENCY_KEY,
+        kind,
+      }),
+      dependencies({
+        createPost: async () => {
+          inserted = true;
+          throw new Error();
+        },
+      }),
+    );
+    expect(result.status).toBe(400);
+    expect(inserted).toBe(false);
+  },
+);
 
 function postRequest(body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost/api/community/posts', {
@@ -153,6 +177,7 @@ describe('community post write route', () => {
             throw new Error('untrusted author was not removed');
           return {
             id: '30000000-0000-4000-8000-000000000001',
+            kind: 'normal',
             authorName: '차분한-고양이-0001',
             title: input.title,
             body: input.body,

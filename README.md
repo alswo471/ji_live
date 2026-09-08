@@ -28,6 +28,7 @@
 - 데스크톱과 모바일을 고려한 반응형 화면
 - 게시글·댓글·신고를 server API로만 처리하는 익명 Community 기반
 - 마켓·커뮤니티 공통 navigation과 제목 중심 게시판·별도 글쓰기 페이지·실제 조회수·추천·댓글 페이지네이션·게시글/댓글 신고 UI
+- 관리자 일반·공지·필독 작성/변경, 종류별 상단 정렬과 한국 시간 날짜 표시 (원격 migration 적용 대기)
 - `/admin` 직접 접근, 운영자 email Magic Link와 등록된 admin membership으로 보호되는 신고 대기·숨김·삭제 대기·제재·운영 로그 console
 
 ## 기술 스택
@@ -109,6 +110,8 @@ Community 공개 API와 navigation은 feature flag가 켜지기 전에는 비활
 
 조회 중복 방지 receipt는 actor·게시글·마지막 반영 시각만 저장하고 24시간 이후 매시 자동 정리합니다. 이 receipt가 파기되어도 누적 조회수는 유지됩니다. 추천 관계는 추천 취소 시 즉시 삭제되고, 사용자나 게시글의 실제 파기 시 cascade로 정리됩니다. 원본 IP는 저장하지 않으며 브라우저 데이터 삭제·새 기기를 통한 중복을 완전히 판별하는 기능은 아닙니다.
 
+관리자 글 종류는 `일반 / 공지 / 필독`을 지원합니다. 서버 관리자 권한과 DB 준비를 확인한 뒤 선택기를 표시하고 글·종류·감사를 한 트랜잭션으로 저장합니다. 필독→공지→일반, 같은 종류는 작성일·ID 내림차순입니다. 이전 DB는 일반 글 읽기를 유지하고 공지 저장은 허용하지 않습니다. 구형 게시글 커서는 새로고침을 요구합니다. `202609090001` migration은 선행 migration 이후 원격 적용 승인이 필요합니다. 기존 local DB는 reset 없이 additive migration을 적용합니다. [공지·필독 구현 기록](./docs/product/2026-09-09_공지_필독_구현.md)에 검증과 배포 경계를 기록했습니다.
+
 ```bash
 pnpm dlx supabase start
 pnpm dlx supabase db reset
@@ -157,7 +160,7 @@ Local Supabase를 포함한 Community 보안 통합 검사는 database를 reset�
 ```bash
 pnpm dlx supabase start
 pnpm dlx supabase db reset
-RUN_LOCAL_SUPABASE_TESTS=true pnpm exec vitest run tests/integration/community-security.test.ts tests/integration/community-engagement.test.ts
+RUN_LOCAL_SUPABASE_TESTS=true pnpm exec vitest run tests/integration/community-security.test.ts tests/integration/community-engagement.test.ts tests/integration/community-post-kind.test.ts
 pnpm dlx supabase test db
 pnpm dlx supabase db lint
 pnpm dlx supabase stop

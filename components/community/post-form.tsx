@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { PostInput } from '@/lib/community/types';
+import {
+  postKindLabels,
+  type CommunityPostKind,
+} from '@/lib/community/post-kind';
 
 function createRequestId() {
   return globalThis.crypto.randomUUID();
@@ -13,8 +17,10 @@ function createRequestId() {
 
 export function PostForm({
   onSubmit,
+  canManageKind = false,
 }: {
-  onSubmit: (input: PostInput) => Promise<void>;
+  onSubmit: (input: PostInput & { kind?: CommunityPostKind }) => Promise<void>;
+  canManageKind?: boolean;
 }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -22,9 +28,18 @@ export function PostForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef<string | null>(null);
+  const submittingRef = useRef(false);
+  const [kind, setKind] = useState<CommunityPostKind>('normal');
 
   async function submit(event: { preventDefault: () => void }) {
     event.preventDefault();
+    if (submittingRef.current) return;
+    if (!canManageKind && kind !== 'normal') {
+      setError(
+        '글 종류 변경 권한을 다시 확인해 주세요. 작성 내용은 유지됩니다.',
+      );
+      return;
+    }
     if (title.trim().length < 2 || title.trim().length > 80) {
       setError('제목은 2–80자로 입력해 주세요.');
       return;
@@ -34,6 +49,7 @@ export function PostForm({
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     requestId.current ??= createRequestId();
@@ -43,14 +59,17 @@ export function PostForm({
         body: body.trim(),
         linkUrl: linkUrl.trim() || null,
         idempotencyKey: requestId.current,
+        ...(canManageKind ? { kind } : {}),
       });
       setTitle('');
       setBody('');
       setLinkUrl('');
+      setKind('normal');
       requestId.current = null;
     } catch {
       setError('글을 올리지 못했습니다. 같은 요청으로 다시 시도해 주세요.');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -65,6 +84,28 @@ export function PostForm({
         <span className="text-xs text-muted-foreground">제목 2–80자</span>
       </div>
       <div className="mt-5 space-y-4">
+        {canManageKind && (
+          <div>
+            <label htmlFor="post-kind" className="text-sm font-semibold">
+              글 종류
+            </label>
+            <select
+              id="post-kind"
+              value={kind}
+              disabled={submitting}
+              onChange={(event) =>
+                setKind(event.target.value as CommunityPostKind)
+              }
+              className="mt-2 block min-h-11 w-full rounded-lg border bg-background px-3 text-sm focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+            >
+              {Object.entries(postKindLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label htmlFor="community-title" className="text-sm font-semibold">
             제목

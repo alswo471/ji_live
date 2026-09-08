@@ -1,3 +1,5 @@
+import type { CommunityPostKind } from './post-kind';
+
 export const COMMUNITY_LIMITS = {
   titleMin: 2,
   titleMax: 80,
@@ -46,6 +48,7 @@ export interface CommunityActor {
 
 export interface CommunityPostSummary {
   id: string;
+  kind: CommunityPostKind;
   authorName: string;
   title: string;
   excerpt: string;

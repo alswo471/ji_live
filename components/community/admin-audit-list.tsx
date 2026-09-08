@@ -1,4 +1,12 @@
-import { Ban, CircleX, EyeOff, RotateCcw, Trash2, Undo2 } from 'lucide-react';
+import {
+  Ban,
+  CircleX,
+  EyeOff,
+  Pin,
+  RotateCcw,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type {
@@ -16,6 +24,7 @@ const ACTION_DETAILS: Record<
   dismiss: { label: '신고 기각', icon: CircleX },
   restrict: { label: '활동 제한', icon: Ban },
   unrestrict: { label: '제한 해제', icon: Undo2 },
+  kind_change: { label: '글 종류 변경', icon: Pin },
 };
 
 const TARGET_LABELS: Record<AdminAuditItem['targetType'], string> = {
