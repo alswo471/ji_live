@@ -211,6 +211,111 @@ describe('PostEngagement', () => {
     });
   });
 
+  it('blocks view retry reentrancy while a recommendation is pending', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json(ENGAGEMENT)),
+    );
+    const recommendResponse = deferred<typeof ENGAGEMENT>();
+    communityWriteMock.mockRejectedValueOnce(new Error('view failed'));
+
+    render(
+      <PostEngagement
+        postId={POST_ID}
+        initialViewCount={12}
+        initialRecommendationCount={3}
+      />,
+    );
+
+    await screen.findByText('조회를 반영하지 못했습니다.');
+    const viewRetry = screen.getByRole('button', {
+      name: '조회 다시 반영하기',
+    });
+    communityWriteMock
+      .mockImplementationOnce(() => {
+        fireEvent.click(viewRetry);
+        return recommendResponse.promise;
+      })
+      .mockResolvedValueOnce({ ...ENGAGEMENT, viewCount: 12 });
+    fireEvent.click(screen.getByRole('button', { name: '추천 3' }));
+    expect(viewRetry).toBeDisabled();
+    expect(communityWriteMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      recommendResponse.resolve({
+        ...ENGAGEMENT,
+        recommendationCount: 4,
+        recommended: true,
+      });
+      await recommendResponse.promise;
+    });
+    const cancelButton = await screen.findByRole('button', {
+      name: '추천 취소 4',
+    });
+    fireEvent.click(cancelButton);
+
+    expect(
+      await screen.findByRole('button', { name: '추천 3' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    expect(communityWriteMock.mock.calls.map((call) => call[2])).toEqual([
+      { action: 'view' },
+      { action: 'recommend', recommended: true },
+      { action: 'recommend', recommended: false },
+    ]);
+  });
+
+  it('blocks recommendation reentrancy while a view retry is pending', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json(ENGAGEMENT)),
+    );
+    communityWriteMock.mockRejectedValueOnce(new Error('view failed'));
+    render(
+      <PostEngagement
+        postId={POST_ID}
+        initialViewCount={12}
+        initialRecommendationCount={3}
+      />,
+    );
+
+    await screen.findByText('조회를 반영하지 못했습니다.');
+    const recommendButton = screen.getByRole('button', { name: '추천 3' });
+    const viewRetry = screen.getByRole('button', {
+      name: '조회 다시 반영하기',
+    });
+    const viewResponse = deferred<typeof ENGAGEMENT>();
+    communityWriteMock
+      .mockImplementationOnce(() => {
+        fireEvent.click(recommendButton);
+        return viewResponse.promise;
+      })
+      .mockResolvedValueOnce({
+        ...ENGAGEMENT,
+        recommendationCount: 4,
+        recommended: true,
+      });
+
+    fireEvent.click(viewRetry);
+    expect(recommendButton).toBeDisabled();
+    expect(communityWriteMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      viewResponse.resolve({ ...ENGAGEMENT, viewCount: 13 });
+      await viewResponse.promise;
+    });
+    await waitFor(() => expect(recommendButton).toBeEnabled());
+    fireEvent.click(recommendButton);
+
+    expect(
+      await screen.findByRole('button', { name: '추천 취소 4' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(communityWriteMock.mock.calls.map((call) => call[2])).toEqual([
+      { action: 'view' },
+      { action: 'view' },
+      { action: 'recommend', recommended: true },
+    ]);
+  });
+
   it('retries the same desired recommendation state after failure', async () => {
     vi.stubGlobal(
       'fetch',

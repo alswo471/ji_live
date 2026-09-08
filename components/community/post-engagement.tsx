@@ -44,6 +44,7 @@ export function PostEngagement({
   const accessTokenRef = useRef(session.accessToken);
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
   const viewedPostRef = useRef<string | null>(null);
+  const mutationPendingRef = useRef(false);
   const [engagement, setEngagement] = useState<CommunityEngagement | null>(
     null,
   );
@@ -60,7 +61,13 @@ export function PostEngagement({
   }, [session]);
 
   const recordView = useCallback(async () => {
-    if (viewedPostRef.current === postId || !challengeRef.current) return;
+    if (
+      mutationPendingRef.current ||
+      viewedPostRef.current === postId ||
+      !challengeRef.current
+    )
+      return;
+    mutationPendingRef.current = true;
     viewedPostRef.current = postId;
     setViewPending(true);
     setViewError(false);
@@ -79,6 +86,7 @@ export function PostEngagement({
     } catch {
       setViewError(true);
     } finally {
+      mutationPendingRef.current = false;
       setViewPending(false);
     }
   }, [postId]);
@@ -112,9 +120,17 @@ export function PostEngagement({
   }, [load, postId]);
 
   async function recommend() {
-    if (!engagement?.canRecommend || recommendPending || !challengeRef.current)
+    if (
+      mutationPendingRef.current ||
+      loading ||
+      viewPending ||
+      !engagement?.canRecommend ||
+      recommendPending ||
+      !challengeRef.current
+    )
       return;
     const desired = !engagement.recommended;
+    mutationPendingRef.current = true;
     setRecommendPending(true);
     setRecommendError(false);
     try {
@@ -132,6 +148,7 @@ export function PostEngagement({
     } catch {
       setRecommendError(true);
     } finally {
+      mutationPendingRef.current = false;
       setRecommendPending(false);
     }
   }
@@ -177,6 +194,7 @@ export function PostEngagement({
             type="button"
             variant="ghost"
             className="min-h-11"
+            disabled={loading || viewPending || recommendPending}
             onClick={() => void load()}
           >
             집계 다시 불러오기
@@ -190,7 +208,9 @@ export function PostEngagement({
             type="button"
             variant="ghost"
             className="min-h-11"
+            disabled={loading || viewPending || recommendPending}
             onClick={() => {
+              if (mutationPendingRef.current) return;
               viewedPostRef.current = null;
               void recordView();
             }}

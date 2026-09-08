@@ -261,6 +261,9 @@ describe.runIf(runIntegration)('local community engagement integration', () => {
   });
 
   it('has an active scheduled receipt cleanup path', () => {
+    const cumulativeViews = sql(
+      `select view_count from public.community_posts where id='${postId}';`,
+    );
     sql(
       `update public.community_post_view_receipts set last_counted_at=clock_timestamp() - interval '25 hours' where post_id='${postId}' and actor_id='${actorOne}';`,
     );
@@ -276,8 +279,86 @@ describe.runIf(runIntegration)('local community engagement integration', () => {
     ).toBe('0');
     expect(
       sql(
+        `select view_count from public.community_posts where id='${postId}';`,
+      ),
+    ).toBe(cumulativeViews);
+    expect(
+      sql(
         `select count(*) from cron.job where jobname='community-view-receipts-hourly' and active;`,
       ),
     ).toBe('1');
+  });
+
+  it('cascades engagement relations while keeping surviving counters accurate', () => {
+    const deletedRecommender = randomUUID();
+    const survivingPostId = randomUUID();
+    const deletedRelationPostId = randomUUID();
+    try {
+      sql(`
+        insert into auth.users (
+          instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,
+          created_at,updated_at,is_sso_user,is_anonymous
+        ) values (
+          '00000000-0000-0000-0000-000000000000','${deletedRecommender}',
+          'authenticated','authenticated','engagement-${deletedRecommender}@example.invalid',
+          '',now(),now(),now(),false,true
+        );
+        insert into public.community_posts (
+          id,author_id,author_name,title,body,idempotency_key,status
+        ) values
+          ('${survivingPostId}','${actorOne}','통합-작성자-0001','사용자 cascade 게시글','로컬 cascade 검증','${randomUUID()}','visible'),
+          ('${deletedRelationPostId}','${actorOne}','통합-작성자-0001','게시글 cascade 게시글','로컬 cascade 검증','${randomUUID()}','visible');
+      `);
+
+      sql(
+        `select public.set_community_post_recommendation('${survivingPostId}','${deletedRecommender}',true);`,
+      );
+      expect(
+        sql(
+          `select recommendation_count from public.community_posts where id='${survivingPostId}';`,
+        ),
+      ).toBe('1');
+      sql(`delete from auth.users where id='${deletedRecommender}';`);
+      expect(
+        sql(`
+          select concat(
+            (select count(*) from public.community_posts where id='${survivingPostId}'), '|',
+            (select recommendation_count from public.community_posts where id='${survivingPostId}'), '|',
+            (select count(*) from public.community_post_recommendations where post_id='${survivingPostId}')
+          );
+        `),
+      ).toBe('1|0|0');
+
+      sql(
+        `select public.record_community_post_view('${deletedRelationPostId}','${actorTwo}');`,
+      );
+      sql(
+        `select public.set_community_post_recommendation('${deletedRelationPostId}','${actorTwo}',true);`,
+      );
+      expect(
+        sql(`
+          select concat(
+            (select count(*) from public.community_post_view_receipts where post_id='${deletedRelationPostId}'), '|',
+            (select count(*) from public.community_post_recommendations where post_id='${deletedRelationPostId}')
+          );
+        `),
+      ).toBe('1|1');
+      sql(
+        `delete from public.community_posts where id='${deletedRelationPostId}';`,
+      );
+      expect(
+        sql(`
+          select concat(
+            (select count(*) from public.community_post_view_receipts where post_id='${deletedRelationPostId}'), '|',
+            (select count(*) from public.community_post_recommendations where post_id='${deletedRelationPostId}')
+          );
+        `),
+      ).toBe('0|0');
+    } finally {
+      sql(`
+        delete from public.community_posts where id in ('${survivingPostId}','${deletedRelationPostId}');
+        delete from auth.users where id='${deletedRecommender}';
+      `);
+    }
   });
 });
