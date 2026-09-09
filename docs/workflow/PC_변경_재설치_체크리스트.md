@@ -45,6 +45,7 @@ git branch -vv
 
 ### 비밀정보는 별도 보관
 
+- 각 worktree의 ignored 설정도 따로 확인한다. 원격 Git에서 복구되지 않으며, worktree 삭제·PC 초기화 전에 암호화된 보관본이 실제 있는지 확인해야 한다. 새 PC 설치만으로 키가 자동 복구되지는 않는다.
 - `.env.local`과 API key는 Git, 문서, 메신저와 Codex 대화에 올리지 않는다.
 - 계속 사용할 개인 secret만 password manager 등 암호화된 저장소에 보관한다.
 - GitHub Actions의 Slack secret은 GitHub 저장소에 남아 있으므로 PC로 복사하지 않는다.

@@ -1,19 +1,27 @@
 import { getServerSupabase } from './supabase';
+import { validatePostKind, type CommunityPostKind } from './post-kind';
+import type { CommunityFeedKind } from './feed';
+import { findCommentThreads } from './reply-repository';
 
 export type CommunityContentStatus = 'visible' | 'hidden' | 'deleted';
 
 export type CommunityPageCursor = {
   createdAt: string;
   id: string;
+  kindRank?: number;
+  feed?: CommunityFeedKind;
+  recommendationCount?: number;
 };
 
 export type CommunityPageQuery = {
   cursor: CommunityPageCursor | null;
   limit: number;
+  feed?: CommunityFeedKind;
 };
 
 export interface CommunityPostRecord {
   id: string;
+  kind: CommunityPostKind;
   authorId: string;
   authorName: string;
   title: string;
@@ -22,6 +30,8 @@ export interface CommunityPostRecord {
   status: CommunityContentStatus;
   createdAt: string;
   commentCount: number;
+  viewCount: number | null;
+  recommendationCount: number | null;
 }
 
 export interface CommunityCommentRecord {
@@ -33,9 +43,17 @@ export interface CommunityCommentRecord {
   status: CommunityContentStatus;
   parentStatus: CommunityContentStatus;
   createdAt: string;
+  parentCommentId?: string | null;
+  replyCount?: number;
+  unavailable?: boolean;
 }
 
 export interface CommunityReadRepository {
+  findCommentThreads?(
+    postId: string,
+    parentCommentId: string | null,
+    query: CommunityPageQuery,
+  ): Promise<{ items: CommunityCommentRecord[]; repliesEnabled: boolean }>;
   findPosts(query: CommunityPageQuery): Promise<CommunityPostRecord[]>;
   findPost(id: string): Promise<CommunityPostRecord | null>;
   findComments(
@@ -85,10 +103,12 @@ function getStatus(
 function toPostRecord(
   value: unknown,
   commentCount: number,
+  counters: { viewCount: number; recommendationCount: number } | null,
 ): CommunityPostRecord {
   const row = asRecord(value);
   return {
     id: getString(row, 'id'),
+    kind: row.kind === undefined ? 'normal' : validatePostKind(row.kind),
     authorId: getString(row, 'author_id'),
     authorName: getString(row, 'author_name'),
     title: getString(row, 'title'),
@@ -97,7 +117,51 @@ function toPostRecord(
     status: getStatus(row, 'status'),
     createdAt: getString(row, 'created_at'),
     commentCount,
+    viewCount: counters?.viewCount ?? null,
+    recommendationCount: counters?.recommendationCount ?? null,
   };
+}
+
+function getCounter(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new CommunityRepositoryError();
+  }
+  return value;
+}
+
+async function loadPostCounters(postIds: string[]) {
+  if (postIds.length === 0) {
+    return new Map<
+      string,
+      { viewCount: number; recommendationCount: number }
+    >();
+  }
+
+  const { data, error } = await getServerSupabase()
+    .from('community_posts')
+    .select('id,view_count,recommendation_count')
+    .in('id', postIds);
+
+  // The engagement migration is deployed separately. Existing reads remain
+  // available during that short window, while the UI renders unknown as —.
+  if (error?.code === '42703') return null;
+  if (error || !Array.isArray(data)) {
+    throw new CommunityRepositoryError(error?.message);
+  }
+
+  return new Map(
+    data.map((value) => {
+      const row = asRecord(value);
+      return [
+        getString(row, 'id'),
+        {
+          viewCount: getCounter(row, 'view_count'),
+          recommendationCount: getCounter(row, 'recommendation_count'),
+        },
+      ] as const;
+    }),
+  );
 }
 
 function getParentStatus(value: unknown): CommunityContentStatus {
@@ -140,46 +204,93 @@ async function loadVisibleCommentCounts(postIds: string[]) {
 }
 
 export const communityReadRepository: CommunityReadRepository = {
-  async findPosts({ cursor, limit }) {
-    let query = getServerSupabase()
-      .from('community_posts')
-      .select('id,author_id,author_name,title,body,link_url,status,created_at')
-      .eq('status', 'visible')
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(limit);
+  async findPosts({ cursor, limit, feed = 'all' }) {
+    const popular = feed === 'popular';
+    const build = (ranked: boolean) => {
+      let query = getServerSupabase()
+        .from('community_posts')
+        .select(
+          `id,author_id,author_name,title,body,link_url,status,created_at${ranked ? ',kind,kind_rank' : ''}${popular ? ',view_count,recommendation_count' : ''}`,
+        )
+        .eq('status', 'visible');
+      if (popular)
+        query = query
+          .eq('kind', 'normal')
+          .order('recommendation_count', { ascending: false });
+      else if (ranked) query = query.order('kind_rank', { ascending: false });
+      if (feed === 'notices') query = query.in('kind', ['notice', 'required']);
+      query = query
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit);
 
-    if (cursor) {
-      query = query.or(
-        `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
-      );
+      if (cursor) {
+        query = query.or(
+          popular
+            ? `recommendation_count.lt.${cursor.recommendationCount},and(recommendation_count.eq.${cursor.recommendationCount},created_at.lt.${cursor.createdAt}),and(recommendation_count.eq.${cursor.recommendationCount},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
+            : ranked
+              ? `kind_rank.lt.${cursor.kindRank},and(kind_rank.eq.${cursor.kindRank},created_at.lt.${cursor.createdAt}),and(kind_rank.eq.${cursor.kindRank},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
+              : `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+        );
+      }
+      return query;
+    };
+    let { data, error } = await build(true);
+    if (
+      feed === 'all' &&
+      error?.code === '42703' &&
+      (!cursor || cursor.kindRank === 0)
+    ) {
+      ({ data, error } = await build(false));
     }
-    const { data, error } = await query;
     if (error || !Array.isArray(data))
       throw new CommunityRepositoryError(error?.message);
 
     const counts = await loadVisibleCommentCounts(
       data.map((value) => getString(asRecord(value), 'id')),
     );
+    const counters = popular
+      ? null
+      : await loadPostCounters(
+          data.map((value) => getString(asRecord(value), 'id')),
+        );
     return data.map((value) => {
       const id = getString(asRecord(value), 'id');
-      return toPostRecord(value, counts.get(id) ?? 0);
+      return toPostRecord(
+        value,
+        counts.get(id) ?? 0,
+        popular
+          ? {
+              viewCount: getCounter(asRecord(value), 'view_count'),
+              recommendationCount: getCounter(
+                asRecord(value),
+                'recommendation_count',
+              ),
+            }
+          : (counters?.get(id) ?? null),
+      );
     });
   },
 
   async findPost(id) {
-    const { data, error } = await getServerSupabase()
-      .from('community_posts')
-      .select('id,author_id,author_name,title,body,link_url,status,created_at')
-      .eq('id', id)
-      .eq('status', 'visible')
-      .maybeSingle();
+    const build = (ranked: boolean) =>
+      getServerSupabase()
+        .from('community_posts')
+        .select(
+          `id,author_id,author_name,title,body,link_url,status,created_at${ranked ? ',kind' : ''}`,
+        )
+        .eq('id', id)
+        .eq('status', 'visible')
+        .maybeSingle();
+    let { data, error } = await build(true);
+    if (error?.code === '42703') ({ data, error } = await build(false));
 
     if (error) throw new CommunityRepositoryError(error.message);
     if (!data) return null;
 
     const counts = await loadVisibleCommentCounts([id]);
-    return toPostRecord(data, counts.get(id) ?? 0);
+    const counters = await loadPostCounters([id]);
+    return toPostRecord(data, counts.get(id) ?? 0, counters?.get(id) ?? null);
   },
 
   async findComments(postId, { cursor, limit }) {
@@ -204,5 +315,10 @@ export const communityReadRepository: CommunityReadRepository = {
     if (error || !Array.isArray(data))
       throw new CommunityRepositoryError(error?.message);
     return data.map(toCommentRecord);
+  },
+  findCommentThreads(postId, parentCommentId, query) {
+    return findCommentThreads(postId, parentCommentId, query, () =>
+      communityReadRepository.findComments(postId, query),
+    );
   },
 };

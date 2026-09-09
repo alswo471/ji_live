@@ -39,23 +39,48 @@ function dependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     createPost: async (actor, input) => ({
+      kind: 'normal',
       id: '30000000-0000-4000-8000-000000000001',
       authorName: '차분한-고양이-0001',
       title: input.title,
       body: input.body,
       linkUrl: input.linkUrl,
       commentCount: 0,
+      viewCount: null,
+      recommendationCount: null,
       createdAt: '2026-09-03T01:00:00.000Z',
       canDelete: actor.id === ACTOR.id,
     }),
     ...overrides,
   };
 }
+
+it.each(['notice', 'required'])(
+  'rejects forged kind %s before the regular route inserts',
+  async (kind) => {
+    let inserted = false;
+    const result = await handleCreatePostRequest(
+      postRequest({
+        title: '공지 제목',
+        body: '본문',
+        idempotencyKey: IDEMPOTENCY_KEY,
+        kind,
+      }),
+      dependencies({
+        createPost: async () => {
+          inserted = true;
+          throw new Error();
+        },
+      }),
+    );
+    expect(result.status).toBe(400);
+    expect(inserted).toBe(false);
+  },
+);
 
 function postRequest(body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost/api/community/posts', {
@@ -152,11 +177,14 @@ describe('community post write route', () => {
             throw new Error('untrusted author was not removed');
           return {
             id: '30000000-0000-4000-8000-000000000001',
+            kind: 'normal',
             authorName: '차분한-고양이-0001',
             title: input.title,
             body: input.body,
             linkUrl: input.linkUrl,
             commentCount: 0,
+            viewCount: null,
+            recommendationCount: null,
             createdAt: '2026-09-03T01:00:00.000Z',
             canDelete: true,
           };
@@ -176,8 +204,7 @@ function commentDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     createComment: async (actor, postId, input) => ({
@@ -198,8 +225,7 @@ function deletePostDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     deletePost: async () => undefined,
@@ -213,8 +239,7 @@ function deleteCommentDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     deleteComment: async () => undefined,
@@ -228,8 +253,7 @@ function reportDependencies(
   return {
     enabled: () => true,
     authenticate: async () => ACTOR,
-    resolveClientIp: (request) =>
-      request.headers.get('cf-connecting-ip') ?? '',
+    resolveClientIp: (request) => request.headers.get('cf-connecting-ip') ?? '',
     verifyHuman: async () => true,
     createAbuseKey: async () => 'a'.repeat(64),
     reportContent: async () => ({ accepted: true, temporarilyHidden: false }),
@@ -252,7 +276,11 @@ describe('remaining community write routes', () => {
 
     const response = await handleCreatePostRequest(
       postRequest(VALID_BODY),
-      dependencies({ resolveClientIp: getTrustedClientIp, createAbuseKey, createPost }),
+      dependencies({
+        resolveClientIp: getTrustedClientIp,
+        createAbuseKey,
+        createPost,
+      }),
     );
 
     expect(response.status).toBe(403);

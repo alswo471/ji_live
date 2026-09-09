@@ -101,6 +101,12 @@ function validateUuid(value: string, code: string, message: string) {
 
 export function validatePostInput(value: unknown): PostInput {
   const record = getRecord(value);
+  if (record.kind !== undefined && record.kind !== 'normal') {
+    throw new CommunityInputError(
+      'invalid_post_kind',
+      '일반 글만 작성할 수 있습니다.',
+    );
+  }
   const title = getString(
     record,
     'title',
@@ -181,6 +187,20 @@ export function validatePostInput(value: unknown): PostInput {
 
 export function validateCommentInput(value: unknown): CommentInput {
   const record = getRecord(value);
+  let parentCommentId: string | null | undefined;
+  if (record.parentCommentId === null) parentCommentId = null;
+  else if (record.parentCommentId !== undefined) {
+    parentCommentId = validateUuid(
+      getString(
+        record,
+        'parentCommentId',
+        'invalid_parent_comment_id',
+        '원댓글 정보를 확인할 수 없습니다.',
+      ),
+      'invalid_parent_comment_id',
+      '원댓글 정보를 확인할 수 없습니다.',
+    );
+  }
   const body = getString(
     record,
     'body',
@@ -214,6 +234,7 @@ export function validateCommentInput(value: unknown): CommentInput {
 
   return {
     body,
+    ...(parentCommentId === undefined ? {} : { parentCommentId }),
     idempotencyKey: validateUuid(
       idempotencyKey,
       'invalid_idempotency_key',

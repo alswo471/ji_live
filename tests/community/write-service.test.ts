@@ -61,6 +61,7 @@ function postRecord(
   overrides: Partial<CommunityPostRecord> = {},
 ): CommunityPostRecord {
   return {
+    kind: 'normal',
     id: POST_ID,
     authorId: ACTOR.id,
     authorName: '차분한-고양이-0001',
@@ -70,6 +71,8 @@ function postRecord(
     status: 'visible',
     createdAt: '2026-09-03T01:00:00.000Z',
     commentCount: 0,
+    viewCount: null,
+    recommendationCount: null,
     ...overrides,
   };
 }
@@ -248,7 +251,9 @@ describe('deletePost', () => {
     const events: string[] = [];
     const repo = repository({
       consumeRateLimit: async (request) => {
-        events.push(`rate:${request.action}:${request.limit}:${request.windowSeconds}`);
+        events.push(
+          `rate:${request.action}:${request.limit}:${request.windowSeconds}`,
+        );
         return { allowed: true, retryAfterSeconds: 0, retryAt: null };
       },
       findPostOwnership: async () => {

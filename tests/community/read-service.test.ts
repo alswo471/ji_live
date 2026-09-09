@@ -19,6 +19,7 @@ function createPost(
 ): CommunityPostRecord {
   return {
     id: POST_ID,
+    kind: 'normal',
     authorId: ACTOR_ID,
     authorName: '차분한-고양이-0001',
     title: '시장 이야기',
@@ -27,6 +28,8 @@ function createPost(
     status: 'visible',
     createdAt: '2026-09-03T01:00:00.000Z',
     commentCount: 2,
+    viewCount: 12,
+    recommendationCount: 3,
     ...overrides,
   };
 }
@@ -59,7 +62,103 @@ function createRepository(
 }
 
 describe('listPosts', () => {
-  it('clamps the limit, sorts newest first and returns an opaque next cursor', async () => {
+  it('round-trips recommendation cursors including zero and rejects reuse in another feed', async () => {
+    let next: unknown;
+    const repository = createRepository({
+      findPosts: async (query) => {
+        next = query;
+        return [
+          createPost({ recommendationCount: 0 }),
+          createPost({
+            id: '10000000-0000-4000-8000-000000000002',
+            recommendationCount: 0,
+          }),
+        ];
+      },
+    });
+    const page = await listPosts(null, 1, repository, 'popular');
+    expect(page.items[0].recommendationCount).toBe(0);
+    await listPosts(page.nextCursor, 1, repository, 'popular');
+    expect(next).toMatchObject({
+      feed: 'popular',
+      cursor: {
+        feed: 'popular',
+        recommendationCount: 0,
+        createdAt: '2026-09-03T01:00:00.000Z',
+      },
+    });
+    await expect(
+      listPosts(page.nextCursor, 1, repository, 'all'),
+    ).rejects.toMatchObject({ code: 'invalid_cursor' });
+    await expect(
+      listPosts(page.nextCursor, 1, repository, 'notices'),
+    ).rejects.toMatchObject({ code: 'invalid_cursor' });
+  });
+  it('preserves database order across mixed fractional timestamp page boundaries', async () => {
+    const newer = createPost({
+      id: '10000000-0000-4000-8000-000000000002',
+      createdAt: '2026-09-09T01:02:03.123+00:00',
+    });
+    const older = createPost({ createdAt: '2026-09-09T01:02:03+00:00' });
+    const repository = createRepository({
+      findPosts: async ({ cursor }) =>
+        cursor ? (cursor.id === newer.id ? [older] : []) : [newer, older],
+    });
+    const first = await listPosts(null, 1, repository);
+    expect(first.items.map((post) => post.id)).toEqual([newer.id]);
+    const second = await listPosts(first.nextCursor, 1, repository);
+    expect(second.items.map((post) => post.id)).toEqual([older.id]);
+    expect(second.nextCursor).toBeNull();
+  });
+  it('keeps kind rank ahead of date and carries it to the next page', async () => {
+    let next: unknown;
+    const repository = createRepository({
+      findPosts: async ({ cursor }) => {
+        next = cursor;
+        return [
+          createPost({
+            kind: 'required',
+            createdAt: '2020-01-01T00:00:00.000Z',
+          }),
+          createPost({ kind: 'notice' }),
+          createPost({ kind: 'normal' }),
+        ];
+      },
+    });
+    const page = await listPosts(null, 2, repository);
+    expect(page.items.map((post) => post.kind)).toEqual(['required', 'notice']);
+    await listPosts(page.nextCursor, 2, repository);
+    expect(next).toEqual({
+      createdAt: '2026-09-03T01:00:00.000Z',
+      id: POST_ID,
+      kindRank: 1,
+    });
+  });
+  it('rejects a legacy post cursor with a restart message instead of silently omitting pinned rows', async () => {
+    const cursor = btoa(JSON.stringify(['2026-09-03T01:00:00.000Z', POST_ID]));
+    await expect(
+      listPosts(cursor, 20, createRepository()),
+    ).rejects.toMatchObject({ code: 'stale_cursor' });
+  });
+  it('round-trips PostgreSQL timestamps without truncating microseconds at a page boundary', async () => {
+    let next: unknown;
+    const repository = createRepository({
+      findPosts: async ({ cursor }) => {
+        next = cursor;
+        return [
+          createPost({ createdAt: '2026-09-09T01:02:03.123456+00:00' }),
+          createPost({ createdAt: '2026-09-09T01:02:03.123455+00:00' }),
+        ];
+      },
+    });
+    const page = await listPosts(null, 1, repository);
+    await listPosts(page.nextCursor, 1, repository);
+    expect(next).toMatchObject({
+      createdAt: '2026-09-09T01:02:03.123456+00:00',
+      kindRank: 0,
+    });
+  });
+  it('clamps the limit, preserves database order and returns an opaque next cursor', async () => {
     const repository = createRepository({
       findPosts: async ({ limit }) => {
         if (limit !== 31)
@@ -96,12 +195,15 @@ describe('listPosts', () => {
 
     expect(page.items).toEqual([
       {
+        kind: 'normal',
         id: '10000000-0000-4000-8000-000000000003',
         authorName: '차분한-고양이-0001',
         title: '시장 이야기',
         excerpt: '오늘 시장에 대한 긴 본문입니다.',
         linkUrl: 'https://example.com/article',
         commentCount: 2,
+        viewCount: 12,
+        recommendationCount: 3,
         createdAt: '2026-09-03T01:00:00.000Z',
       },
     ]);
@@ -131,6 +233,8 @@ describe('getPost', () => {
     expect(post).toMatchObject({
       id: POST_ID,
       body: '오늘 시장에 대한 긴 본문입니다.',
+      viewCount: 12,
+      recommendationCount: 3,
       canDelete: true,
     });
     expect(post).not.toHaveProperty('authorId');

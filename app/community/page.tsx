@@ -1,24 +1,68 @@
 'use client';
 
-import { useRef } from 'react';
 import Link from 'next/link';
-import { PenLine, ShieldCheck } from 'lucide-react';
-import { CommunityFeed } from '@/components/community/community-feed';
-import { PostForm } from '@/components/community/post-form';
 import {
-  TurnstileChallenge,
-  type TurnstileChallengeHandle,
-} from '@/components/community/turnstile-challenge';
+  PenLine,
+  ShieldCheck,
+  List,
+  Megaphone,
+  TrendingUp,
+  RefreshCw,
+} from 'lucide-react';
+import { useSearchParams } from 'vinext/shims/navigation';
+import { CommunityFeed } from '@/components/community/community-feed';
 import { SiteHeader } from '@/components/site/site-header';
 import { SiteFooter } from '@/components/site/site-footer';
 import { useCommunityPosts } from '@/hooks/use-community-posts';
-import { useCommunitySession } from '@/hooks/use-community-session';
-import { communityWrite } from '@/lib/community/browser-api';
+import {
+  communityFeeds,
+  isCommunityFeed,
+  type CommunityFeedKind,
+} from '@/lib/community/feed';
+
+const feedIcons = { all: List, notices: Megaphone, popular: TrendingUp };
+
+function CommunityPostList({ feed }: { feed: CommunityFeedKind }) {
+  const posts = useCommunityPosts(feed);
+  return (
+    <section className="min-w-0 flex-1" aria-label={communityFeeds[feed].label}>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">{communityFeeds[feed].label}</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {communityFeeds[feed].description}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void posts.reload()}
+          disabled={posts.state === 'loading'}
+          className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm hover:bg-muted disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <RefreshCw aria-hidden="true" className="size-4" />
+          새로고침
+        </button>
+      </div>
+      <CommunityFeed
+        state={posts.state}
+        items={posts.items}
+        hasMore={posts.hasMore}
+        loadingMore={posts.loadingMore}
+        onLoadMore={() => void posts.loadMore()}
+      />
+      {posts.loadMoreError && (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          다음 글을 불러오지 못했습니다. 더 보기를 눌러 다시 시도해 주세요.
+        </p>
+      )}
+    </section>
+  );
+}
 
 export default function CommunityPage() {
-  const posts = useCommunityPosts();
-  const session = useCommunitySession();
-  const challengeRef = useRef<TurnstileChallengeHandle>(null);
+  const search = useSearchParams();
+  const requestedFeed = search.get('feed');
+  const feed = isCommunityFeed(requestedFeed) ? requestedFeed : 'all';
   const enabled = process.env.NEXT_PUBLIC_COMMUNITY_ENABLED === 'true';
 
   return (
@@ -27,7 +71,7 @@ export default function CommunityPage() {
         <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-xl">
           <SiteHeader current="community" />
         </header>
-        <div className="px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
           <section className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">커뮤니티</h1>
@@ -36,13 +80,13 @@ export default function CommunityPage() {
               </p>
             </div>
             {enabled && (
-              <a
-                href="#community-compose"
+              <Link
+                href="/community/write"
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <PenLine aria-hidden="true" className="size-4" />
                 글쓰기
-              </a>
+              </Link>
             )}
           </section>
           {!enabled ? (
@@ -53,45 +97,33 @@ export default function CommunityPage() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-              <section aria-label="최신 게시글">
-                <CommunityFeed
-                  state={posts.state}
-                  items={posts.items}
-                  hasMore={posts.hasMore}
-                  loadingMore={posts.loadingMore}
-                  onLoadMore={() => void posts.loadMore()}
-                />
-              </section>
-              <aside
-                id="community-compose"
-                tabIndex={-1}
-                aria-label="게시글 작성"
-                className="scroll-mt-56 rounded-xl focus-visible:ring-2 focus-visible:ring-ring lg:scroll-mt-36"
+            <div className="flex flex-col gap-6 lg:flex-row">
+              <nav
+                aria-label="커뮤니티 게시판"
+                className="grid grid-cols-3 gap-1 rounded-xl border bg-card p-1 lg:flex lg:w-40 lg:shrink-0 lg:flex-col lg:self-start lg:p-2"
               >
-                <PostForm
-                  onSubmit={async (input) => {
-                    if (!challengeRef.current)
-                      throw new Error('challenge unavailable');
-                    await communityWrite(
-                      '/api/community/posts',
-                      'POST',
-                      input,
-                      session,
-                      challengeRef.current,
+                {(Object.keys(communityFeeds) as CommunityFeedKind[]).map(
+                  (item) => {
+                    const Icon = feedIcons[item];
+                    return (
+                      <Link
+                        key={item}
+                        href={
+                          item === 'all'
+                            ? '/community'
+                            : `/community?feed=${item}`
+                        }
+                        aria-current={feed === item ? 'page' : undefined}
+                        className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring lg:justify-start ${feed === item ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                      >
+                        <Icon aria-hidden="true" className="size-4 shrink-0" />
+                        {communityFeeds[item].label}
+                      </Link>
                     );
-                    await posts.reload();
-                  }}
-                />
-                <div className="mt-3 rounded-2xl border bg-card p-4">
-                  <TurnstileChallenge ref={challengeRef} />
-                  {session.error && (
-                    <p role="alert" className="text-sm text-destructive">
-                      {session.error}
-                    </p>
-                  )}
-                </div>
-              </aside>
+                  },
+                )}
+              </nav>
+              <CommunityPostList key={feed} feed={feed} />
             </div>
           )}
           <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-5">

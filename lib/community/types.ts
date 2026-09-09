@@ -1,3 +1,5 @@
+import type { CommunityPostKind } from './post-kind';
+
 export const COMMUNITY_LIMITS = {
   titleMin: 2,
   titleMax: 80,
@@ -29,6 +31,7 @@ export interface PostInput {
 export interface CommentInput {
   body: string;
   idempotencyKey: string;
+  parentCommentId?: string | null;
 }
 
 export interface ReportInput {
@@ -46,12 +49,22 @@ export interface CommunityActor {
 
 export interface CommunityPostSummary {
   id: string;
+  kind: CommunityPostKind;
   authorName: string;
   title: string;
   excerpt: string;
   linkUrl: string | null;
   commentCount: number;
+  viewCount: number | null;
+  recommendationCount: number | null;
   createdAt: string;
+}
+
+export interface CommunityEngagement {
+  viewCount: number;
+  recommendationCount: number;
+  recommended: boolean;
+  canRecommend: boolean;
 }
 
 export interface CommunityPostDetail extends Omit<
@@ -69,6 +82,9 @@ export interface CommunityComment {
   body: string;
   createdAt: string;
   canDelete?: boolean;
+  parentCommentId?: string | null;
+  replyCount?: number;
+  unavailable?: boolean;
 }
 
 export interface PostPage {
@@ -79,6 +95,7 @@ export interface PostPage {
 export interface CommentPage {
   items: CommunityComment[];
   nextCursor: string | null;
+  repliesEnabled?: boolean;
 }
 
 export interface ReportReceipt {

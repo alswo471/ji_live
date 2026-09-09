@@ -5,7 +5,16 @@ import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { CommentForm } from '@/components/community/comment-form';
 import { CommentList } from '@/components/community/comment-list';
+import { CommentReplies } from '@/components/community/comment-replies';
 import { ReportDialog } from '@/components/community/report-dialog';
+import { PostEngagement } from '@/components/community/post-engagement';
+import { PostKindControl } from '@/components/community/post-kind-control';
+import { useCommunityPostKindPermission } from '@/hooks/use-community-post-kind-permission';
+import {
+  formatCommunityDate,
+  postKindLabels,
+  validatePostKind,
+} from '@/lib/community/post-kind';
 import {
   TurnstileChallenge,
   type TurnstileChallengeHandle,
@@ -31,20 +40,26 @@ export default function CommunityDetailPage({
   const { id } = use(params);
   const [post, setPost] = useState<CommunityPostDetail | null>(null);
   const [comments, setComments] = useState<CommunityComment[]>([]);
+  const [repliesEnabled, setRepliesEnabled] = useState(false);
+  const [commentVersion, setCommentVersion] = useState(0);
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const session = useCommunitySession();
+  const permission = useCommunityPostKindPermission(session.accessToken);
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
   const commentRequestRef = useRef(0);
+  const invalidateComments = useCallback(() => {
+    ++commentRequestRef.current;
+  }, []);
 
   const reload = useCallback(
     async (targetId = id) => {
       if (!targetId) return;
       const requestId = ++commentRequestRef.current;
-      setState('loading');
+      setState((current) => (current === 'ready' ? current : 'loading'));
       setCommentsLoadingMore(false);
       setCommentError(null);
       try {
@@ -68,6 +83,8 @@ export default function CommunityDetailPage({
         setPost(nextPost);
         setComments(commentPage.items);
         setCommentCursor(commentPage.nextCursor);
+        setRepliesEnabled(commentPage.repliesEnabled === true);
+        setCommentVersion((current) => current + 1);
         setState('ready');
       } catch {
         if (requestId !== commentRequestRef.current) return;
@@ -77,8 +94,18 @@ export default function CommunityDetailPage({
     [id, session.accessToken],
   );
   useEffect(() => {
-    queueMicrotask(() => void reload(id));
-  }, [id, reload]);
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setState('loading');
+        void reload(id);
+      }
+    });
+    return () => {
+      active = false;
+      invalidateComments();
+    };
+  }, [id, reload, invalidateComments]);
 
   async function write(url: string, body: CommentInput | ReportInput) {
     if (!challengeRef.current) throw new Error();
@@ -161,9 +188,8 @@ export default function CommunityDetailPage({
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_0%,var(--brand-soft),transparent_32%)] opacity-60" />
-      <div className="relative mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background/80">
-        <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur-xl">
+      <div className="mx-auto min-h-screen w-full max-w-[1440px] border-x bg-background">
+        <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-xl">
           <SiteHeader current="community" />
         </header>
         <div className="mx-auto max-w-3xl px-4 pb-16 pt-8 sm:px-6">
@@ -186,13 +212,57 @@ export default function CommunityDetailPage({
           {state === 'ready' && post && (
             <>
               <article className="mt-4 rounded-2xl border bg-card p-5 sm:p-7">
-                <p className="text-xs text-muted-foreground">
-                  {post.authorName}
-                </p>
-                <h1 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                <h1
+                  className={`break-all text-xl font-bold tracking-tight sm:text-2xl ${post.kind === 'notice' || post.kind === 'required' ? 'text-red-700 dark:text-red-300' : ''}`}
+                >
+                  {(post.kind === 'notice' || post.kind === 'required') && (
+                    <span className="mr-2 inline-flex shrink-0 whitespace-nowrap rounded bg-red-100 px-2 py-1 align-middle text-xs font-bold text-red-800 dark:bg-red-950 dark:text-red-200">
+                      {postKindLabels[post.kind]}
+                    </span>
+                  )}
                   {post.title}
                 </h1>
-                <p className="mt-6 whitespace-pre-wrap text-sm leading-7 sm:text-base">
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-b pb-5 text-xs text-muted-foreground">
+                  <span>{post.authorName}</span>
+                  <time dateTime={post.createdAt}>
+                    {formatCommunityDate(post.createdAt)}{' '}
+                    {new Intl.DateTimeFormat('ko-KR', {
+                      timeZone: 'Asia/Seoul',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }).format(new Date(post.createdAt))}
+                  </time>
+                </div>
+                {permission.canManage && (
+                  <PostKindControl
+                    key={post.id}
+                    kind={post.kind}
+                    onSave={async (kind) => {
+                      const saved = await permission.write(
+                        `/api/admin/community/posts/${post.id}/kind`,
+                        'PATCH',
+                        { kind },
+                        session.getAccessToken,
+                      );
+                      return {
+                        kind: validatePostKind(
+                          (saved as { kind?: unknown } | null)?.kind,
+                        ),
+                      };
+                    }}
+                    onChanged={(kind) =>
+                      setPost((current) =>
+                        current ? { ...current, kind } : current,
+                      )
+                    }
+                  />
+                )}
+                {permission.error && (
+                  <p role="alert" className="mt-3 text-sm text-destructive">
+                    {permission.error}
+                  </p>
+                )}
+                <p className="mt-6 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-base leading-7">
                   {post.body}
                 </p>
                 {post.linkUrl && (
@@ -206,6 +276,11 @@ export default function CommunityDetailPage({
                     {new URL(post.linkUrl).hostname}
                   </a>
                 )}
+                <PostEngagement
+                  postId={id}
+                  initialViewCount={post.viewCount}
+                  initialRecommendationCount={post.recommendationCount}
+                />
                 <div className="mt-5 flex justify-end gap-2">
                   {post.canDelete && (
                     <Button
@@ -224,17 +299,35 @@ export default function CommunityDetailPage({
                 </div>
               </article>
               <section className="mt-6 rounded-2xl border bg-card p-5 sm:p-7">
-                <h2 className="text-lg font-black">댓글 {post.commentCount}</h2>
+                <h2 className="text-base font-bold">
+                  댓글 {post.commentCount}
+                </h2>
                 <div className="mt-5">
-                  <CommentForm
-                    onSubmit={(input) =>
-                      write(`/api/community/posts/${id}/comments`, input)
-                    }
-                  />
                   <CommentList
                     comments={comments}
                     onReport={(input) => write('/api/community/reports', input)}
                     onDelete={(commentId) => void deleteComment(commentId)}
+                    renderReplies={
+                      repliesEnabled
+                        ? (comment) => (
+                            <CommentReplies
+                              comment={comment}
+                              accessToken={session.accessToken}
+                              refreshVersion={commentVersion}
+                              onSubmit={(input) =>
+                                write(
+                                  `/api/community/posts/${id}/comments`,
+                                  input,
+                                )
+                              }
+                              onDelete={deleteComment}
+                              onReport={(input) =>
+                                write('/api/community/reports', input)
+                              }
+                            />
+                          )
+                        : undefined
+                    }
                   />
                   {commentError ? (
                     <p
@@ -257,6 +350,13 @@ export default function CommunityDetailPage({
                         : '댓글 더 보기'}
                     </Button>
                   ) : null}
+                  <div className="mt-5 border-t pt-5">
+                    <CommentForm
+                      onSubmit={(input) =>
+                        write(`/api/community/posts/${id}/comments`, input)
+                      }
+                    />
+                  </div>
                 </div>
               </section>
               <div className="mt-3 rounded-2xl border bg-card p-4">

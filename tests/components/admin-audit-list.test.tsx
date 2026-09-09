@@ -17,6 +17,24 @@ const item: AdminAuditItem = {
 };
 
 describe('AdminAuditList', () => {
+  it('labels kind changes without treating them as moderation penalties', () => {
+    render(
+      <AdminAuditList
+        items={[
+          {
+            ...item,
+            action: 'kind_change',
+            targetTitle: null,
+            targetBody: null,
+            deletionSource: null,
+            reason: '글 종류 변경: notice → normal',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('글 종류 변경')).toBeVisible();
+    expect(screen.getByText('글 종류 변경: notice → normal')).toBeVisible();
+  });
   it('renders action, target, reason and time as a read-only log', () => {
     render(<AdminAuditList items={[item]} />);
 

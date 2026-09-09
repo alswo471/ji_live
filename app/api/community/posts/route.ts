@@ -12,6 +12,7 @@ import {
   listPosts,
   CommunityReadInputError,
   validateCommunityCursor,
+  validateCommunityFeed,
 } from '@/lib/community/read-service';
 import { verifyTurnstile } from '@/lib/community/turnstile';
 import {
@@ -59,7 +60,13 @@ export async function handleListPostsRequest(
     const search = new URL(request.url).searchParams;
     const cursor = search.get('cursor');
     validateCommunityCursor(cursor);
-    const result = await load(cursor, getRequestedLimit(search.get('limit')));
+    const feed = validateCommunityFeed(search.get('feed'));
+    const result = await load(
+      cursor,
+      getRequestedLimit(search.get('limit')),
+      undefined,
+      feed,
+    );
     return noStoreJson(result);
   } catch (error) {
     if (error instanceof CommunityReadInputError) {
