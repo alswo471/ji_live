@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { findCommentThreads } from '@/lib/community/reply-repository';
+import {
+  findCommentThreads,
+  isMissingCommentRpc,
+} from '@/lib/community/reply-repository';
 import { communityWriteRepository } from '@/lib/community/write-service';
 const { client } = vi.hoisted(() => ({ client: vi.fn() }));
 vi.mock('@/lib/community/supabase', () => ({ getServerSupabase: client }));
@@ -12,6 +15,82 @@ const missing = (name: string) => ({
   message: `Could not find the function public.${name}(p_actor_id) in the schema cache`,
 });
 const query = { cursor: null, limit: 31 };
+
+it.each(['read_community_comments', 'create_community_comment'])(
+  'matches only the exact public %s identity in a provider missing-function error',
+  (name) => {
+    for (const [code, prefix] of [
+      ['PGRST202', 'Could not find the function '],
+      ['42883', 'function '],
+    ]) {
+      expect(
+        isMissingCommentRpc(
+          { code, message: `${prefix}public.${name}(uuid) does not exist` },
+          name,
+        ),
+      ).toBe(true);
+      for (const identity of [
+        `public.internal_${name}`,
+        `private.${name}`,
+        `not_public.${name}`,
+        `public.${name}_internal`,
+        name,
+      ]) {
+        expect(
+          isMissingCommentRpc(
+            { code, message: `${prefix}${identity}(uuid) does not exist` },
+            name,
+          ),
+        ).toBe(false);
+      }
+      expect(
+        isMissingCommentRpc(
+          {
+            code,
+            message: `${prefix}public.internal_rpc(uuid) failed while invoking public.${name}(uuid)`,
+          },
+          name,
+        ),
+      ).toBe(false);
+    }
+  },
+);
+
+it('propagates missing internal-function errors instead of using root read or write fallbacks', async () => {
+  const input = {
+    actorId: key,
+    authorName: '작성자',
+    postId: post,
+    input: { body: '원댓글', idempotencyKey: key },
+  };
+  for (const identity of ['public.internal_', 'private.']) {
+    client.mockReturnValue({
+      rpc: async () => ({
+        error: {
+          code: '42883',
+          message: `function ${identity}read_community_comments(uuid) does not exist`,
+        },
+      }),
+    });
+    await expect(
+      findCommentThreads(post, null, query, async () => []),
+    ).rejects.toThrow('커뮤니티 데이터를');
+    client.mockReturnValue({
+      rpc: async () => ({
+        error: {
+          code: '42883',
+          message: `function ${identity}create_community_comment(uuid) does not exist`,
+        },
+      }),
+      from: () => {
+        throw new Error('unexpected legacy root write');
+      },
+    });
+    await expect(
+      communityWriteRepository.insertComment(input),
+    ).rejects.toMatchObject({ code: 'community_write_unavailable' });
+  }
+});
 
 it('falls back only for roots when the exact read RPC is absent', async () => {
   client.mockReturnValue({

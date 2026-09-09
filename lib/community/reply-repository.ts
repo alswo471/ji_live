@@ -10,11 +10,12 @@ export function isMissingCommentRpc(
   error: { code?: string; message?: string } | null,
   name: string,
 ) {
-  return (
-    !!error &&
-    ['PGRST202', '42883'].includes(error.code ?? '') &&
-    new RegExp(`(?:public\\.)?${name}\\s*\\(`).test(error.message ?? '')
-  );
+  if (!error || !['PGRST202', '42883'].includes(error.code ?? '')) return false;
+  const identity =
+    error.code === 'PGRST202'
+      ? /^Could not find the function public\.([a-z_][a-z0-9_]*)\s*\(/
+      : /^function public\.([a-z_][a-z0-9_]*)\s*\(/;
+  return identity.exec(error.message ?? '')?.[1] === name;
 }
 
 export async function findCommentThreads(
