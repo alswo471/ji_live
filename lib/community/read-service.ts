@@ -13,6 +13,7 @@ import type {
   PostPage,
 } from './types';
 import { postKindRank } from './post-kind';
+import { isCommunityFeed, type CommunityFeedKind } from './feed';
 
 const DEFAULT_POST_LIMIT = 20;
 const DEFAULT_COMMENT_LIMIT = 30;
@@ -46,6 +47,7 @@ function encodeCursor(cursor: CommunityPageCursor) {
       cursor.createdAt,
       cursor.id,
       ...(cursor.kindRank === undefined ? [] : [cursor.kindRank]),
+      ...(cursor.feed ? [cursor.feed, cursor.recommendationCount ?? null] : []),
     ]),
   )
     .replaceAll('+', '-')
@@ -58,11 +60,19 @@ function decodeCursor(value: string): CommunityPageCursor {
     const base64 = value.replaceAll('-', '+').replaceAll('_', '/');
     const padding = '='.repeat((4 - (base64.length % 4)) % 4);
     const decoded: unknown = JSON.parse(atob(base64 + padding));
-    if (!Array.isArray(decoded) || ![2, 3].includes(decoded.length))
+    if (!Array.isArray(decoded) || ![2, 3, 5].includes(decoded.length))
       throw new Error();
 
-    const [createdAt, id, kindRank] = decoded;
-    if (decoded.length === 3 && ![0, 1, 2].includes(kindRank))
+    const [createdAt, id, kindRank, feed, recommendationCount] = decoded;
+    if (decoded.length >= 3 && ![0, 1, 2].includes(kindRank)) throw new Error();
+    if (
+      decoded.length === 5 &&
+      (!isCommunityFeed(feed) ||
+        (feed === 'popular'
+          ? !Number.isSafeInteger(recommendationCount) ||
+            recommendationCount < 0
+          : recommendationCount !== null))
+    )
       throw new Error();
     if (
       typeof createdAt !== 'string' ||
@@ -80,6 +90,12 @@ function decodeCursor(value: string): CommunityPageCursor {
       createdAt,
       id: id.toLowerCase(),
       ...(kindRank === undefined ? {} : { kindRank }),
+      ...(feed === undefined
+        ? {}
+        : {
+            feed,
+            ...(recommendationCount === null ? {} : { recommendationCount }),
+          }),
     };
   } catch {
     throw new CommunityReadInputError(
@@ -91,6 +107,15 @@ function decodeCursor(value: string): CommunityPageCursor {
 
 export function validateCommunityCursor(value: string | null) {
   return value === null ? null : decodeCursor(value);
+}
+
+export function validateCommunityFeed(value: unknown): CommunityFeedKind {
+  if (value === null || value === undefined) return 'all';
+  if (isCommunityFeed(value)) return value;
+  throw new CommunityReadInputError(
+    'invalid_feed',
+    '게시판 종류를 확인할 수 없습니다.',
+  );
 }
 
 function compareNewestFirst(
@@ -178,7 +203,9 @@ export async function listPosts(
   cursor: string | null,
   limit: number = DEFAULT_POST_LIMIT,
   repository: CommunityReadRepository = communityReadRepository,
+  feed: CommunityFeedKind = 'all',
 ): Promise<PostPage> {
+  validateCommunityFeed(feed);
   const selectedLimit = getLimit(limit, DEFAULT_POST_LIMIT);
   const decoded = validateCommunityCursor(cursor);
   if (decoded && decoded.kindRank === undefined) {
@@ -187,15 +214,34 @@ export async function listPosts(
       '글 정렬이 변경되었습니다. 목록을 새로고침해 주세요.',
     );
   }
+  if (decoded && (decoded.feed ?? 'all') !== feed) {
+    throw new CommunityReadInputError(
+      'invalid_cursor',
+      '게시판이 변경되었습니다. 목록을 새로고침해 주세요.',
+    );
+  }
   const rows = await repository.findPosts({
     cursor: decoded,
     limit: selectedLimit + 1,
+    ...(feed === 'all' ? {} : { feed }),
   });
   // Preserve the database's rank/time/id order and full timestamp precision.
   const visible = rows
     .filter((post) => post.status === 'visible')
     .map(toPostSummary);
   const page = createPage(visible, selectedLimit);
+  const last = page.pageItems.at(-1);
+  if (feed !== 'all' && page.nextCursor && last) {
+    page.nextCursor = encodeCursor({
+      createdAt: last.createdAt,
+      id: last.id,
+      kindRank: postKindRank[last.kind],
+      feed,
+      ...(feed === 'popular'
+        ? { recommendationCount: last.recommendationCount ?? undefined }
+        : {}),
+    });
+  }
   return { items: page.pageItems, nextCursor: page.nextCursor };
 }
 

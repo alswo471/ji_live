@@ -1,14 +1,68 @@
 'use client';
 
 import Link from 'next/link';
-import { PenLine, ShieldCheck } from 'lucide-react';
+import {
+  PenLine,
+  ShieldCheck,
+  List,
+  Megaphone,
+  TrendingUp,
+  RefreshCw,
+} from 'lucide-react';
+import { useSearchParams } from 'vinext/shims/navigation';
 import { CommunityFeed } from '@/components/community/community-feed';
 import { SiteHeader } from '@/components/site/site-header';
 import { SiteFooter } from '@/components/site/site-footer';
 import { useCommunityPosts } from '@/hooks/use-community-posts';
+import {
+  communityFeeds,
+  isCommunityFeed,
+  type CommunityFeedKind,
+} from '@/lib/community/feed';
+
+const feedIcons = { all: List, notices: Megaphone, popular: TrendingUp };
+
+function CommunityPostList({ feed }: { feed: CommunityFeedKind }) {
+  const posts = useCommunityPosts(feed);
+  return (
+    <section className="min-w-0 flex-1" aria-label={communityFeeds[feed].label}>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">{communityFeeds[feed].label}</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {communityFeeds[feed].description}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void posts.reload()}
+          disabled={posts.state === 'loading'}
+          className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm hover:bg-muted disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <RefreshCw aria-hidden="true" className="size-4" />
+          새로고침
+        </button>
+      </div>
+      <CommunityFeed
+        state={posts.state}
+        items={posts.items}
+        hasMore={posts.hasMore}
+        loadingMore={posts.loadingMore}
+        onLoadMore={() => void posts.loadMore()}
+      />
+      {posts.loadMoreError && (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          다음 글을 불러오지 못했습니다. 더 보기를 눌러 다시 시도해 주세요.
+        </p>
+      )}
+    </section>
+  );
+}
 
 export default function CommunityPage() {
-  const posts = useCommunityPosts();
+  const search = useSearchParams();
+  const requestedFeed = search.get('feed');
+  const feed = isCommunityFeed(requestedFeed) ? requestedFeed : 'all';
   const enabled = process.env.NEXT_PUBLIC_COMMUNITY_ENABLED === 'true';
 
   return (
@@ -43,16 +97,33 @@ export default function CommunityPage() {
               </p>
             </div>
           ) : (
-            <div>
-              <section aria-label="최신 게시글">
-                <CommunityFeed
-                  state={posts.state}
-                  items={posts.items}
-                  hasMore={posts.hasMore}
-                  loadingMore={posts.loadingMore}
-                  onLoadMore={() => void posts.loadMore()}
-                />
-              </section>
+            <div className="flex flex-col gap-6 lg:flex-row">
+              <nav
+                aria-label="커뮤니티 게시판"
+                className="grid grid-cols-3 gap-1 rounded-xl border bg-card p-1 lg:flex lg:w-40 lg:shrink-0 lg:flex-col lg:self-start lg:p-2"
+              >
+                {(Object.keys(communityFeeds) as CommunityFeedKind[]).map(
+                  (item) => {
+                    const Icon = feedIcons[item];
+                    return (
+                      <Link
+                        key={item}
+                        href={
+                          item === 'all'
+                            ? '/community'
+                            : `/community?feed=${item}`
+                        }
+                        aria-current={feed === item ? 'page' : undefined}
+                        className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring lg:justify-start ${feed === item ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                      >
+                        <Icon aria-hidden="true" className="size-4 shrink-0" />
+                        {communityFeeds[item].label}
+                      </Link>
+                    );
+                  },
+                )}
+              </nav>
+              <CommunityPostList key={feed} feed={feed} />
             </div>
           )}
           <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-5">

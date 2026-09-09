@@ -7,6 +7,31 @@ import { CommunityRepositoryError } from '@/lib/community/repository';
 const POST_ID = '10000000-0000-4000-8000-000000000001';
 
 describe('community read routes', () => {
+  it('validates and forwards the requested feed', async () => {
+    let feed: unknown;
+    const load = async (
+      _cursor: unknown,
+      _limit: unknown,
+      _repository: unknown,
+      value: unknown,
+    ) => {
+      feed = value;
+      return { items: [], nextCursor: null };
+    };
+    const response = await handleListPostsRequest(
+      new Request('http://localhost/api/community/posts?feed=popular'),
+      load,
+      () => true,
+    );
+    expect(response.status).toBe(200);
+    expect(feed).toBe('popular');
+    const invalid = await handleListPostsRequest(
+      new Request('http://localhost/api/community/posts?feed=typo'),
+      load,
+      () => true,
+    );
+    expect(invalid.status).toBe(400);
+  });
   it('returns 404 before opening a data source when community is disabled', async () => {
     const response = await handleListPostsRequest(
       new Request('http://localhost/api/community/posts'),

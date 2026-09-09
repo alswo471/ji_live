@@ -1,5 +1,6 @@
 import { getServerSupabase } from './supabase';
 import { validatePostKind, type CommunityPostKind } from './post-kind';
+import type { CommunityFeedKind } from './feed';
 
 export type CommunityContentStatus = 'visible' | 'hidden' | 'deleted';
 
@@ -7,11 +8,14 @@ export type CommunityPageCursor = {
   createdAt: string;
   id: string;
   kindRank?: number;
+  feed?: CommunityFeedKind;
+  recommendationCount?: number;
 };
 
 export type CommunityPageQuery = {
   cursor: CommunityPageCursor | null;
   limit: number;
+  feed?: CommunityFeedKind;
 };
 
 export interface CommunityPostRecord {
@@ -191,15 +195,21 @@ async function loadVisibleCommentCounts(postIds: string[]) {
 }
 
 export const communityReadRepository: CommunityReadRepository = {
-  async findPosts({ cursor, limit }) {
+  async findPosts({ cursor, limit, feed = 'all' }) {
+    const popular = feed === 'popular';
     const build = (ranked: boolean) => {
       let query = getServerSupabase()
         .from('community_posts')
         .select(
-          `id,author_id,author_name,title,body,link_url,status,created_at${ranked ? ',kind,kind_rank' : ''}`,
+          `id,author_id,author_name,title,body,link_url,status,created_at${ranked ? ',kind,kind_rank' : ''}${popular ? ',view_count,recommendation_count' : ''}`,
         )
         .eq('status', 'visible');
-      if (ranked) query = query.order('kind_rank', { ascending: false });
+      if (popular)
+        query = query
+          .eq('kind', 'normal')
+          .order('recommendation_count', { ascending: false });
+      else if (ranked) query = query.order('kind_rank', { ascending: false });
+      if (feed === 'notices') query = query.in('kind', ['notice', 'required']);
       query = query
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
@@ -207,15 +217,21 @@ export const communityReadRepository: CommunityReadRepository = {
 
       if (cursor) {
         query = query.or(
-          ranked
-            ? `kind_rank.lt.${cursor.kindRank},and(kind_rank.eq.${cursor.kindRank},created_at.lt.${cursor.createdAt}),and(kind_rank.eq.${cursor.kindRank},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
-            : `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+          popular
+            ? `recommendation_count.lt.${cursor.recommendationCount},and(recommendation_count.eq.${cursor.recommendationCount},created_at.lt.${cursor.createdAt}),and(recommendation_count.eq.${cursor.recommendationCount},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
+            : ranked
+              ? `kind_rank.lt.${cursor.kindRank},and(kind_rank.eq.${cursor.kindRank},created_at.lt.${cursor.createdAt}),and(kind_rank.eq.${cursor.kindRank},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
+              : `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
         );
       }
       return query;
     };
     let { data, error } = await build(true);
-    if (error?.code === '42703' && (!cursor || cursor.kindRank === 0)) {
+    if (
+      feed === 'all' &&
+      error?.code === '42703' &&
+      (!cursor || cursor.kindRank === 0)
+    ) {
       ({ data, error } = await build(false));
     }
     if (error || !Array.isArray(data))
@@ -224,15 +240,25 @@ export const communityReadRepository: CommunityReadRepository = {
     const counts = await loadVisibleCommentCounts(
       data.map((value) => getString(asRecord(value), 'id')),
     );
-    const counters = await loadPostCounters(
-      data.map((value) => getString(asRecord(value), 'id')),
-    );
+    const counters = popular
+      ? null
+      : await loadPostCounters(
+          data.map((value) => getString(asRecord(value), 'id')),
+        );
     return data.map((value) => {
       const id = getString(asRecord(value), 'id');
       return toPostRecord(
         value,
         counts.get(id) ?? 0,
-        counters?.get(id) ?? null,
+        popular
+          ? {
+              viewCount: getCounter(asRecord(value), 'view_count'),
+              recommendationCount: getCounter(
+                asRecord(value),
+                'recommendation_count',
+              ),
+            }
+          : (counters?.get(id) ?? null),
       );
     });
   },

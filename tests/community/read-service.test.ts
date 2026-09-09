@@ -62,6 +62,38 @@ function createRepository(
 }
 
 describe('listPosts', () => {
+  it('round-trips recommendation cursors including zero and rejects reuse in another feed', async () => {
+    let next: unknown;
+    const repository = createRepository({
+      findPosts: async (query) => {
+        next = query;
+        return [
+          createPost({ recommendationCount: 0 }),
+          createPost({
+            id: '10000000-0000-4000-8000-000000000002',
+            recommendationCount: 0,
+          }),
+        ];
+      },
+    });
+    const page = await listPosts(null, 1, repository, 'popular');
+    expect(page.items[0].recommendationCount).toBe(0);
+    await listPosts(page.nextCursor, 1, repository, 'popular');
+    expect(next).toMatchObject({
+      feed: 'popular',
+      cursor: {
+        feed: 'popular',
+        recommendationCount: 0,
+        createdAt: '2026-09-03T01:00:00.000Z',
+      },
+    });
+    await expect(
+      listPosts(page.nextCursor, 1, repository, 'all'),
+    ).rejects.toMatchObject({ code: 'invalid_cursor' });
+    await expect(
+      listPosts(page.nextCursor, 1, repository, 'notices'),
+    ).rejects.toMatchObject({ code: 'invalid_cursor' });
+  });
   it('preserves database order across mixed fractional timestamp page boundaries', async () => {
     const newer = createPost({
       id: '10000000-0000-4000-8000-000000000002',

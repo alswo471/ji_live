@@ -24,6 +24,42 @@ function query(result: unknown) {
 }
 beforeEach(() => from.mockReset());
 describe('post kind repository boundary', () => {
+  it('selects all normal posts including zero recommendations in database recommendation order', async () => {
+    const q = query({ data: [], error: null });
+    from.mockReturnValue(q);
+    await communityReadRepository.findPosts({
+      cursor: {
+        createdAt: '2026-04-15T00:00:00.000Z',
+        id,
+        kindRank: 0,
+        feed: 'popular',
+        recommendationCount: 0,
+      },
+      limit: 21,
+      feed: 'popular',
+    });
+    expect(q.eq).toHaveBeenCalledWith('status', 'visible');
+    expect(q.eq).toHaveBeenCalledWith('kind', 'normal');
+    expect(q.order.mock.calls).toEqual([
+      ['recommendation_count', { ascending: false }],
+      ['created_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+    expect(q.or).toHaveBeenCalledWith(
+      `recommendation_count.lt.0,and(recommendation_count.eq.0,created_at.lt.2026-04-15T00:00:00.000Z),and(recommendation_count.eq.0,created_at.eq.2026-04-15T00:00:00.000Z,id.lt.${id})`,
+    );
+    expect(q.limit).toHaveBeenCalledWith(21);
+  });
+  it('selects notice and required posts before pagination', async () => {
+    const q = query({ data: [], error: null });
+    from.mockReturnValue(q);
+    await communityReadRepository.findPosts({
+      cursor: null,
+      limit: 21,
+      feed: 'notices',
+    });
+    expect(q.in).toHaveBeenCalledWith('kind', ['notice', 'required']);
+  });
   it('retains persisted kind when a regular-route retry finds an admin-created post', async () => {
     from.mockReturnValue(
       query({
