@@ -191,13 +191,9 @@ export async function listPosts(
     cursor: decoded,
     limit: selectedLimit + 1,
   });
+  // Preserve the database's rank/time/id order and full timestamp precision.
   const visible = rows
     .filter((post) => post.status === 'visible')
-    .sort(
-      (left, right) =>
-        postKindRank[right.kind] - postKindRank[left.kind] ||
-        compareNewestFirst(left, right),
-    )
     .map(toPostSummary);
   const page = createPage(visible, selectedLimit);
   return { items: page.pageItems, nextCursor: page.nextCursor };

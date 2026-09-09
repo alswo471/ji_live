@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { listPosts } from '@/lib/community/read-service';
+import type { CommunityReadRepository } from '@/lib/community/repository';
 
 function sql(statement: string) {
   return execFileSync(
@@ -145,6 +147,49 @@ describe.runIf(process.env.RUN_LOCAL_SUPABASE_TESTS === 'true')(
           `set role service_role; insert into public.community_posts(author_id,author_name,title,body,idempotency_key) values('${actor}','검증-이름','제목','본문','${randomUUID()}') returning kind;`,
         ),
       ).toContain('normal');
+    });
+    it('paginates real mixed-precision PostgreSQL timestamps through the read service without omission', async () => {
+      const timestamps = [
+        '2026-09-09T01:02:03.123456+00:00',
+        '2026-09-09T01:02:03.123+00:00',
+        '2026-09-09T01:02:03+00:00',
+      ];
+      const ids: string[] = [];
+      for (const createdAt of timestamps) {
+        const { id } = JSON.parse(sql(create('notice')));
+        ids.push(id);
+        sql(
+          `update public.community_posts set created_at='${createdAt}' where id='${id}';`,
+        );
+      }
+      const repository: CommunityReadRepository = {
+        findPost: async () => null,
+        findComments: async () => [],
+        findPosts: async ({ cursor, limit }) =>
+          JSON.parse(
+            sql(`select coalesce(json_agg(p),'[]') from (
+          select id,kind,author_id as "authorId",author_name as "authorName",title,body,link_url as "linkUrl",status,
+            created_at as "createdAt",0 as "commentCount",0 as "viewCount",0 as "recommendationCount"
+          from public.community_posts where id in (${ids.map((id) => `'${id}'`).join(',')}) and status='visible'
+          ${cursor ? `and (kind_rank,created_at,id) < (${cursor.kindRank},'${cursor.createdAt}'::timestamptz,'${cursor.id}'::uuid)` : ''}
+          order by kind_rank desc,created_at desc,id desc limit ${limit}
+        ) p;`),
+          ),
+      };
+      const seen: string[] = [];
+      const dates: string[] = [];
+      let cursor: string | null = null;
+      for (let index = 0; index < 3; index++) {
+        const page = await listPosts(cursor, 1, repository);
+        expect(page.items).toHaveLength(1);
+        seen.push(page.items[0].id);
+        dates.push(page.items[0].createdAt);
+        cursor = page.nextCursor;
+        if (index < 2) expect(cursor).not.toBeNull();
+      }
+      expect(seen).toEqual(ids);
+      expect(dates).toEqual(timestamps);
+      expect(cursor).toBeNull();
     });
     it('preserves rank/date/id order across page boundaries and excludes non-visible rows', () => {
       const ids: string[] = [];

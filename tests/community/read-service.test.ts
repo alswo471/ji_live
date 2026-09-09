@@ -62,18 +62,34 @@ function createRepository(
 }
 
 describe('listPosts', () => {
+  it('preserves database order across mixed fractional timestamp page boundaries', async () => {
+    const newer = createPost({
+      id: '10000000-0000-4000-8000-000000000002',
+      createdAt: '2026-09-09T01:02:03.123+00:00',
+    });
+    const older = createPost({ createdAt: '2026-09-09T01:02:03+00:00' });
+    const repository = createRepository({
+      findPosts: async ({ cursor }) =>
+        cursor ? (cursor.id === newer.id ? [older] : []) : [newer, older],
+    });
+    const first = await listPosts(null, 1, repository);
+    expect(first.items.map((post) => post.id)).toEqual([newer.id]);
+    const second = await listPosts(first.nextCursor, 1, repository);
+    expect(second.items.map((post) => post.id)).toEqual([older.id]);
+    expect(second.nextCursor).toBeNull();
+  });
   it('keeps kind rank ahead of date and carries it to the next page', async () => {
     let next: unknown;
     const repository = createRepository({
       findPosts: async ({ cursor }) => {
         next = cursor;
         return [
-          createPost({ kind: 'normal' }),
           createPost({
             kind: 'required',
             createdAt: '2020-01-01T00:00:00.000Z',
           }),
           createPost({ kind: 'notice' }),
+          createPost({ kind: 'normal' }),
         ];
       },
     });
@@ -110,7 +126,7 @@ describe('listPosts', () => {
       kindRank: 0,
     });
   });
-  it('clamps the limit, sorts newest first and returns an opaque next cursor', async () => {
+  it('clamps the limit, preserves database order and returns an opaque next cursor', async () => {
     const repository = createRepository({
       findPosts: async ({ limit }) => {
         if (limit !== 31)
