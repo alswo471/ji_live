@@ -7,6 +7,48 @@ import { CommunityRepositoryError } from '@/lib/community/repository';
 const POST_ID = '10000000-0000-4000-8000-000000000001';
 
 describe('community read routes', () => {
+  it('validates parent IDs and scoped cursors before loading and exposes the capability', async () => {
+    const parent = '20000000-0000-4000-8000-000000000001';
+    const base = `http://localhost/api/community/posts/${POST_ID}/comments`;
+    const load = async (
+      _post: unknown,
+      _cursor: unknown,
+      _limit: unknown,
+      _actor: unknown,
+      _repo: unknown,
+      value: unknown,
+    ) => {
+      if (value !== parent) throw new Error('wrong parent');
+      return { items: [], nextCursor: null, repliesEnabled: true };
+    };
+    const result = await handleListCommentsRequest(
+      new Request(`${base}?parentCommentId=${parent}`),
+      POST_ID,
+      load,
+      async () => null,
+      () => true,
+    );
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({
+      items: [],
+      nextCursor: null,
+      repliesEnabled: true,
+    });
+    for (const query of [
+      'parentCommentId=invalid',
+      'parentCommentId=',
+      `parentCommentId=${parent}&cursor=${btoa(JSON.stringify(['2026-09-09T00:00:00Z', POST_ID]))}`,
+    ]) {
+      const invalid = await handleListCommentsRequest(
+        new Request(`${base}?${query}`),
+        POST_ID,
+        load,
+        async () => null,
+        () => true,
+      );
+      expect(invalid.status).toBe(400);
+    }
+  });
   it('validates and forwards the requested feed', async () => {
     let feed: unknown;
     const load = async (

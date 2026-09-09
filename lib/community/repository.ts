@@ -1,6 +1,7 @@
 import { getServerSupabase } from './supabase';
 import { validatePostKind, type CommunityPostKind } from './post-kind';
 import type { CommunityFeedKind } from './feed';
+import { findCommentThreads } from './reply-repository';
 
 export type CommunityContentStatus = 'visible' | 'hidden' | 'deleted';
 
@@ -42,9 +43,17 @@ export interface CommunityCommentRecord {
   status: CommunityContentStatus;
   parentStatus: CommunityContentStatus;
   createdAt: string;
+  parentCommentId?: string | null;
+  replyCount?: number;
+  unavailable?: boolean;
 }
 
 export interface CommunityReadRepository {
+  findCommentThreads?(
+    postId: string,
+    parentCommentId: string | null,
+    query: CommunityPageQuery,
+  ): Promise<{ items: CommunityCommentRecord[]; repliesEnabled: boolean }>;
   findPosts(query: CommunityPageQuery): Promise<CommunityPostRecord[]>;
   findPost(id: string): Promise<CommunityPostRecord | null>;
   findComments(
@@ -306,5 +315,10 @@ export const communityReadRepository: CommunityReadRepository = {
     if (error || !Array.isArray(data))
       throw new CommunityRepositoryError(error?.message);
     return data.map(toCommentRecord);
+  },
+  findCommentThreads(postId, parentCommentId, query) {
+    return findCommentThreads(postId, parentCommentId, query, () =>
+      communityReadRepository.findComments(postId, query),
+    );
   },
 };

@@ -12,7 +12,7 @@ import {
   listComments,
   CommunityReadInputError,
   isCommunityUuid,
-  validateCommunityCursor,
+  validateCommentCursor,
 } from '@/lib/community/read-service';
 import { verifyTurnstile } from '@/lib/community/turnstile';
 import {
@@ -77,13 +77,18 @@ export async function handleListCommentsRequest(
   try {
     const search = new URL(request.url).searchParams;
     const cursor = search.get('cursor');
-    validateCommunityCursor(cursor);
-    const result = await load(
+    const parentCommentId =
+      search.get('parentCommentId')?.toLowerCase() ?? null;
+    validateCommentCursor(cursor, rawPostId.toLowerCase(), parentCommentId);
+    const args = [
       rawPostId.toLowerCase(),
       cursor,
       getRequestedLimit(search.get('limit')),
       await resolveActor(request),
-    );
+    ] as const;
+    const result = parentCommentId
+      ? await load(...args, undefined, parentCommentId)
+      : await load(...args);
     return noStoreJson(result);
   } catch (error) {
     if (error instanceof CommunityReadInputError) {

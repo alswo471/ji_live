@@ -31,6 +31,7 @@ export interface PostInput {
 export interface CommentInput {
   body: string;
   idempotencyKey: string;
+  parentCommentId?: string | null;
 }
 
 export interface ReportInput {
@@ -81,6 +82,9 @@ export interface CommunityComment {
   body: string;
   createdAt: string;
   canDelete?: boolean;
+  parentCommentId?: string | null;
+  replyCount?: number;
+  unavailable?: boolean;
 }
 
 export interface PostPage {
@@ -91,6 +95,7 @@ export interface PostPage {
 export interface CommentPage {
   items: CommunityComment[];
   nextCursor: string | null;
+  repliesEnabled?: boolean;
 }
 
 export interface ReportReceipt {

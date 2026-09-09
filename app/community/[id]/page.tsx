@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { CommentForm } from '@/components/community/comment-form';
 import { CommentList } from '@/components/community/comment-list';
+import { CommentReplies } from '@/components/community/comment-replies';
 import { ReportDialog } from '@/components/community/report-dialog';
 import { PostEngagement } from '@/components/community/post-engagement';
 import { PostKindControl } from '@/components/community/post-kind-control';
@@ -39,6 +40,8 @@ export default function CommunityDetailPage({
   const { id } = use(params);
   const [post, setPost] = useState<CommunityPostDetail | null>(null);
   const [comments, setComments] = useState<CommunityComment[]>([]);
+  const [repliesEnabled, setRepliesEnabled] = useState(false);
+  const [commentVersion, setCommentVersion] = useState(0);
   const [commentCursor, setCommentCursor] = useState<string | null>(null);
   const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
@@ -48,12 +51,15 @@ export default function CommunityDetailPage({
   const permission = useCommunityPostKindPermission(session.accessToken);
   const challengeRef = useRef<TurnstileChallengeHandle>(null);
   const commentRequestRef = useRef(0);
+  const invalidateComments = useCallback(() => {
+    ++commentRequestRef.current;
+  }, []);
 
   const reload = useCallback(
     async (targetId = id) => {
       if (!targetId) return;
       const requestId = ++commentRequestRef.current;
-      setState('loading');
+      setState((current) => (current === 'ready' ? current : 'loading'));
       setCommentsLoadingMore(false);
       setCommentError(null);
       try {
@@ -77,6 +83,8 @@ export default function CommunityDetailPage({
         setPost(nextPost);
         setComments(commentPage.items);
         setCommentCursor(commentPage.nextCursor);
+        setRepliesEnabled(commentPage.repliesEnabled === true);
+        setCommentVersion((current) => current + 1);
         setState('ready');
       } catch {
         if (requestId !== commentRequestRef.current) return;
@@ -86,8 +94,18 @@ export default function CommunityDetailPage({
     [id, session.accessToken],
   );
   useEffect(() => {
-    queueMicrotask(() => void reload(id));
-  }, [id, reload]);
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setState('loading');
+        void reload(id);
+      }
+    });
+    return () => {
+      active = false;
+      invalidateComments();
+    };
+  }, [id, reload, invalidateComments]);
 
   async function write(url: string, body: CommentInput | ReportInput) {
     if (!challengeRef.current) throw new Error();
@@ -289,6 +307,27 @@ export default function CommunityDetailPage({
                     comments={comments}
                     onReport={(input) => write('/api/community/reports', input)}
                     onDelete={(commentId) => void deleteComment(commentId)}
+                    renderReplies={
+                      repliesEnabled
+                        ? (comment) => (
+                            <CommentReplies
+                              comment={comment}
+                              accessToken={session.accessToken}
+                              refreshVersion={commentVersion}
+                              onSubmit={(input) =>
+                                write(
+                                  `/api/community/posts/${id}/comments`,
+                                  input,
+                                )
+                              }
+                              onDelete={deleteComment}
+                              onReport={(input) =>
+                                write('/api/community/reports', input)
+                              }
+                            />
+                          )
+                        : undefined
+                    }
                   />
                   {commentError ? (
                     <p

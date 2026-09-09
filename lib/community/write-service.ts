@@ -6,6 +6,7 @@ import {
   type CommunityPostRecord,
 } from './repository';
 import { getServerSupabase } from './supabase';
+import { isMissingCommentRpc } from './reply-repository';
 import type {
   CommentInput,
   CommunityActor,
@@ -43,6 +44,7 @@ export interface CommunityOwnership {
 }
 
 export interface CommunityWriteRepository {
+  atomicComments?: boolean;
   isRestricted(actorId: string): Promise<boolean>;
   findPostByIdempotency(
     actorId: string,
@@ -162,6 +164,9 @@ function commentRecord(value: unknown): CommunityCommentRecord {
     status: status(row),
     parentStatus: 'visible',
     createdAt: string(row, 'created_at'),
+    ...(row.parent_comment_id === undefined
+      ? {}
+      : { parentCommentId: nullableString(row, 'parent_comment_id') }),
   };
 }
 
@@ -195,6 +200,7 @@ const COMMENT_COLUMNS =
   'id,post_id,author_id,author_name,body,status,created_at';
 
 export const communityWriteRepository: CommunityWriteRepository = {
+  atomicComments: true,
   async isRestricted(actorId) {
     const { data, error } = await getServerSupabase()
       .from('community_sanctions')
@@ -302,6 +308,38 @@ export const communityWriteRepository: CommunityWriteRepository = {
 
   async insertComment({ actorId, authorName, postId, input }) {
     const client = getServerSupabase();
+    const atomic = await client.rpc('create_community_comment', {
+      p_actor_id: actorId,
+      p_post_id: postId,
+      p_author_name: authorName,
+      p_body: input.body,
+      p_idempotency_key: input.idempotencyKey,
+      p_parent_comment_id: input.parentCommentId ?? null,
+    });
+    if (!atomic.error) {
+      if (!atomic.data) providerError();
+      return commentRecord(atomic.data);
+    }
+    if (
+      atomic.error.code === '42501' &&
+      atomic.error.message === 'community write restricted'
+    )
+      throw new CommunityWriteError(
+        403,
+        'community_write_restricted',
+        '운영정책 위반으로 작성이 일시 제한되었습니다.',
+      );
+    if (atomic.error.code === '22023')
+      throw new CommunityWriteError(
+        400,
+        'invalid_comment',
+        '댓글 입력을 확인해 주세요.',
+      );
+    if (
+      !isMissingCommentRpc(atomic.error, 'create_community_comment') ||
+      input.parentCommentId
+    )
+      providerError(atomic.error);
     const { data: parent, error: parentError } = await client
       .from('community_posts')
       .select('id')
@@ -310,6 +348,15 @@ export const communityWriteRepository: CommunityWriteRepository = {
       .maybeSingle();
     if (parentError) providerError(parentError);
     if (!parent) providerError({ code: 'P0002' });
+
+    const existing = await communityWriteRepository.findCommentByIdempotency(
+      actorId,
+      input.idempotencyKey,
+    );
+    if (existing) {
+      validateCommentRetry(existing, postId, input);
+      return existing;
+    }
 
     const { data, error } = await client
       .from('community_comments')
@@ -439,6 +486,9 @@ function toComment(comment: CommunityCommentRecord): CommunityComment {
     body: comment.body,
     createdAt: comment.createdAt,
     canDelete: true,
+    ...(comment.parentCommentId === undefined
+      ? {}
+      : { parentCommentId: comment.parentCommentId }),
   };
 }
 
@@ -513,11 +563,13 @@ export async function createComment(
   repository: CommunityWriteRepository = communityWriteRepository,
   nameFactory: (actorId: string) => Promise<string> = createAnonymousName,
 ) {
-  const existing = await repository.findCommentByIdempotency(
-    actor.id,
-    input.idempotencyKey,
-  );
-  if (existing) return toComment(existing);
+  const existing = repository.atomicComments
+    ? null
+    : await repository.findCommentByIdempotency(actor.id, input.idempotencyKey);
+  if (existing) {
+    validateCommentRetry(existing, postId, input);
+    return toComment(existing);
+  }
 
   await ensureCanWrite(actor, repository);
   await consume(actor, context, 'comment', 10, 600, repository);
@@ -533,6 +585,21 @@ export async function createComment(
       input,
     }),
   );
+}
+
+function validateCommentRetry(
+  existing: CommunityCommentRecord,
+  postId: string,
+  input: CommentInput,
+) {
+  if (existing.status !== 'visible' || existing.parentStatus !== 'visible')
+    providerError({ code: 'P0002' });
+  if (
+    existing.postId !== postId ||
+    existing.body !== input.body ||
+    (existing.parentCommentId ?? null) !== (input.parentCommentId ?? null)
+  )
+    providerError({ code: '23505' });
 }
 
 async function deleteOwned(

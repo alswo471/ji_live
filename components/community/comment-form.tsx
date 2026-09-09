@@ -23,8 +23,12 @@ const EMOJIS = [
 
 export function CommentForm({
   onSubmit,
+  label = '댓글',
+  submitLabel = '댓글 올리기',
 }: {
   onSubmit: (input: CommentInput) => Promise<void>;
+  label?: string;
+  submitLabel?: string;
 }) {
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -83,7 +87,7 @@ export function CommentForm({
   return (
     <form onSubmit={submit} className="space-y-2">
       <label htmlFor={fieldId} className="text-sm font-semibold">
-        댓글
+        {label}
       </label>
       <Textarea
         id={fieldId}
@@ -132,7 +136,7 @@ export function CommentForm({
           </span>
         </div>
         <Button type="submit" className="min-h-11" disabled={submitting}>
-          {submitting ? '올리는 중…' : '댓글 올리기'}
+          {submitting ? '올리는 중…' : submitLabel}
         </Button>
       </div>
       {emojiOpen && (

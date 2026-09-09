@@ -109,6 +109,43 @@ export function validateCommunityCursor(value: string | null) {
   return value === null ? null : decodeCursor(value);
 }
 
+export function validateCommentCursor(
+  value: string | null,
+  postId: string,
+  parentCommentId: string | null,
+) {
+  if (parentCommentId !== null && !isCommunityUuid(parentCommentId)) {
+    throw new CommunityReadInputError(
+      'invalid_parent_comment_id',
+      '원댓글 정보를 확인할 수 없습니다.',
+    );
+  }
+  if (value === null) return null;
+  try {
+    const decoded: unknown = JSON.parse(
+      atob(value.replaceAll('-', '+').replaceAll('_', '/')),
+    );
+    if (
+      Array.isArray(decoded) &&
+      decoded.length === 5 &&
+      decoded[0] === 'comments' &&
+      decoded[1] === postId &&
+      decoded[2] === parentCommentId
+    ) {
+      return decodeCursor(btoa(JSON.stringify(decoded.slice(3))));
+    }
+    // Root cursors issued before this additive deployment remain usable for roots only.
+    if (!parentCommentId && Array.isArray(decoded) && decoded.length === 2)
+      return decodeCursor(value);
+  } catch {
+    /* Report all malformed or cross-scope cursors consistently. */
+  }
+  throw new CommunityReadInputError(
+    'invalid_cursor',
+    '페이지 정보를 확인할 수 없습니다.',
+  );
+}
+
 export function validateCommunityFeed(value: unknown): CommunityFeedKind {
   if (value === null || value === undefined) return 'all';
   if (isCommunityFeed(value)) return value;
@@ -171,6 +208,19 @@ function toComment(
   comment: CommunityCommentRecord,
   actorId: string | null,
 ): CommunityComment {
+  if (comment.unavailable) {
+    return {
+      id: comment.id,
+      postId: comment.postId,
+      authorName: '',
+      body: '삭제·숨김 처리된 댓글입니다.',
+      createdAt: comment.createdAt,
+      canDelete: false,
+      parentCommentId: null,
+      replyCount: comment.replyCount ?? 0,
+      unavailable: true,
+    };
+  }
   return {
     id: comment.id,
     postId: comment.postId,
@@ -178,6 +228,13 @@ function toComment(
     body: comment.body,
     createdAt: comment.createdAt,
     ...(actorId ? { canDelete: comment.authorId === actorId } : {}),
+    ...(comment.parentCommentId === undefined
+      ? {}
+      : { parentCommentId: comment.parentCommentId }),
+    ...(comment.replyCount === undefined
+      ? {}
+      : { replyCount: comment.replyCount }),
+    ...(comment.unavailable === undefined ? {} : { unavailable: false }),
   };
 }
 
@@ -266,6 +323,7 @@ export async function listComments(
   limit: number = DEFAULT_COMMENT_LIMIT,
   actorId: string | null = null,
   repository: CommunityReadRepository = communityReadRepository,
+  parentCommentId: string | null = null,
 ): Promise<CommentPage> {
   if (!isCommunityUuid(postId)) {
     throw new CommunityReadInputError(
@@ -274,17 +332,61 @@ export async function listComments(
     );
   }
   const selectedLimit = getLimit(limit, DEFAULT_COMMENT_LIMIT);
-  const rows = await repository.findComments(postId.toLowerCase(), {
-    cursor: validateCommunityCursor(cursor),
+  const normalizedParent = parentCommentId?.toLowerCase() ?? null;
+  const query = {
+    cursor: validateCommentCursor(
+      cursor,
+      postId.toLowerCase(),
+      normalizedParent,
+    ),
     limit: selectedLimit + 1,
-  });
+  };
+  const threads = repository.findCommentThreads
+    ? await repository.findCommentThreads(
+        postId.toLowerCase(),
+        normalizedParent,
+        query,
+      )
+    : null;
+  if (normalizedParent && !threads?.repliesEnabled) {
+    throw new CommunityReadInputError(
+      'replies_unavailable',
+      '답글을 아직 사용할 수 없습니다.',
+    );
+  }
+  const rows =
+    threads?.items ??
+    (await repository.findComments(postId.toLowerCase(), query));
   const visible = rows
     .filter(
       (comment) =>
-        comment.status === 'visible' && comment.parentStatus === 'visible',
+        (comment.status === 'visible' ||
+          (!normalizedParent &&
+            comment.unavailable &&
+            (comment.replyCount ?? 0) > 0)) &&
+        comment.parentStatus === 'visible',
     )
-    .sort(compareNewestFirst)
     .map((comment) => toComment(comment, actorId));
+  if (!threads) visible.sort(compareNewestFirst);
   const page = createPage(visible, selectedLimit);
-  return { items: page.pageItems, nextCursor: page.nextCursor };
+  const last = page.pageItems.at(-1);
+  if (threads?.repliesEnabled && page.nextCursor && last) {
+    page.nextCursor = btoa(
+      JSON.stringify([
+        'comments',
+        postId.toLowerCase(),
+        normalizedParent,
+        last.createdAt,
+        last.id,
+      ]),
+    )
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/g, '');
+  }
+  return {
+    items: page.pageItems,
+    nextCursor: page.nextCursor,
+    ...(threads ? { repliesEnabled: threads.repliesEnabled } : {}),
+  };
 }
