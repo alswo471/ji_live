@@ -139,7 +139,7 @@ git branch -a
 GitHub의 최신 작업 branch를 확인한 뒤 전환한다. 현재 기록 기준 재개 후보는 다음과 같다.
 
 ```bash
-git switch feature/community-mvp
+git switch develop
 pnpm install --frozen-lockfile
 pnpm test
 pnpm lint
@@ -185,14 +185,15 @@ local database를 옮기기 위해 기존 Mac의 Docker volume을 복사하지 �
 
 ## 7. 현재 재개 지점
 
-이 섹션은 2026-09-03 기준 기록이며, 재설치 시 반드시 GitHub 최신 이력과 비교한다.
+이 섹션은 2026-09-10 기준 기록이며, 재설치 시 반드시 GitHub 최신 이력과 비교한다.
 
-- 작업 branch: `feature/community-mvp`
-- 완료: community environment 경계, local Supabase schema·RLS, anonymous Auth·Turnstile·validation·abuse key, public read/write API, anonymous session·Community UI
-- 관련 commit: `3aad1d9`, `05f716e`, `5f556ce`, `8fbb68b`, `ce6ab41` 및 GitHub의 후속 Task 5 commit
-- 미완료: 구현 계획 Task 7 moderation console과 admin authentication
+- 재개 branch: `develop` (이번 이전 준비 변경도 feature에서 develop으로 통합)
+- 완료: 익명 커뮤니티·관리자 인증/운영 콘솔, 조회수·추천·공지/필독·인기글·대댓글, 공식 일별 주식/ETF/지수·ECB 환율, 관리자 신고 UI 안내
+- 원격 DB migration: `202609090002`까지 적용. 새 PC라는 이유로 원격 DB를 reset하거나 기존 migration을 재적용하지 않는다.
+- 미완료: 새 관리자 신고→숨김→복구 E2E, 모바일 실제 화면 재검증, 운영 요약 간헐 실패 원인 조사, 관리자 UI 후속 정리
+- 이후: 종목·나스닥·한국/미국 심리지수 공급원 검토, 공개 운영 gate와 Oracle 배포. 해외 뉴스는 비용·번역/재배포 권한 검토 후 보류
 - 기존 Mac local runtime: Colima + Docker CLI
-- 재개 순서: Docker 확인 → `supabase db reset` → Task 7 admin auth 테스트 우선 구현
+- 재개 순서: develop clone → 환경변수 복원 → install/test/lint/build → `pnpm exec vinext dev --hostname 0.0.0.0 --port 3002` → 남은 검증. DB reset은 폐기 가능한 로컬 DB에만 실행한다.
 - 기준 문서: [익명 커뮤니티 설계](../superpowers/specs/2026-09-03-익명-커뮤니티-설계.md), [커뮤니티 구현 계획](../superpowers/plans/2026-09-03-community-mvp.md)
 
 별도의 `feature/market-dashboard-v1-design`은 과거 설계 기록 보존용 branch다. 커뮤니티 구현 branch에 필요한 최신 설계와 계획이 포함되어 있으므로 새 구현 기준으로 merge하지 않는다.
@@ -217,3 +218,43 @@ local database를 옮기기 위해 기존 Mac의 Docker volume을 복사하지 �
 - 개인 GitHub, Codex, Slack과 password manager에서 로그아웃한다.
 - 개인 `.env.local`, token과 repository 제거는 회사의 반납·초기화 정책을 따른다.
 - 새 PC 검증 전에 기존 Mac의 유일한 파일이나 credential을 먼저 삭제하지 않는다.
+
+## 10. 채팅·스킬·비공개 파일 보존 — 2026-09-10
+
+### 실제 백업할 위치
+
+Finder에서 Cmd+Shift+G로 아래 경로를 열고 개인 소유 자료만 암호화된 외장 저장장치/개인 보관함에 복사한다. 이 문서는 백업 안내이며 실제 외장 백업을 생성했다는 뜻은 아니다.
+
+| 대상 | 기존 Mac 위치 | 복원 방법 |
+| --- | --- | --- |
+| 최신 개발 환경변수 | 프로젝트 `.worktrees/ui-refresh/.env.local` | 새 develop 작업 폴더의 `.env.local`에 직접 복원. 다른 worktree의 `.env*`도 별도로 확인하고 덮어쓰지 않기 |
+| 채팅 원본·설정 | `/Users/jiminjae/.codex` | 아래의 종료 후 스냅샷 원칙으로 보관. 새 PC에 통째로 덮어쓰지 않기 |
+| 개인 스킬 | `/Users/jiminjae/.codex/skills` | 특히 `minjae-commit`과 수정한 스킬 폴더 전체. Windows 실행 환경의 실제 스킬 경로 확인 후 복원 |
+| 상세 작업 보고서 | 프로젝트 각 worktree의 `.superpowers/sdd/` | Git 제외 파일. 연구·검토 이력 보관용으로 별도 복사 |
+| 생성 이미지·첨부 | `.codex/generated_images`, `.codex/attachments`, `.codex/visualizations` | 원본 보존. `/var/folders/.../T/`에만 있는 첨부는 별도 복사하지 않으면 사라질 수 있음 |
+| DB 백업 원본 | `.codex/community-db-backup-20260909-G7BIHl`, `.codex/community-replies-backup-20260909-w0LAaR` | 개인정보 포함 가능. 암호화 보관만 하고 새 Supabase에 임의 import하지 않기 |
+
+프로젝트 전체 폴더와 `.git`도 보존용으로 따로 복사할 수 있지만, Windows에서 실행할 때는 GitHub에서 새로 clone하는 것을 권장한다. Mac worktree의 `.git` 포인터는 절대 경로를 참조하므로 단독 복사는 재설치 방법이 아니다. `.codex`만 복사하면 프로젝트 소스와 worktree 환경변수는 빠진다.
+
+### 채팅 보존과 복구의 차이
+
+1. 이 답변을 별도 텍스트로 보관하고 모든 작업을 종료한 뒤 Codex를 완전히 종료한다. 실행 중 SQLite 파일 일부만 복사하면 일관된 백업이 아닐 수 있다.
+2. `.codex`의 개인 자료를 암호화 백업한다. 현재 `sessions/`, `session_index.jsonl`, `state_5.sqlite`, `thread_history_1.sqlite`, `.codex-global-state.json` 및 SQLite 보조 파일이 존재한다. 파일명은 버전에 따라 달라지므로 종료 후 디렉터리 단위 스냅샷을 보존한다.
+3. 이 디렉터리는 인증정보·다른 프로젝트 대화·회사 자료를 포함할 수 있다. 회사 정책상 반출할 수 없는 자료는 제외하고 개인 프로젝트 기록만 선별해야 한다. 공개 GitHub/공유 링크에 업로드하지 않는다.
+4. Windows에는 앱을 새로 설치하고 로그인한다. 기존 `auth.json`, 브라우저 쿠키, Mac Keychain 인증을 이식하지 않는다. `config.toml`은 MCP secret·Mac 절대경로를 검토한 뒤 필요한 설정만 옮긴다.
+5. 채팅 파일 보존과 앱 사이드바 자동 복원은 다르다. Mac→Windows 전체 기록 import를 보장하는 공식 절차는 이번 확인에서 찾지 못했다. 백업은 별도 경로에 두고 실제 버전/저장소를 확인하여 복구를 시도한다. 원본 DB를 직접 수정하거나 새 PC DB에 덮어쓰지 않는다.
+6. 사이드바 복원이 안 되어도 이 문서·Git history와 보존한 대화 원문으로 새 작업에서 이어갈 수 있다. 원본에는 비밀값이 있을 수 있어 전체 대화를 공개 문서로 커밋하지 않는다.
+
+### 스킬·플러그인·계정
+
+- 현재 custom skill 묶음: superpowers 계열, ui-ux-pro-max, ip-as-logo-skill, minjae-commit. 스킬 폴더의 SKILL.md뿐 아니라 references/scripts/assets도 보존한다.
+- `.codex/plugins`는 설치 상태 참고용으로 백업하되 Mac용 캐시/실행 파일을 Windows에서 재사용하지 않는다. 새 앱에서 지원되는 플러그인을 재설치하고 OAuth/MCP 연결은 다시 인증한다.
+- Windows 앱과 WSL CLI는 서로 다른 사용자 홈/설정 위치를 쓸 수 있다. 실제 실행 환경의 CODEX_HOME과 스킬 경로를 먼저 확인한다. WSL2는 이 프로젝트의 권장 개발 환경이지 Windows 앱 자체의 필수 조건은 아니다.
+- Supabase·Cloudflare·GitHub 저장소/Actions secrets는 기존 클라우드 계정에 남는다. 프로젝트를 새로 만들 필요는 없다. CLI와 브라우저는 재로그인하고 Turnstile 허용 호스트/redirect URL이 새 개발 주소와 맞는지만 확인한다.
+- 새 PC SSH key를 생성하고 개인 GitHub에 등록한다. 회사 인증서는 가져오지 않는다. 2FA 복구 코드도 개인 암호화 저장소에서 사용 가능한지 확인한다.
+
+### 새 PC 첫 메시지
+
+> PC 변경으로 인한 재설치. alswo471/ji_live의 develop을 기준으로 docs/workflow/PC_변경_재설치_체크리스트.md를 먼저 읽어줘. 뉴스는 보류했고 관리자 신고 안내 수정까지 통합했다. 개인 환경변수와 Codex 백업은 별도 보관 중이니 비밀값은 출력하지 말고 복원할 위치부터 안내해줘.
+
+참고: [공식 Windows 앱 안내](https://learn.chatgpt.com/docs/windows/windows-app), [공식 troubleshooting](https://learn.chatgpt.com/docs/reference/troubleshooting). 2026-09-10 확인. 로컬 저장 파일 목록은 이 PC의 실제 디렉터리에서 확인한 것이며 공식적인 이식 보장은 아니다.
