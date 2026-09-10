@@ -9,11 +9,13 @@ export function CommentList({
   onDelete,
   onReport,
   renderReplies,
+  isAdmin = false,
 }: {
   comments: CommunityComment[];
   onDelete: (id: string) => void;
   onReport: (input: ReportInput) => Promise<void>;
   renderReplies?: (comment: CommunityComment) => ReactNode;
+  isAdmin?: boolean;
 }) {
   if (!comments.length)
     return (
@@ -50,6 +52,7 @@ export function CommentList({
                   targetType="comment"
                   targetId={comment.id}
                   onSubmit={onReport}
+                  isAdmin={isAdmin}
                 />
               </div>
             </div>

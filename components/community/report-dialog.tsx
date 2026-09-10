@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,10 +24,12 @@ export function ReportDialog({
   targetType,
   targetId,
   onSubmit,
+  isAdmin = false,
 }: {
   targetType: ReportTargetType;
   targetId: string;
   onSubmit: (input: ReportInput) => Promise<void>;
+  isAdmin?: boolean;
 }) {
   const [reason, setReason] = useState<ReportReason | ''>('');
   const [detail, setDetail] = useState('');
@@ -35,6 +38,7 @@ export function ReportDialog({
   const [submitting, setSubmitting] = useState(false);
 
   async function submit() {
+    if (isAdmin) return;
     if (!reason) {
       setError('신고 사유를 선택해 주세요.');
       return;
@@ -49,6 +53,14 @@ export function ReportDialog({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (isAdmin) {
+    return (
+      <Link href="/admin/community" className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-4 focus-visible:ring-3 focus-visible:ring-ring/50">
+        관리자 조치는 운영 콘솔에서
+      </Link>
+    );
   }
 
   return (

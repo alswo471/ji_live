@@ -292,6 +292,7 @@ export default function CommunityDetailPage({
                     </Button>
                   )}
                   <ReportDialog
+                    isAdmin={permission.canManage}
                     targetType="post"
                     targetId={id}
                     onSubmit={(input) => write('/api/community/reports', input)}
@@ -304,6 +305,7 @@ export default function CommunityDetailPage({
                 </h2>
                 <div className="mt-5">
                   <CommentList
+                    isAdmin={permission.canManage}
                     comments={comments}
                     onReport={(input) => write('/api/community/reports', input)}
                     onDelete={(commentId) => void deleteComment(commentId)}
@@ -311,6 +313,7 @@ export default function CommunityDetailPage({
                       repliesEnabled
                         ? (comment) => (
                             <CommentReplies
+                              isAdmin={permission.canManage}
                               comment={comment}
                               accessToken={session.accessToken}
                               refreshVersion={commentVersion}

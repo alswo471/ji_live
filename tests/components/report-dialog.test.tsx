@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { ReportDialog } from '@/components/community/report-dialog';
 
 describe('ReportDialog', () => {
+  it('shows the operations link instead of a report form for an administrator', () => {
+    render(<ReportDialog targetType="post" targetId="post-id" onSubmit={vi.fn()} isAdmin />);
+    expect(screen.queryByRole('button', { name: '신고' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /운영 콘솔/ })).toHaveAttribute('href', '/admin/community');
+  });
   it('requires a reason and announces successful submission', async () => {
     const submit = vi.fn().mockResolvedValue(undefined);
     render(

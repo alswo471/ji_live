@@ -12,6 +12,7 @@ import { CommentForm } from './comment-form';
 import { CommentList } from './comment-list';
 
 interface CommentRepliesProps {
+  isAdmin?: boolean;
   comment: CommunityComment;
   accessToken?: string | null;
   refreshVersion?: number;
@@ -37,6 +38,7 @@ function ReplyThread({
   onSubmit,
   onDelete,
   onReport,
+  isAdmin = false,
 }: CommentRepliesProps) {
   const [open, setOpen] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -150,6 +152,7 @@ function ReplyThread({
               comments={items}
               onDelete={(id) => void onDelete(id)}
               onReport={onReport}
+              isAdmin={isAdmin}
             />
           )}
           {loading && (
